@@ -107,6 +107,11 @@ const app = {
     switchTab(tabId) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
+
+        // Справочник использует всю доступную ширину окна; остальные вкладки сохраняют прежнюю ширину.
+        const appContainer = document.getElementById('app-container');
+        if (appContainer) appContainer.classList.toggle('manual-wide', tabId === 'manual');
+
         if (tabId === 'sheet') this.renderSheet();
         if (tabId === 'compare') this.populateCompareSelectors();
     },

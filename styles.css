@@ -308,16 +308,53 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--g
 .trait-options .trait-neg:has(input:checked) { border-color: var(--danger) !important; box-shadow: inset 4px 0 0 var(--danger); }
 
 /* Расширенный справочник */
-.manual-section { margin-bottom: 36px; }
+/* На вкладке справочника снимаем ограничение ширины 1000px, сохраняя обычную ширину других экранов. */
+#app-container.manual-wide {
+    width: 100%;
+    max-width: none;
+    margin: 22px 0 36px;
+    padding: 0 22px;
+}
+#manual {
+    width: 100%;
+    min-width: 0;
+}
+.manual-section {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 36px;
+}
 .manual-heading { margin: 0 0 14px; font-family: var(--font-pixel); font-size: 14px; line-height: 1.7; color: var(--gold); text-transform: uppercase; }
 .manual-description { margin: 0 0 18px; color: #aaa; font-size: 18px; line-height: 1.4; }
 .manual-search-label { display: block; margin-bottom: 8px; color: var(--gold); }
 #manual-search { max-width: 560px; }
-.manual-table { min-width: 1000px; }
-.manual-table th, .manual-table td { text-align: left; vertical-align: top; line-height: 1.35; overflow-wrap: anywhere; }
-.manual-table td { min-width: 90px; font-size: 17px; }
-.manual-table td:nth-child(1) { min-width: 170px; }
-.manual-table td:nth-child(4), .manual-table td:nth-child(5), .manual-table td:nth-child(6), .manual-table td:nth-child(7), .manual-table td:nth-child(10) { min-width: 220px; white-space: normal; }
+.manual-table {
+    width: 100%;
+    min-width: 1580px;
+    table-layout: fixed;
+}
+.manual-table th, .manual-table td {
+    text-align: left;
+    vertical-align: top;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+.manual-table th { padding: 14px 12px; }
+.manual-table td { min-width: 0; padding: 12px; font-size: 17px; }
+/* Ширины колонок подобраны под длинные описания материалов и эффекты. */
+.manual-table th:nth-child(1), .manual-table td:nth-child(1) { width: 14%; }
+.manual-table th:nth-child(2), .manual-table td:nth-child(2) { width: 7%; }
+.manual-table th:nth-child(3), .manual-table td:nth-child(3) { width: 7%; }
+.manual-table th:nth-child(4), .manual-table td:nth-child(4) { width: 13%; white-space: normal; }
+.manual-table th:nth-child(5), .manual-table td:nth-child(5) { width: 13%; white-space: normal; }
+.manual-table th:nth-child(6), .manual-table td:nth-child(6) { width: 14%; white-space: normal; }
+.manual-table th:nth-child(7), .manual-table td:nth-child(7) { width: 12%; white-space: normal; }
+.manual-table th:nth-child(8), .manual-table td:nth-child(8) { width: 6%; }
+.manual-table th:nth-child(9), .manual-table td:nth-child(9) { width: 6%; }
+.manual-table th:nth-child(10), .manual-table td:nth-child(10) { width: 8%; white-space: normal; }
+#manual-search { width: min(560px, 100%); max-width: 100%; }
+#manual .table-responsive { width: 100%; max-width: 100%; }
 .manual-table .material-category-row th { background: #30250c; color: var(--gold); font-size: 12px; padding: 12px 15px; text-align: left; }
 .manual-table .material-name { color: var(--gold); font-weight: bold; }
 .manual-effect { white-space: normal; }
@@ -332,8 +369,11 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--g
 @media (max-width: 768px) {
     .trait-options { grid-template-columns: minmax(0, 1fr); }
     .trait-group { padding: 12px; }
+    #app-container.manual-wide { padding: 0 10px; margin-top: 16px; }
     .manual-heading { font-size: 11px; }
     .manual-description { font-size: 17px; }
+    .manual-table { min-width: 1450px; }
+    .manual-table th, .manual-table td { padding: 10px 8px; }
     .modal-actions { align-items: stretch; }
     .modal-button-group { width: 100%; flex-direction: column; }
     .modal-button-group button { width: 100%; }
