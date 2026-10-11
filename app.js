@@ -1,7 +1,7 @@
 // app.js
 const app = {
     step: 1,
-    char: { name: "", race: "", parent1: "", parent2: "", age: "", gift: "", traits: [], weapon: "", armor: "", backstory: "" },
+    char: { name: "", race: "", parent1: "", parent2: "", age: "", skill: "", gift: "", traits: [], weapon: "", armor: "", backstory: "" },
     stats: { body: 0, spirit: 0, str: 0, int: 0, agi: 0, lvl: 0, od: 3 },
     savedChars: JSON.parse(localStorage.getItem('rpgChars')) || [],
     
@@ -86,6 +86,9 @@ const app = {
         this.calculateStats();
         this.step = 1;
         this.renderWizard();
+
+        document.getElementById('skill-select').value = "";
+        this.updateInfoCard('skill-info', null, "Выберите навык, чтобы увидеть его бонусы и требования");
     },
 
     init() {
@@ -238,6 +241,7 @@ const app = {
         fill('parent1-select', rpgData.races.filter(r => r.name !== 'Полукровка'), 'Раса Отца');
         fill('parent2-select', rpgData.races.filter(r => r.name !== 'Полукровка'), 'Раса Матери');
         fill('age-select', rpgData.ages, 'Выберите возраст');
+        fill('skill-select', rpgData.skills, 'Выберите стартовый навык');
         fill('gift-select', rpgData.gifts, 'Выберите Тёмный Дар');
         fill('weapon-select', rpgData.materials, 'Материал Оружия');
         fill('armor-select', rpgData.materials, 'Материал Брони');
@@ -290,6 +294,10 @@ const app = {
         this.char.armor = document.getElementById('armor-select').value;
         this.char.name = document.getElementById('char-name').value;
         this.char.backstory = document.getElementById('backstory').value;
+        this.char.skill = document.getElementById('skill-select').value;
+        // ...
+        const sData = rpgData.skills.find(s => s.name === this.char.skill);
+        if (sData) this.updateInfoCard('skill-info', `<strong>Эффект:</strong> ${sData.effect}<br><strong>Требования:</strong> ${sData.req}`);
 
         const aData = rpgData.ages.find(a => a.name === this.char.age) || { maxTraits: 0 };
         const checkboxes = Array.from(document.querySelectorAll('#traits-container input'));
@@ -370,6 +378,7 @@ const app = {
         document.getElementById('sh-weapon').innerText = this.char.weapon || "-";
         document.getElementById('sh-armor').innerText = this.char.armor || "-";
         document.getElementById('sh-backstory').innerText = this.char.backstory || "История не написана...";
+        document.getElementById('sh-skill').innerText = this.char.skill || "-";
     },
 
 exportJPG() {
@@ -436,6 +445,7 @@ exportJPG() {
         document.getElementById('weapon-select').value = this.char.weapon;
         document.getElementById('armor-select').value = this.char.armor;
         document.getElementById('backstory').value = this.char.backstory;
+        document.getElementById('skill-select').value = this.char.skill || "";
 
         document.querySelectorAll('#traits-container input').forEach(cb => {
             cb.checked = this.char.traits.includes(cb.value);

@@ -93,6 +93,11 @@
                 </div>
 
                 <div class="wizard-panel pixel-box" id="step-4">
+                    <!-- Добавлен селект для навыка -->
+                    <h2>Стартовый навык</h2>
+                    <select id="skill-select" onchange="app.updateData()"></select>
+                    <div id="skill-info" class="info-card empty" style="margin-bottom: 30px;">Выберите навык, чтобы увидеть его бонусы и требования</div>
+
                     <h2>Тёмные Дары (Строго 1)</h2>
                     <select id="gift-select" onchange="app.updateData()"></select>
                     <div id="gift-info" class="info-card empty">Сделайте выбор, чтобы узнать силу Дара</div>
@@ -148,7 +153,8 @@
                         <p><strong>Возраст:</strong> <span id="sh-a-buff">-</span></p>
                     </div>
                     <div class="sheet-box">
-                        <h3>Таланты</h3>
+                        <h3>Таланты и Навыки</h3>
+                        <p><strong>Навык:</strong> <span id="sh-skill">-</span></p>
                         <p><strong>Тёмный дар:</strong> <span id="sh-gift">-</span></p>
                         <p><strong>Черты:</strong> <span id="sh-traits">Нет</span></p>
                     </div>
