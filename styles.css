@@ -97,8 +97,15 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--g
 .sheet-box li, .sheet-box p { font-size: 18px; margin-bottom: 5px; }
 
 /* Режим PDF */
-.pdf-export-mode { background: #fff !important; border: none !important; margin: 0 !important; padding: 20px !important; }
-.pdf-export-mode * { color: #000 !important; text-shadow: none !important; }
+/* Режим экспорта JPG */
+.jpg-export-mode {
+    transform: none !important;
+    transition: none !important;
+}
+.jpg-export-mode .sheet-box {
+    box-shadow: none !important;
+    transform: none !important;
+}
 
 /* Сравнение */
 .table-responsive { overflow-x: auto; }

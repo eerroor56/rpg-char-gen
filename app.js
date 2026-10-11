@@ -372,15 +372,40 @@ const app = {
         document.getElementById('sh-backstory').innerText = this.char.backstory || "История не написана...";
     },
 
-    exportPDF() {
+exportJPG() {
         const element = document.getElementById('character-sheet');
-        element.classList.add('pdf-export-mode'); 
-        const opt = {
-            margin: 10, filename: `Персонаж_${this.char.name || 'Hero'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        html2pdf().set(opt).from(element).save().then(() => element.classList.remove('pdf-export-mode'));
+        element.classList.add('jpg-export-mode'); 
+        
+        // Меняем текст кнопки для обратной связи
+        const btn = document.querySelector('button[onclick="app.exportJPG()"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳ Обработка...";
+        btn.disabled = true;
+
+        // Даем браузеру мгновение на применение CSS-класса перед созданием скриншота
+        setTimeout(() => {
+            html2canvas(element, { 
+                scale: 2, // Высокое разрешение (х2)
+                useCORS: true, // Позволяет корректно рендерить Google Шрифты
+                backgroundColor: "#111" // Подложка
+            }).then(canvas => {
+                element.classList.remove('jpg-export-mode');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                
+                // Конвертируем Canvas в JPG и вызываем скачивание
+                const link = document.createElement('a');
+                link.download = `Персонаж_${this.char.name || 'Hero'}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.95); // 0.95 - качество сжатия
+                link.click();
+            }).catch(err => {
+                console.error("Ошибка при создании JPG: ", err);
+                element.classList.remove('jpg-export-mode');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                alert("Не удалось сохранить изображение.");
+            });
+        }, 100);
     },
 
     renderSavedList() {
