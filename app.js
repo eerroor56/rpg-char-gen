@@ -1,105 +1,24 @@
 // app.js
 const app = {
     step: 1,
-    char: { name: "", race: "", parent1: "", parent2: "", age: "", skill: "", gift: "", traits: [], weapon: "", armor: "", backstory: "" },
+    char: { name: "", race: "", parent1: "", parent2: "", age: "", faction: "", skill: "", activeSkill: "", gift: "", traits: [], backstory: "" },
     stats: { body: 0, spirit: 0, str: 0, int: 0, agi: 0, lvl: 0, od: 3 },
     savedChars: JSON.parse(localStorage.getItem('rpgChars')) || [],
-    
-    // Добавь это свойство в начало объекта app (например, под savedChars)
     isCurrentSaved: false,
 
-    // ...
-
-    // --- НОВАЯ ЛОГИКА СОХРАНЕНИЯ ---
-    saveCurrentCharacter() {
-        if (!this.char.name) { 
-            alert("Имя персонажа обязательно!"); 
-            return; 
-        }
-
-        // Блокируем дублирование
-        if (this.isCurrentSaved) return;
-
-        const newChar = { id: Date.now(), data: { ...this.char }, stats: { ...this.stats } };
-        this.savedChars.push(newChar);
-        localStorage.setItem('rpgChars', JSON.stringify(this.savedChars));
-        this.renderSavedList();
-        
-        // Меняем внешний вид кнопки на "Сохранено"
-        const saveBtn = document.getElementById('btn-save-char');
-        if (saveBtn) {
-            saveBtn.innerHTML = "✓ Сохранено";
-            saveBtn.classList.add('saved');
-        }
-        
-        this.isCurrentSaved = true;
-
-        // Показываем именное уведомление
-        this.showToast(`Персонаж ${this.char.name} успешно сохранён!`);
-    },
-
-    // --- ЛОГИКА СОЗДАНИЯ НОВОГО ПЕРСОНАЖА ---
-    resetAndCreateNew() {
-        if (confirm("Создать нового героя? Несохраненный прогресс будет потерян.")) {
-            this.resetWizard();
-            this.switchTab('wizard');
-        }
-    },
-
-    // --- ОБНОВЛЕННЫЙ СБРОС МАСТЕРА ---
-    resetWizard() {
-        // Очистка объекта данных
-        this.char = { name: "", race: "", parent1: "", parent2: "", age: "", gift: "", traits: [], weapon: "", armor: "", backstory: "" };
-        
-        // Очистка DOM (инпуты и селекты)
-        document.getElementById('char-name').value = "";
-        document.getElementById('backstory').value = "";
-        document.getElementById('race-select').value = "";
-        document.getElementById('parent1-select').value = "";
-        document.getElementById('parent2-select').value = "";
-        document.getElementById('age-select').value = "";
-        document.getElementById('gift-select').value = "";
-        document.getElementById('weapon-select').value = "";
-        document.getElementById('armor-select').value = "";
-
-        // Сброс чекбоксов черт
-        document.querySelectorAll('#traits-container input').forEach(cb => cb.checked = false);
-
-        // Скрытие блока полукровки
-        document.getElementById('halfblood-container').style.display = 'none';
-
-        // Очистка инфо-карточек
-        this.updateInfoCard('race-info', null, "Укажите расу для отображения бонусов");
-        this.updateInfoCard('age-info', null, "Укажите возраст для отображения модификаторов");
-        this.updateInfoCard('gift-info', null, "Сделайте выбор, чтобы узнать силу Дара");
-        document.getElementById('traits-limit').innerText = "Количество черт зависит от возраста";
-
-        // Сбрасываем кнопку сохранения, если она была нажата
-        this.isCurrentSaved = false;
-        const saveBtn = document.getElementById('btn-save-char');
-        if (saveBtn) {
-            saveBtn.innerHTML = "💾 Сохранить";
-            saveBtn.classList.remove('saved');
-        }
-
-        // Пересчет пустых статов и возврат на шаг 1
-        this.calculateStats();
-        this.step = 1;
-        this.renderWizard();
-
-        document.getElementById('skill-select').value = "";
-        this.updateInfoCard('skill-info', null, "Выберите навык, чтобы увидеть его бонусы и требования");
+    escapeHTML(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     },
 
     init() {
         this.populateDropdowns();
         this.updateData();
         this.renderSavedList();
+        this.renderManual();
         this.checkOnboarding();
         this.renderWizard();
     },
 
-    // --- Тост Уведомление ---
     showToast(msg) {
         const toast = document.getElementById("toast");
         toast.innerText = msg;
@@ -107,7 +26,32 @@ const app = {
         setTimeout(() => { toast.className = toast.className.replace("toast show", "toast"); }, 2800);
     },
 
-    // --- Сброс Мастера (Ручной и Автоматический) ---
+    saveCurrentCharacter() {
+        if (!this.char.name) { alert("Имя персонажа обязательно!"); return; }
+        if (this.isCurrentSaved) return;
+
+        const newChar = { id: Date.now(), data: { ...this.char }, stats: { ...this.stats } };
+        this.savedChars.push(newChar);
+        localStorage.setItem('rpgChars', JSON.stringify(this.savedChars));
+        this.renderSavedList();
+        
+        const saveBtn = document.getElementById('btn-save-char');
+        if (saveBtn) {
+            saveBtn.innerHTML = "✓ Сохранено";
+            saveBtn.classList.add('saved');
+        }
+        
+        this.isCurrentSaved = true;
+        this.showToast(`Персонаж ${this.char.name} успешно сохранён!`);
+    },
+
+    resetAndCreateNew() {
+        if (confirm("Создать нового героя? Несохраненный прогресс будет потерян.")) {
+            this.resetWizard();
+            this.switchTab('wizard');
+        }
+    },
+
     manualReset() {
         if (confirm("Вы уверены, что хотите сбросить текущего персонажа и начать заново?")) {
             this.resetWizard();
@@ -115,55 +59,42 @@ const app = {
     },
 
     resetWizard() {
-        // Очистка объекта данных
-        this.char = { name: "", race: "", parent1: "", parent2: "", age: "", gift: "", traits: [], weapon: "", armor: "", backstory: "" };
+        this.char = { name: "", race: "", parent1: "", parent2: "", age: "", faction: "", skill: "", activeSkill: "", gift: "", traits: [], backstory: "" };
         
-        // Очистка DOM (инпуты и селекты)
         document.getElementById('char-name').value = "";
         document.getElementById('backstory').value = "";
         document.getElementById('race-select').value = "";
         document.getElementById('parent1-select').value = "";
         document.getElementById('parent2-select').value = "";
         document.getElementById('age-select').value = "";
+        document.getElementById('faction-select').value = "";
+        document.getElementById('skill-select').value = "";
+        document.getElementById('active-skill-select').value = "";
         document.getElementById('gift-select').value = "";
-        document.getElementById('weapon-select').value = "";
-        document.getElementById('armor-select').value = "";
 
-        // Сброс чекбоксов черт
         document.querySelectorAll('#traits-container input').forEach(cb => cb.checked = false);
-
-        // Скрытие блока полукровки
         document.getElementById('halfblood-container').style.display = 'none';
 
-        // Очистка инфо-карточек
         this.updateInfoCard('race-info', null, "Укажите расу для отображения бонусов");
-        this.updateInfoCard('age-info', null, "Укажите возраст для отображения модификаторов");
+        this.updateInfoCard('age-info', null, "Укажите возраст");
+        this.updateInfoCard('faction-info', null, "Укажите гильдию или церковь");
+        this.updateInfoCard('skill-info', null, "Выберите ремесло или талант");
+        this.updateInfoCard('active-skill-info', null, "Выберите боевой приём");
         this.updateInfoCard('gift-info', null, "Сделайте выбор, чтобы узнать силу Дара");
-        document.getElementById('traits-limit').innerText = "Количество черт зависит от возраста";
+        document.getElementById('traits-limit').innerText = "Сначала выберите возраст, затем положительную и отрицательную черту.";
 
-        // Пересчет пустых статов и возврат на шаг 1
+        this.isCurrentSaved = false;
+        const saveBtn = document.getElementById('btn-save-char');
+        if (saveBtn) {
+            saveBtn.innerHTML = "💾 Сохранить";
+            saveBtn.classList.remove('saved');
+        }
+
         this.calculateStats();
         this.step = 1;
         this.renderWizard();
     },
 
-    // --- Сохранение ---
-    saveCurrentChar() {
-        if (!this.char.name) { alert("Укажите имя героя (Шаг 3) перед сохранением!"); return; }
-        
-        const newChar = { id: Date.now(), data: { ...this.char }, stats: { ...this.stats } };
-        this.savedChars.push(newChar);
-        localStorage.setItem('rpgChars', JSON.stringify(this.savedChars));
-        this.renderSavedList();
-        
-        // Показываем уведомление об успехе
-        this.showToast("Герой успешно сохранён в коллекцию!");
-        
-        // Сбрасываем мастер
-        this.resetWizard();
-    },
-
-    // --- Онбординг ---
     checkOnboarding() {
         if (!localStorage.getItem('rpgOnboardingClosed')) this.openOnboarding();
     },
@@ -173,13 +104,13 @@ const app = {
         document.getElementById('onboarding-modal').classList.remove('open');
     },
 
-    // --- Навигация и Степпер ---
     switchTab(tabId) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
         if (tabId === 'sheet') this.renderSheet();
         if (tabId === 'compare') this.populateCompareSelectors();
     },
+    
     toggleSession() { document.getElementById('session-manager').classList.toggle('open'); },
 
     goToStep(n) {
@@ -207,11 +138,21 @@ const app = {
             if (this.char.race === 'Полукровка' && (!this.char.parent1 || !this.char.parent2)) return "Укажите обе родительские расы!";
         }
         if (s === 2 && !this.char.age) return "Пожалуйста, выберите возраст персонажа!";
-        if (s === 3) {
-            if (!this.char.weapon || !this.char.armor) return "Выберите материал для снаряжения!";
-            if (!this.char.name.trim()) return "Укажите имя персонажа!";
+        if (s === 3 && !this.char.name.trim()) return "Укажите имя персонажа!";
+        if (s === 4 && (!this.char.gift || !this.char.skill)) return "Выберите Тёмный Дар и Навык!";
+        if (s === 5) {
+            const counts = this.getTraitCounts();
+            const ageData = rpgData.ages.find(a => a.name === this.char.age);
+            if (counts.pos > (ageData?.maxTraits ?? 0) || counts.neg > (ageData?.maxTraits ?? 0)) {
+                return `Для возраста «${this.char.age || 'не выбран'}» допустимо не более ${ageData?.maxTraits ?? 0} положительных и ${ageData?.maxTraits ?? 0} отрицательных черт.`;
+            }
+            if (counts.neg > counts.pos) {
+                return "У вас осталась отрицательная черта без пары. Снимите её или сначала выберите положительную черту.";
+            }
+            if (counts.pos > counts.neg + counts.extraPositives) {
+                return "Завершите выбор черт: положительные должны быть уравновешены отрицательными. Некоторые отрицательные черты дают дополнительные положительные выборы.";
+            }
         }
-        if (s === 4 && !this.char.gift) return "Обязательно выберите Тёмный Дар!";
         return true;
     },
 
@@ -230,36 +171,42 @@ const app = {
         document.getElementById('next-btn').innerText = this.step === 5 ? "Завершить ➡" : "Далее ➡";
     },
 
-    // --- Инициализация и обновление UI ---
     populateDropdowns() {
         const fill = (id, arr, defaultText) => {
             const select = document.getElementById(id);
-            select.innerHTML = `<option value="" disabled selected hidden>-- ${defaultText} --</option>` + 
-                arr.map(item => `<option value="${item.name}">${item.name}</option>`).join('');
+            select.innerHTML = `<option value="" disabled selected hidden>-- ${this.escapeHTML(defaultText)} --</option>` +
+                arr.map(item => `<option value="${this.escapeHTML(item.name)}">${this.escapeHTML(item.name)}</option>`).join('');
         };
         fill('race-select', rpgData.races, 'Выберите расу');
         fill('parent1-select', rpgData.races.filter(r => r.name !== 'Полукровка'), 'Раса Отца');
         fill('parent2-select', rpgData.races.filter(r => r.name !== 'Полукровка'), 'Раса Матери');
         fill('age-select', rpgData.ages, 'Выберите возраст');
-        fill('skill-select', rpgData.skills, 'Выберите стартовый навык');
+        fill('faction-select', rpgData.factions, 'Принадлежность (Опционально)');
+        fill('skill-select', rpgData.skills, 'Выберите пассивный навык');
+        fill('active-skill-select', rpgData.active_skills, 'Выберите боевой навык');
         fill('gift-select', rpgData.gifts, 'Выберите Тёмный Дар');
-        fill('weapon-select', rpgData.materials, 'Материал Оружия');
-        fill('armor-select', rpgData.materials, 'Материал Брони');
 
-        document.getElementById('traits-container').innerHTML = rpgData.traits.map(t => 
-            `<label><input type="checkbox" value="${t.name}" onchange="app.updateData()"> <span>${t.name}</span></label>`
-        ).join('');
+        const traitMarkup = (type, title, description) => {
+            const items = rpgData.traits.filter(t => t.type === type);
+            const colorClass = type === 'pos' ? 'trait-pos' : 'trait-neg';
+            const typeLabel = type === 'pos' ? 'Положительная' : 'Отрицательная';
+            const list = items.map(t => `
+                <label class="${colorClass}">
+                    <input type="checkbox" value="${this.escapeHTML(t.name)}" onchange="app.onTraitChange(this)" aria-label="${this.escapeHTML(t.name)}">
+                    <span><strong>${this.escapeHTML(t.name)}</strong><small>${typeLabel}</small><span class="trait-effect">${this.escapeHTML(t.effect || 'Эффект не указан')}</span></span>
+                </label>`).join('');
+            return `<section class="trait-group ${colorClass}-group"><h3>${title}</h3><p>${description}</p><div class="trait-options">${list}</div></section>`;
+        };
+        document.getElementById('traits-container').innerHTML =
+            traitMarkup('pos', '1. Положительные черты', 'Начните с положительной черты.') +
+            traitMarkup('neg', '2. Отрицательные черты', 'После положительной выберите отрицательную черту для баланса.');
+        this.updateTraitsGuidance();
     },
 
     updateInfoCard(id, contentHTML, defaultText = "") {
         const el = document.getElementById(id);
-        if (contentHTML) {
-            el.innerHTML = contentHTML;
-            el.classList.remove('empty');
-        } else {
-            el.innerHTML = defaultText;
-            el.classList.add('empty');
-        }
+        if (contentHTML) { el.innerHTML = contentHTML; el.classList.remove('empty'); } 
+        else { el.innerHTML = defaultText; el.classList.add('empty'); }
     },
 
     updateRace() {
@@ -277,11 +224,13 @@ const app = {
     updateAge() {
         const age = document.getElementById('age-select').value;
         const aData = rpgData.ages.find(a => a.name === age);
-        if(aData) {
-            this.updateInfoCard('age-info', `<strong>Бафф:</strong> ${aData.buffs}<br><strong>Условие:</strong> ${aData.constraints}`);
-            document.getElementById('traits-limit').innerText = `Доступно черт для выбора: ${aData.maxTraits}`;
+        if (aData) {
+            this.updateInfoCard('age-info', `<strong>Бафф:</strong> ${this.escapeHTML(aData.buffs)}<br><strong>Условие:</strong> ${this.escapeHTML(aData.constraints)}`);
+        } else {
+            this.updateInfoCard('age-info', null, 'Укажите возраст');
         }
         this.updateData();
+        this.updateTraitsGuidance();
     },
 
     updateData() {
@@ -289,31 +238,103 @@ const app = {
         this.char.parent1 = document.getElementById('parent1-select').value;
         this.char.parent2 = document.getElementById('parent2-select').value;
         this.char.age = document.getElementById('age-select').value;
+        this.char.faction = document.getElementById('faction-select').value;
         this.char.gift = document.getElementById('gift-select').value;
-        this.char.weapon = document.getElementById('weapon-select').value;
-        this.char.armor = document.getElementById('armor-select').value;
         this.char.name = document.getElementById('char-name').value;
         this.char.backstory = document.getElementById('backstory').value;
         this.char.skill = document.getElementById('skill-select').value;
-        // ...
-        const sData = rpgData.skills.find(s => s.name === this.char.skill);
-        if (sData) this.updateInfoCard('skill-info', `<strong>Эффект:</strong> ${sData.effect}<br><strong>Требования:</strong> ${sData.req}`);
+        this.char.activeSkill = document.getElementById('active-skill-select').value;
+        this.char.traits = Array.from(document.querySelectorAll('#traits-container input[type="checkbox"]:checked')).map(cb => cb.value);
 
-        const aData = rpgData.ages.find(a => a.name === this.char.age) || { maxTraits: 0 };
-        const checkboxes = Array.from(document.querySelectorAll('#traits-container input'));
-        const checked = checkboxes.filter(cb => cb.checked);
-        
-        if (checked.length > aData.maxTraits && this.char.age !== "") {
-            alert(`Для этого возраста максимум черт: ${aData.maxTraits}`);
-            event.target.checked = false;
-            return;
-        }
-        this.char.traits = checked.map(cb => cb.value);
+        const fData = rpgData.factions.find(f => f.name === this.char.faction);
+        if (fData) this.updateInfoCard('faction-info', `<strong>Тип:</strong> ${this.escapeHTML(fData.type)}<br><strong>Бонус:</strong> ${this.escapeHTML(fData.effect)}`);
+        else this.updateInfoCard('faction-info', null, 'Укажите гильдию или церковь');
+
+        const sData = rpgData.skills.find(s => s.name === this.char.skill);
+        if (sData) this.updateInfoCard('skill-info', `<strong>Эффект:</strong> ${this.escapeHTML(sData.effect)}<br><strong>Требования:</strong> ${this.escapeHTML(sData.req)}`);
+        else this.updateInfoCard('skill-info', null, 'Выберите ремесло или талант');
+
+        const asData = rpgData.active_skills.find(s => s.name === this.char.activeSkill);
+        if (asData) this.updateInfoCard('active-skill-info', `<strong>Эффект:</strong> ${this.escapeHTML(asData.effect)}<br><strong>КД:</strong> ${this.escapeHTML(asData.cooldown)} | <strong>Требования:</strong> ${this.escapeHTML(asData.req)}`);
+        else this.updateInfoCard('active-skill-info', null, 'Выберите боевой приём');
 
         const gData = rpgData.gifts.find(g => g.name === this.char.gift);
-        if (gData) this.updateInfoCard('gift-info', `<strong>Дар:</strong> ${gData.bonus}<br><strong>Проклятье:</strong> ${gData.debuff}`);
+        if (gData) this.updateInfoCard('gift-info', `<strong>Дар:</strong> ${this.escapeHTML(gData.bonus)}<br><strong>Проклятье:</strong> ${this.escapeHTML(gData.debuff)}`);
+        else this.updateInfoCard('gift-info', null, 'Сделайте выбор, чтобы узнать силу Дара');
 
+        const rData = rpgData.races.find(r => r.name === this.char.race);
+        if (rData) this.updateInfoCard('race-info', `<strong>Бонус:</strong> ${this.escapeHTML(rData.bonus)}<br><strong>Штраф:</strong> ${this.escapeHTML(rData.penalty)}`);
+        else this.updateInfoCard('race-info', null, 'Укажите расу для отображения бонусов');
+
+        this.updateTraitsGuidance();
         this.calculateStats();
+    },
+
+    getTraitCounts() {
+        const selected = Array.from(document.querySelectorAll('#traits-container input[type="checkbox"]:checked'));
+        const counts = { pos: 0, neg: 0, extraPositives: 0 };
+        selected.forEach(cb => {
+            const trait = rpgData.traits.find(t => t.name === cb.value);
+            if (!trait) return;
+            if (trait.type === 'neg') {
+                counts.neg += 1;
+                counts.extraPositives += Number(trait.extraPositives || 0);
+            } else {
+                counts.pos += 1;
+            }
+        });
+        return counts;
+    },
+
+    onTraitChange(checkbox) {
+        if (!checkbox) return;
+        const ageData = rpgData.ages.find(a => a.name === document.getElementById('age-select').value);
+        if (!ageData) {
+            checkbox.checked = false;
+            this.updateTraitsGuidance();
+            this.showToast('Сначала выберите возраст персонажа.');
+            return;
+        }
+
+        const counts = this.getTraitCounts();
+        if (checkbox.checked) {
+            if (ageData.maxTraits === 0) {
+                checkbox.checked = false;
+                this.showToast('Для выбранного возраста черты недоступны.');
+            } else if (counts.pos > ageData.maxTraits || counts.neg > ageData.maxTraits) {
+                checkbox.checked = false;
+                this.showToast(`Лимит возраста: до ${ageData.maxTraits} положительных и ${ageData.maxTraits} отрицательных черт.`);
+            } else if (checkbox.closest('.trait-neg-group') && counts.neg > counts.pos) {
+                checkbox.checked = false;
+                this.showToast('Сначала выберите положительную черту, затем отрицательную.');
+            } else if (checkbox.closest('.trait-pos-group') && !(counts.pos <= counts.neg + counts.extraPositives || counts.pos === counts.neg + 1)) {
+                checkbox.checked = false;
+                this.showToast('Сначала уравновесьте предыдущую положительную черту отрицательной.');
+            }
+        }
+
+        this.updateData();
+    },
+
+    updateTraitsGuidance() {
+        const target = document.getElementById('traits-limit');
+        if (!target) return;
+        const age = document.getElementById('age-select')?.value || '';
+        const ageData = rpgData.ages.find(a => a.name === age);
+        const counts = this.getTraitCounts();
+        if (!ageData) {
+            target.innerText = 'Сначала выберите возраст. Затем выберите положительную черту и уравновесьте её отрицательной.';
+            return;
+        }
+        const max = ageData.maxTraits;
+        const outstanding = Math.max(0, counts.pos - counts.neg - counts.extraPositives);
+        const bonus = counts.extraPositives ? ` Дополнительные положительные выборы от выбранных черт: +${counts.extraPositives}.` : '';
+        const balance = counts.neg > counts.pos
+            ? ' Снимите лишнюю отрицательную черту или выберите положительную.'
+            : outstanding > 0
+                ? ` Нужно выбрать ещё ${outstanding} отрицательную(ые) черту(ы).`
+                : ' Баланс черт соблюдён.';
+        target.innerText = `Лимит возраста: до ${max} положительных и ${max} отрицательных черт. Выбрано: +${counts.pos} / −${counts.neg}.${balance}${bonus}`;
     },
 
     calculateStats() {
@@ -335,8 +356,23 @@ const app = {
             }
         }
 
+        const fData = rpgData.factions.find(f => f.name === this.char.faction);
+        if (fData && fData.mods) {
+            const applyMod = (base, mod) => {
+                if (!mod) return base;
+                if (mod.op === 'add') return base + mod.val;
+                if (mod.op === 'sub') return base - mod.val;
+                if (mod.op === 'mul') return base * mod.val;
+                return base;
+            };
+            baseBody = applyMod(baseBody, fData.mods.body);
+            baseSpirit = applyMod(baseSpirit, fData.mods.spirit);
+            baseStr = applyMod(baseStr, fData.mods.strength);
+            baseInt = applyMod(baseInt, fData.mods.intellect);
+            baseAgi = applyMod(baseAgi, fData.mods.agility);
+        }
+
         const aData = rpgData.ages.find(a => a.name === this.char.age);
-        // Если раса не выбрана, ОД должно быть 0, а не 3 по умолчанию
         let od = this.char.race ? (3 + (aData ? aData.odOffset : 0)) : 0;
         let lvl = baseLvl * (aData ? aData.lvlMod : 1);
 
@@ -360,59 +396,102 @@ const app = {
         }
     },
 
-    // --- Лист Персонажа, Списки и Versus (Остальное без изменений) ---
+    renderManual() {
+        const tbody = document.querySelector('#manual-table tbody');
+        if (!tbody) return;
+        let currentCategory = '';
+        const rows = [];
+        rpgData.materials.forEach(m => {
+            const category = m.category || 'Основные материалы';
+            if (category !== currentCategory) {
+                currentCategory = category;
+                rows.push(`<tr class="material-category-row" data-category-row="${this.escapeHTML(category)}"><th colspan="10">${this.escapeHTML(category)}</th></tr>`);
+            }
+            const values = [m.name, m.dmg, m.armor, m.weap_effect, m.armor_effect, m.ring_effect, m.source, m.price, m.skill_level, m.notes];
+            const searchText = values.join(' ').toLocaleLowerCase('ru-RU');
+            rows.push(`<tr data-material-row="true" data-category="${this.escapeHTML(category)}" data-search="${this.escapeHTML(searchText)}">` +
+                values.map((value, index) => `<td${index === 0 ? ' class="gold-text material-name"' : ''}>${this.escapeHTML(value || '—')}</td>`).join('') +
+                '</tr>');
+        });
+        tbody.innerHTML = rows.join('');
+        const traitsBody = document.querySelector('#traits-table tbody');
+        if (traitsBody) {
+            const traits = [...rpgData.traits.filter(t => t.type === 'pos'), ...rpgData.traits.filter(t => t.type === 'neg')];
+            traitsBody.innerHTML = traits.map(t => `
+                <tr>
+                    <td class="${t.type === 'pos' ? 'trait-manual-pos' : 'trait-manual-neg'}">${t.type === 'pos' ? 'Положительная' : 'Отрицательная'}</td>
+                    <td class="material-name">${this.escapeHTML(t.name)}</td>
+                    <td class="manual-effect">${this.escapeHTML(t.effect || 'Эффект не указан')}</td>
+                </tr>`).join('');
+        }
+        const count = document.getElementById('materials-count');
+        if (count) count.innerText = `Материалов в справочнике: ${rpgData.materials.length}.`;
+    },
+
+    filterManual(query) {
+        const normalized = String(query || '').trim().toLocaleLowerCase('ru-RU');
+        const body = document.querySelector('#manual-table tbody');
+        if (!body) return;
+        body.querySelectorAll('[data-material-row="true"]').forEach(row => {
+            row.hidden = !!normalized && !(row.dataset.search || row.textContent.toLocaleLowerCase('ru-RU')).includes(normalized);
+        });
+        body.querySelectorAll('[data-category-row]').forEach(groupRow => {
+            const category = groupRow.dataset.categoryRow;
+            const visibleInGroup = Array.from(body.querySelectorAll('[data-material-row="true"]')).some(row => row.dataset.category === category && !row.hidden);
+            groupRow.hidden = !visibleInGroup;
+        });
+        const visibleCount = Array.from(body.querySelectorAll('[data-material-row="true"]')).filter(row => !row.hidden).length;
+        const count = document.getElementById('materials-count');
+        if (count) count.innerText = normalized ? `Найдено материалов: ${visibleCount} из ${rpgData.materials.length}.` : `Материалов в справочнике: ${rpgData.materials.length}.`;
+    },
+
     renderSheet() {
         document.getElementById('sh-name').innerText = this.char.name || "Безымянный Герой";
         document.getElementById('sh-subtitle').innerText = `Раса: ${this.char.race || '-'} | Возраст: ${this.char.age || '-'}`;
         ['body', 'spirit', 'str', 'int', 'agi', 'od', 'lvl'].forEach(key => {
             document.getElementById(`sh-${key}`).innerText = this.stats[key];
         });
+        
         const rData = rpgData.races.find(r => r.name === this.char.race) || {};
         const aData = rpgData.ages.find(a => a.name === this.char.age) || {};
         
         document.getElementById('sh-r-bonus').innerText = rData.bonus || "-";
         document.getElementById('sh-r-penalty').innerText = rData.penalty || "-";
         document.getElementById('sh-a-buff').innerText = aData.buffs || "-";
+        
+        document.getElementById('sh-faction').innerText = this.char.faction || "Одиночка";
+        document.getElementById('sh-skill').innerText = this.char.skill || "-";
+        document.getElementById('sh-active-skill').innerText = this.char.activeSkill || "-";
         document.getElementById('sh-gift').innerText = this.char.gift || "-";
         document.getElementById('sh-traits').innerText = this.char.traits.length ? this.char.traits.join(', ') : "Нет";
-        document.getElementById('sh-weapon').innerText = this.char.weapon || "-";
-        document.getElementById('sh-armor').innerText = this.char.armor || "-";
         document.getElementById('sh-backstory').innerText = this.char.backstory || "История не написана...";
-        document.getElementById('sh-skill').innerText = this.char.skill || "-";
     },
 
-exportJPG() {
+    exportJPG() {
         const element = document.getElementById('character-sheet');
         element.classList.add('jpg-export-mode'); 
         
-        // Меняем текст кнопки для обратной связи
         const btn = document.querySelector('button[onclick="app.exportJPG()"]');
         const originalText = btn.innerHTML;
         btn.innerHTML = "⏳ Обработка...";
         btn.disabled = true;
 
-        // Даем браузеру мгновение на применение CSS-класса перед созданием скриншота
         setTimeout(() => {
-            html2canvas(element, { 
-                scale: 2, // Высокое разрешение (х2)
-                useCORS: true, // Позволяет корректно рендерить Google Шрифты
-                backgroundColor: "#111" // Подложка
-            }).then(canvas => {
+            html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#111" })
+            .then(canvas => {
                 element.classList.remove('jpg-export-mode');
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 
-                // Конвертируем Canvas в JPG и вызываем скачивание
                 const link = document.createElement('a');
                 link.download = `Персонаж_${this.char.name || 'Hero'}.jpg`;
-                link.href = canvas.toDataURL('image/jpeg', 0.95); // 0.95 - качество сжатия
+                link.href = canvas.toDataURL('image/jpeg', 0.95);
                 link.click();
             }).catch(err => {
-                console.error("Ошибка при создании JPG: ", err);
+                console.error("Ошибка JPG: ", err);
                 element.classList.remove('jpg-export-mode');
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-                alert("Не удалось сохранить изображение.");
             });
         }, 100);
     },
@@ -441,11 +520,11 @@ exportJPG() {
         document.getElementById('parent1-select').value = this.char.parent1 || "";
         document.getElementById('parent2-select').value = this.char.parent2 || "";
         document.getElementById('age-select').value = this.char.age;
-        document.getElementById('gift-select').value = this.char.gift;
-        document.getElementById('weapon-select').value = this.char.weapon;
-        document.getElementById('armor-select').value = this.char.armor;
-        document.getElementById('backstory').value = this.char.backstory;
+        document.getElementById('faction-select').value = this.char.faction || "";
         document.getElementById('skill-select').value = this.char.skill || "";
+        document.getElementById('active-skill-select').value = this.char.activeSkill || "";
+        document.getElementById('gift-select').value = this.char.gift;
+        document.getElementById('backstory').value = this.char.backstory;
 
         document.querySelectorAll('#traits-container input').forEach(cb => {
             cb.checked = this.char.traits.includes(cb.value);

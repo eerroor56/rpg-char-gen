@@ -248,6 +248,19 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--g
     }
 }
 
+/* Цветовая дифференциация черт */
+.trait-pos { border-left: 4px solid var(--success) !important; }
+.trait-pos span small { color: var(--success); font-size: 14px; }
+.trait-neg { border-left: 4px solid var(--danger) !important; }
+.trait-neg span small { color: var(--danger); font-size: 14px; }
+
+.trait-pos:hover { border-color: var(--success) !important; box-shadow: inset 20px 0 20px -20px rgba(46, 204, 113, 0.2); }
+.trait-neg:hover { border-color: var(--danger) !important; box-shadow: inset 20px 0 20px -20px rgba(231, 76, 60, 0.2); }
+
+#manual-table th { font-size: 14px; }
+#manual-table td { font-size: 18px; }
+#manual-table td.gold-text { color: var(--gold); text-transform: uppercase; font-family: var(--font-pixel); font-size: 12px; }
+
 @media (max-width: 768px) {
     header { flex-direction: column; text-align: center; gap: 15px; }
     nav { justify-content: center; }
@@ -276,4 +289,52 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--g
     
     .sheet-grid { grid-template-columns: 1fr; }
     .sidebar { width: 100%; right: -100%; border-left: none; }
+}
+
+/* Исправленная раскладка черт: чекбокс не растягивается на всю ширину */
+.traits-layout { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.trait-group { min-width: 0; padding: 16px; border: 2px solid #333; background: #090909; }
+.trait-group > h3 { font-size: 12px; line-height: 1.7; margin-bottom: 8px; }
+.trait-group > p { color: #aaa; margin-bottom: 12px; font-size: 18px; }
+.trait-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: 10px; align-items: stretch; }
+.trait-options label { display: flex; align-items: flex-start; gap: 10px; min-width: 0; height: 100%; padding: 12px; background: #000; border: 2px solid #333; cursor: pointer; overflow-wrap: anywhere; }
+.trait-options label > span { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.trait-options label > span > strong { color: var(--text-main); line-height: 1.2; }
+.trait-options label > span small { font-size: 14px; line-height: 1.2; }
+.trait-options .trait-effect { display: block; color: #bcbcbc; font-size: 17px; line-height: 1.25; }
+.trait-options input[type="checkbox"] { width: 20px; min-width: 20px; max-width: 20px; height: 20px; flex: 0 0 20px; margin: 2px 0 0; padding: 0; accent-color: var(--success); }
+.trait-neg-group .trait-options input[type="checkbox"] { accent-color: var(--danger); }
+.trait-options .trait-pos:has(input:checked) { border-color: var(--success) !important; box-shadow: inset 4px 0 0 var(--success); }
+.trait-options .trait-neg:has(input:checked) { border-color: var(--danger) !important; box-shadow: inset 4px 0 0 var(--danger); }
+
+/* Расширенный справочник */
+.manual-section { margin-bottom: 36px; }
+.manual-heading { margin: 0 0 14px; font-family: var(--font-pixel); font-size: 14px; line-height: 1.7; color: var(--gold); text-transform: uppercase; }
+.manual-description { margin: 0 0 18px; color: #aaa; font-size: 18px; line-height: 1.4; }
+.manual-search-label { display: block; margin-bottom: 8px; color: var(--gold); }
+#manual-search { max-width: 560px; }
+.manual-table { min-width: 1000px; }
+.manual-table th, .manual-table td { text-align: left; vertical-align: top; line-height: 1.35; overflow-wrap: anywhere; }
+.manual-table td { min-width: 90px; font-size: 17px; }
+.manual-table td:nth-child(1) { min-width: 170px; }
+.manual-table td:nth-child(4), .manual-table td:nth-child(5), .manual-table td:nth-child(6), .manual-table td:nth-child(7), .manual-table td:nth-child(10) { min-width: 220px; white-space: normal; }
+.manual-table .material-category-row th { background: #30250c; color: var(--gold); font-size: 12px; padding: 12px 15px; text-align: left; }
+.manual-table .material-name { color: var(--gold); font-weight: bold; }
+.manual-effect { white-space: normal; }
+.manual-count { margin-top: 12px; color: #aaa; font-size: 18px; }
+.trait-manual-pos { color: var(--success); white-space: nowrap; }
+.trait-manual-neg { color: var(--danger); white-space: nowrap; }
+.trait-manual-pos, .trait-manual-neg { font-weight: bold; }
+
+.modal-content { max-height: 90vh; overflow-y: auto; }
+.modal-button-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.modal-button-group button { min-height: 42px; }
+@media (max-width: 768px) {
+    .trait-options { grid-template-columns: minmax(0, 1fr); }
+    .trait-group { padding: 12px; }
+    .manual-heading { font-size: 11px; }
+    .manual-description { font-size: 17px; }
+    .modal-actions { align-items: stretch; }
+    .modal-button-group { width: 100%; flex-direction: column; }
+    .modal-button-group button { width: 100%; }
 }
