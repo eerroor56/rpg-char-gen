@@ -1,0 +1,253 @@
+:root {
+    --bg-main: #000;
+    --bg-panel: #111;
+    --border: #444;
+    --text-main: #e0e0e0;
+    --gold: #f1c40f;
+    --gold-hover: #f39c12;
+    --parchment: #f4ebd8;
+    --parchment-text: #2c1a0e;
+    --danger: #e74c3c;
+    --success: #2ecc71;
+    
+    /* Новые пиксельные шрифты */
+    --font-ui: 'VT323', monospace;
+    --font-pixel: 'Press Start 2P', cursive;
+    --font-parchment-title: 'Ruslan Display', serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background-color: var(--bg-main); color: var(--text-main); font-family: var(--font-ui); font-size: 22px; overflow-x: hidden; }
+
+/* Анимации UI */
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseStat { 0% { transform: scale(1); color: var(--gold); } 50% { transform: scale(1.2); color: #fff; text-shadow: 0 0 5px var(--gold); } 100% { transform: scale(1); color: var(--gold); } }
+.pulse-anim { animation: pulseStat 0.3s ease-out; display: inline-block; }
+
+.screen, .wizard-panel { display: none; }
+.screen.active, .wizard-panel.active { display: block; animation: fadeInUp 0.3s ease forwards; }
+
+h2 { font-family: var(--font-pixel); font-size: 12px; line-height: 1.6; color: var(--gold); text-transform: uppercase; margin-bottom: 20px; text-shadow: 2px 2px #000; }
+h3 { font-family: var(--font-pixel); font-size: 10px; color: var(--gold); }
+
+header { background: #1a1a1a; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--gold); flex-wrap: wrap; gap: 10px; }
+header .logo { font-family: var(--font-pixel); font-size: 14px; color: var(--gold); font-weight: normal; text-shadow: 2px 2px #000; }
+nav { display: flex; gap: 15px; flex-wrap: wrap; }
+nav button { background: none; border: none; color: var(--text-main); font-family: var(--font-ui); font-size: 20px; cursor: pointer; transition: 0.2s; }
+nav button:hover { color: var(--gold); text-shadow: 2px 2px #000; }
+.help-btn { color: #3498db; }
+
+/* Кнопки в ретро-стиле (рубленые, без закруглений) */
+button { border-radius: 0 !important; font-family: var(--font-ui); text-transform: uppercase; }
+.gold-btn { background: var(--gold); color: #000; padding: 8px 15px; border: 2px solid #fff; font-size: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.gold-btn:hover { background: var(--gold-hover); box-shadow: 4px 4px 0 #fff; transform: translate(-2px, -2px); }
+.danger-btn { background: var(--danger); color: #fff; padding: 8px 15px; border: 2px solid #fff; font-size: 20px; cursor: pointer; transition: 0.2s; }
+.danger-btn:hover { background: #c0392b; box-shadow: 4px 4px 0 #fff; transform: translate(-2px, -2px); }
+
+/* Пиксельные блоки */
+.pixel-box { background: var(--bg-panel); border: 3px solid #333; padding: 25px; box-shadow: 4px 4px 0 #000; }
+#app-container { max-width: 1000px; margin: 30px auto; padding: 0 15px; }
+
+/* Stepper */
+.wizard-steps-container { overflow-x: auto; scrollbar-width: none; margin-bottom: 20px; border-bottom: 3px dashed var(--border); padding-bottom: 10px; }
+.wizard-steps-container::-webkit-scrollbar { display: none; }
+.wizard-steps { display: flex; justify-content: space-between; min-width: 600px; font-family: var(--font-pixel); font-size: 10px; }
+.step-indicator { color: #666; cursor: pointer; padding: 5px; transition: 0.2s; text-transform: uppercase; }
+.step-indicator:hover { color: #aaa; }
+.step-indicator.active { color: var(--gold); text-shadow: 1px 1px #fff; }
+.step-indicator.active::before { content: "► "; }
+.step-indicator.completed { color: var(--success); }
+
+/* Инпуты */
+select, input, textarea { width: 100%; padding: 12px; background: #000; color: #fff; border: 2px solid #555; border-radius: 0; margin-bottom: 15px; font-size: 20px; font-family: var(--font-ui); transition: 0.2s; }
+select:invalid, select option[value=""] { color: #777; }
+select:focus, input:focus, textarea:focus { outline: none; border-color: var(--gold); box-shadow: 4px 4px 0 var(--gold); }
+
+.info-card { background: #000; padding: 15px; border-left: 4px solid var(--gold); font-size: 20px; margin-top: 10px; }
+.info-card.empty { border-color: #555; color: #777; border-style: dashed; }
+.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.checkbox-grid label { background: #000; padding: 10px; border: 2px solid #333; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.checkbox-grid label:hover { border-color: var(--gold); }
+.checkbox-grid input:checked + span { color: var(--gold); text-shadow: 1px 1px #000; }
+.warning { color: var(--danger); margin-bottom: 15px; font-family: var(--font-pixel); font-size: 9px; }
+
+/* Нижняя панель */
+.wizard-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px; }
+.nav-btn { padding: 10px 20px; border: 2px solid #fff; cursor: pointer; }
+.nav-btn:disabled { opacity: 0.5; border-style: dashed; cursor: not-allowed; pointer-events: none; }
+.live-stats { display: flex; gap: 10px; font-family: var(--font-pixel); font-size: 10px; }
+.stat-badge { background: #000; padding: 8px; border: 2px solid #333; }
+.gold-text { color: var(--gold) !important; }
+
+/* Toast */
+.toast { visibility: hidden; min-width: 300px; background-color: var(--success); color: #000; text-align: center; border: 4px solid #fff; box-shadow: 6px 6px 0 #000; padding: 15px; position: fixed; z-index: 3000; left: 50%; bottom: 30px; transform: translateX(-50%); font-family: var(--font-pixel); font-size: 12px; text-transform: uppercase; }
+.toast.show { visibility: visible; animation: fadein 0.3s, fadeout 0.3s 2.5s; }
+@keyframes fadein { from { bottom: 0; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+@keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 0; opacity: 0; } }
+
+/* Лист персонажа */
+.parchment { background: var(--parchment); color: var(--parchment-text); border: 4px solid #5c3a21; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); font-family: 'Georgia', serif; }
+.sheet-container { padding: 40px; margin-bottom: 20px; }
+.sheet-header { text-align: center; border-bottom: 4px double #5c3a21; padding-bottom: 15px; margin-bottom: 20px; }
+.sheet-header h1 { font-family: var(--font-parchment-title); font-size: 46px; font-weight: normal; margin-bottom: 10px; color: #4a2912; text-shadow: none; text-transform: none; }
+.sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.sheet-box { border: 2px solid #8b5a2b; padding: 15px; background: rgba(255,255,255,0.4); }
+.sheet-box h3 { font-family: var(--font-parchment-title); font-size: 24px; color: #5c3a21; text-transform: none; border-bottom: 1px solid #8b5a2b; margin-bottom: 10px; text-shadow: none; }
+.sheet-box ul { list-style: square inside; }
+.sheet-box li, .sheet-box p { font-size: 18px; margin-bottom: 5px; }
+
+/* Режим PDF */
+.pdf-export-mode { background: #fff !important; border: none !important; margin: 0 !important; padding: 20px !important; }
+.pdf-export-mode * { color: #000 !important; text-shadow: none !important; }
+
+/* Сравнение */
+.table-responsive { overflow-x: auto; }
+.compare-table { width: 100%; border-collapse: collapse; text-align: center; min-width: 600px; }
+.compare-table th, .compare-table td { padding: 15px; border: 2px solid #333; }
+.compare-table th { background: #222; color: var(--gold); font-family: var(--font-pixel); font-size: 10px; }
+.win { color: var(--success); font-weight: bold; }
+.lose { color: var(--danger); }
+
+/* Модалка & Сайдбар */
+/* Модалка (Онбординг) */
+.modal { 
+    display: none; 
+    position: fixed; 
+    z-index: 2000; 
+    left: 0; 
+    top: 0; 
+    width: 100%; 
+    height: 100%; 
+    background-color: rgba(0,0,0,0.8); 
+}
+.modal.open { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+}
+.modal-content { 
+    max-width: 600px; 
+    width: 90%; 
+    position: relative; 
+    /* Добавляем внутренний отступ для пиксельной коробки */
+    padding: 30px; 
+}
+.modal-content h2 {
+    margin-bottom: 25px;
+}
+.modal-content p {
+    margin-bottom: 20px;
+    line-height: 1.4;
+}
+.onboarding-list {
+    margin: 0 0 30px 25px; /* Отступ слева для буллитов и снизу */
+    line-height: 1.5;
+}
+.onboarding-list li {
+    margin-bottom: 10px;
+}
+
+/* Исправленный нижний блок с чекбоксом и кнопкой */
+.modal-actions { 
+    display: flex; 
+    justify-content: space-between; /* Раскидываем по краям */
+    align-items: center; /* Центрируем по вертикали */
+    flex-wrap: wrap; /* Если не влезет на мобилке - перенесется */
+    gap: 15px; /* Отступ между элементами при переносе */
+    margin-top: 20px; 
+    border-top: 2px dashed #444; 
+    padding-top: 20px; 
+}
+
+/* Стили для лейбла с чекбоксом */
+.checkbox-label { 
+    display: flex; 
+    align-items: center; /* Чекбокс и текст на одной линии */
+    gap: 10px; 
+    cursor: pointer; 
+    font-size: 18px; /* Немного уменьшаем шрифт, чтобы влезло */
+    user-select: none; /* Запрещаем выделение текста */
+}
+/* Делаем сам чекбокс чуть больше для стиля */
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0; /* Убираем дефолтные отступы */
+    cursor: pointer;
+}
+.sidebar { position: fixed; top: 0; right: -350px; width: 350px; height: 100%; background: #111; border-left: 4px solid var(--gold); padding: 20px; transition: 0.3s ease; z-index: 1500; overflow-y: auto; }
+.sidebar.open { right: 0; }
+.sidebar h2 { font-family: var(--font-pixel); font-size: 14px; text-align: center; }
+.saved-char { background: #000; padding: 15px; border: 2px solid #333; margin-bottom: 10px; border-left: 6px solid var(--gold); display: flex; flex-direction: column; gap: 10px; }
+.saved-char-actions { display: flex; gap: 10px; }
+.saved-char-actions button { flex: 1; padding: 8px; font-size: 18px; }
+.close-btn { background: none; border: none; color: #fff; font-size: 24px; position: absolute; top: 15px; right: 20px; cursor: pointer; }
+
+/* Панель управления на листе персонажа */
+.sheet-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+/* Общие стили для кнопок в панели */
+.action-btn {
+    padding: 12px 20px;
+    font-size: 18px;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 #000;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.2s;
+}
+
+/* Физика нажатия (смещение вниз) */
+.action-btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 #000;
+}
+
+/* Специфичный стиль для кнопки "Новый герой" */
+.dark-btn {
+    background: #2a2a2a;
+    color: #fff;
+    border: 2px solid #555;
+    font-family: var(--font-ui);
+    cursor: pointer;
+}
+.dark-btn:hover {
+    background: #444;
+    border-color: #fff;
+}
+
+/* Состояние "Сохранено" (блокировка) */
+.action-btn.saved {
+    background: var(--success) !important;
+    color: #000 !important;
+    border-color: #fff !important;
+    pointer-events: none;
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 #000;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+    .sheet-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .action-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    header { flex-direction: column; text-align: center; }
+    nav { justify-content: center; }
+    .wizard-controls { position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100; border-top: 4px solid var(--gold); flex-direction: column; gap: 10px; }
+    #app-container { padding-bottom: 120px; }
+    .live-stats { font-size: 8px; }
+    .stat-badge { padding: 4px; }
+    .sheet-grid { grid-template-columns: 1fr; }
+    .sidebar { width: 100%; right: -100%; border-left: none; }
+}
