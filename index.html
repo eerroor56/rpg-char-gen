@@ -1,255 +1,59 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DnD / RPG Конструктор</title>
-    
-    <!-- Подключаем пиксельные и ретро шрифты -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Ruslan+Display&family=VT323&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="styles.css?v=2.1">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мастерская героя</title>
+  <meta name="description" content="Конструктор персонажа и справочник по таблицам игры">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpolygon points='32,4 59,24 49,58 15,58 5,24' fill='%23d4a55a'/%3E%3Cpolygon points='32,16 47,27 41,48 23,48 17,27' fill='%231b1830'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Forum&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
-    <header class="no-print">
-        <div class="logo">RPG CharGen <span>✨</span></div>
-        <nav>
-            <button onclick="app.switchTab('wizard')">Создание</button>
-            <button onclick="app.switchTab('sheet')">Лист Героя</button>
-            <button onclick="app.switchTab('compare')">Сравнение</button>
-            <button onclick="app.switchTab('manual')" style="color: var(--success);">Справочник</button>
-            <button onclick="app.openOnboarding()" class="help-btn">❓ Справка</button>
-            <button class="gold-btn" onclick="app.toggleSession()">💾 Мои Герои</button>
-        </nav>
-    </header>
-
-    <!-- Тост-уведомление -->
-    <div id="toast" class="toast">Персонаж успешно сохранён!</div>
-
-    <!-- Стартовый экран (Онбординг) -->
-    <div id="onboarding-modal" class="modal">
-        <div class="modal-content pixel-box">
-            <h2>Справка по конструктору</h2>
-            <p>Создание героя состоит из пяти этапов. Выборы и их эффекты можно проверить в справочнике.</p>
-            <ul class="onboarding-list">
-                <li><strong>1. Раса:</strong> задаёт базовые характеристики, бонусы и штрафы. Для полукровки нужно выбрать обе родительские расы.</li>
-                <li><strong>2. Возраст и путь:</strong> возраст меняет характеристики, ОД и допустимое количество черт; фракция или религия могут давать бонусы.</li>
-                <li><strong>3. Предыстория:</strong> укажите имя, историю и мотивацию героя.</li>
-                <li><strong>4. Навыки и Дар:</strong> выберите пассивный навык, боевой навык и ровно один Тёмный Дар.</li>
-                <li><strong>5. Черты:</strong> сначала выбирайте положительную черту, затем уравновешивающую её отрицательную. Специальные черты могут давать дополнительные положительные выборы.</li>
-                <li><strong>Справочник:</strong> содержит эффекты всех черт и список материалов для крафта, включая кристаллы.</li>
-            </ul>
-            <div class="modal-actions">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="dont-show-again"> Больше не показывать
-                </label>
-                <div class="modal-button-group">
-                    <button class="dark-btn" onclick="app.closeOnboarding(); app.switchTab('manual')">Открыть справочник</button>
-                    <button class="gold-btn" onclick="app.closeOnboarding()">Начать ➡</button>
-                </div>
-            </div>
-        </div>
+  <a class="skip" href="#main">Перейти к содержимому</a>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 59,24 49,58 15,58 5,24"/><polygon class="inner" points="32,16 47,27 41,48 23,48 17,27"/></svg>
+      <span>Мастерская героя</span>
     </div>
+    <nav class="tabs" aria-label="Разделы">
+      <a href="#create" data-tab="create">Создание</a>
+      <a href="#heroes" data-tab="heroes">Мои герои</a>
+      <a href="#ref" data-tab="ref">Справочник</a>
+      <a href="#rules" data-tab="rules">Как считается</a>
+    </nav>
+  </header>
 
-    <main id="app-container">
-        <!-- WIZARD -->
-        <section id="wizard" class="screen active">
-            <!-- Stepper -->
-            <div class="wizard-steps-container">
-                <div class="wizard-steps">
-                    <div class="step-indicator" onclick="app.goToStep(1)" id="ind-1">1.Раса</div>
-                    <div class="step-indicator" onclick="app.goToStep(2)" id="ind-2">2.Возраст/Путь</div>
-                    <div class="step-indicator" onclick="app.goToStep(3)" id="ind-3">3.Предыстория</div>
-                    <div class="step-indicator" onclick="app.goToStep(4)" id="ind-4">4.Навыки/Дар</div>
-                    <div class="step-indicator" onclick="app.goToStep(5)" id="ind-5">5.Черты</div>
-                </div>
-            </div>
+  <main id="main">
+    <section id="tab-create" class="tab-pane" hidden>
+      <div class="workbench">
+        <nav class="rail" aria-label="Этапы создания" id="rail"></nav>
+        <div class="work" id="work" tabindex="-1"></div>
+        <aside class="ledger" id="ledger" aria-label="Сводка персонажа"></aside>
+      </div>
+    </section>
+    <section id="tab-heroes" class="tab-pane" hidden></section>
+    <section id="tab-ref" class="tab-pane" hidden></section>
+    <section id="tab-rules" class="tab-pane" hidden></section>
+  </main>
 
-            <div class="wizard-content">
-                <div class="wizard-panel active pixel-box" id="step-1">
-                    <h2>Выбор Расы</h2>
-                    <select id="race-select" onchange="app.updateRace()"></select>
-                    <div id="halfblood-container" style="display: none; margin-top: 15px;">
-                        <h3 style="margin-bottom: 10px;">Родительские расы:</h3>
-                        <select id="parent1-select" onchange="app.updateHalfblood()"></select>
-                        <select id="parent2-select" onchange="app.updateHalfblood()"></select>
-                    </div>
-                    <div id="race-info" class="info-card empty">Укажите расу для отображения бонусов</div>
-                </div>
-                
-                <div class="wizard-panel pixel-box" id="step-2">
-                    <h2>Возраст</h2>
-                    <select id="age-select" onchange="app.updateAge()"></select>
-                    <div id="age-info" class="info-card empty" style="margin-bottom: 25px;">Укажите возраст</div>
+  <button class="ledger-toggle" id="ledgerToggle" type="button" aria-controls="ledger" aria-expanded="false">Сводка</button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
 
-                    <h2>Принадлежность (Фракция / Религия)</h2>
-                    <select id="faction-select" onchange="app.updateData()"></select>
-                    <div id="faction-info" class="info-card empty">Укажите гильдию или церковь</div>
-                </div>
+  <noscript><p class="noscript">Для работы конструктора нужен включённый JavaScript.</p></noscript>
 
-                <div class="wizard-panel pixel-box" id="step-3">
-                    <h2>Квента и Личность</h2>
-                    <label>Имя персонажа:</label>
-                    <input type="text" id="char-name" placeholder="Введите имя героя..." onkeyup="app.updateData()">
-                    <label>Квента / Мотивация:</label>
-                    <textarea id="backstory" rows="6" placeholder="Напишите историю вашего героя..." onkeyup="app.updateData()"></textarea>
-                </div>
-
-                <div class="wizard-panel pixel-box" id="step-4">
-                    <h2>Пассивный навык</h2>
-                    <select id="skill-select" onchange="app.updateData()"></select>
-                    <div id="skill-info" class="info-card empty" style="margin-bottom: 25px;">Выберите ремесло или талант</div>
-
-                    <h2>Активный (боевой) навык</h2>
-                    <select id="active-skill-select" onchange="app.updateData()"></select>
-                    <div id="active-skill-info" class="info-card empty" style="margin-bottom: 25px;">Выберите боевой приём</div>
-
-                    <h2>Тёмные Дары (Строго 1)</h2>
-                    <select id="gift-select" onchange="app.updateData()"></select>
-                    <div id="gift-info" class="info-card empty">Сделайте выбор, чтобы узнать силу Дара</div>
-                </div>
-
-                <div class="wizard-panel pixel-box" id="step-5">
-                    <h2>Черты характера</h2>
-                    <p id="traits-limit" class="warning">Количество черт зависит от возраста. Каждая положительная черта должна уравновешиваться отрицательной.</p>
-                    <div id="traits-container" class="traits-layout"></div>
-                </div>
-            </div>
-
-            <!-- Контролы -->
-            <div class="wizard-controls pixel-box">
-                <button class="nav-btn" onclick="app.prevStep()" id="prev-btn" disabled>⬅ Назад</button>
-                <div class="live-stats">
-                    <span class="stat-badge">Тело <b id="s-body">0</b></span>
-                    <span class="stat-badge">Дух <b id="s-spirit">0</b></span>
-                    <span class="stat-badge">Сила <b id="s-str">0</b></span>
-                    <span class="stat-badge gold-text">ОД <b id="s-od">0</b></span>
-                </div>
-                <div class="action-buttons" style="display:flex; gap:10px;">
-                    <button class="danger-btn nav-btn" onclick="app.manualReset()">🔄 Сброс</button>
-                    <button class="gold-btn nav-btn" onclick="app.nextStep()" id="next-btn">Далее ➡</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- CHARACTER SHEET -->
-        <section id="sheet" class="screen">
-            <div id="character-sheet" class="sheet-container parchment">
-                <div class="sheet-header">
-                    <h1 id="sh-name">Имя Неизвестно</h1>
-                    <p id="sh-subtitle">Раса: - | Возраст: -</p>
-                </div>
-                <div class="sheet-grid">
-                    <div class="sheet-box">
-                        <h3>Характеристики</h3>
-                        <ul>
-                            <li>Тело: <span id="sh-body">0</span></li>
-                            <li>Дух: <span id="sh-spirit">0</span></li>
-                            <li>Сила: <span id="sh-str">0</span></li>
-                            <li>Интеллект: <span id="sh-int">0</span></li>
-                            <li>Ловкость: <span id="sh-agi">0</span></li>
-                            <li>ОД: <span id="sh-od" class="gold-text">0</span></li>
-                            <li>Уровень: <span id="sh-lvl">0</span></li>
-                        </ul>
-                    </div>
-                    <div class="sheet-box">
-                        <h3>Особенности</h3>
-                        <p><strong>Бонус:</strong> <span id="sh-r-bonus">-</span></p>
-                        <p><strong>Штраф:</strong> <span id="sh-r-penalty">-</span></p>
-                        <p><strong>Возраст:</strong> <span id="sh-a-buff">-</span></p>
-                        <p><strong>Принадлежность:</strong> <span id="sh-faction">Одиночка</span></p>
-                    </div>
-                    <div class="sheet-box">
-                        <h3>Таланты и Навыки</h3>
-                        <p><strong>Пассивный:</strong> <span id="sh-skill">-</span></p>
-                        <p><strong>Боевой:</strong> <span id="sh-active-skill">-</span></p>
-                        <p><strong>Тёмный дар:</strong> <span id="sh-gift">-</span></p>
-                        <p><strong>Черты:</strong> <span id="sh-traits">Нет</span></p>
-                    </div>
-                    <div class="sheet-box">
-                        <h3>История</h3>
-                        <p><strong>Квента:</strong> <br><span id="sh-backstory">-</span></p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="sheet-actions no-print">
-                <button id="btn-save-char" class="gold-btn action-btn" onclick="app.saveCurrentCharacter()">💾 Сохранить</button>
-                <button class="dark-btn action-btn" onclick="app.resetAndCreateNew()">➕ Новый герой</button>
-                <button class="gold-btn action-btn" onclick="app.exportJPG()">📥 Скачать JPG</button>
-            </div>
-        </section>
-
-        <!-- MANUAL (Справочник) -->
-        <section id="manual" class="screen">
-            <div class="manual-section">
-                <h2 class="manual-heading">Справочник по материалам</h2>
-                <p class="manual-description">Полный список перенесён из листа «материаллы» книги Manual_DM_RPG.xlsm. Включены характеристики, эффекты, способы получения, цены, требования к навыку и примечания.</p>
-                <label class="manual-search-label" for="manual-search">Поиск по материалам</label>
-                <input type="search" id="manual-search" placeholder="Введите название, эффект или способ добычи…" oninput="app.filterManual(this.value)" autocomplete="off">
-                <div class="table-responsive">
-                    <table class="compare-table pixel-box manual-table" id="manual-table">
-                        <thead>
-                            <tr>
-                                <th>Материал</th>
-                                <th>Урон за ед. / слиток</th>
-                                <th>Броня за ед. / слиток</th>
-                                <th>Эффект оружия</th>
-                                <th>Эффект брони</th>
-                                <th>Эффект украшения / инкрустации</th>
-                                <th>Сплав / добыча</th>
-                                <th>Цена</th>
-                                <th>Уровень навыка</th>
-                                <th>Условие / примечание</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <p id="materials-count" class="manual-count" aria-live="polite"></p>
-            </div>
-
-            <div class="manual-section" id="traits-reference">
-                <h2 class="manual-heading">Справочник по чертам характера</h2>
-                <p class="manual-description">Положительные черты расположены первыми, затем отрицательные. Описания перенесены из таблицы игрока; одинаковые повторяющиеся строки объединены.</p>
-                <div class="table-responsive">
-                    <table class="compare-table pixel-box manual-table" id="traits-table">
-                        <thead><tr><th>Тип</th><th>Черта</th><th>Эффект</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- СРАВНЕНИЕ -->
-        <section id="compare" class="screen">
-            <h2 style="margin-bottom: 20px; font-family: 'Press Start 2P'; font-size: 14px; text-transform: uppercase;">Versus Mode</h2>
-            <div class="compare-selectors">
-                <select id="vs-1" onchange="app.renderCompare()"></select>
-                <span>VS</span>
-                <select id="vs-2" onchange="app.renderCompare()"></select>
-            </div>
-            <div class="table-responsive">
-                <table class="compare-table pixel-box">
-                    <thead><tr><th id="vs-name-1">Боец 1</th><th>Параметр</th><th id="vs-name-2">Боец 2</th></tr></thead>
-                    <tbody id="vs-body"></tbody>
-                </table>
-            </div>
-        </section>
-    </main>
-
-    <!-- Сайдбар -->
-    <div id="session-manager" class="sidebar">
-        <button class="close-btn" onclick="app.toggleSession()">✖</button>
-        <h2>Сохранения</h2>
-        <button onclick="app.saveCurrentCharacter()" class="gold-btn" style="width:100%; margin-bottom:15px;">+ Сохранить героя</button>
-        <div id="saved-list"></div>
-    </div>
-
-    <script src="data.js?v=2.0"></script>
-    <script src="app.js?v=2.1"></script>
+  <script src="data/data.js?v=4"></script>
+  <script src="js/config.js?v=4"></script>
+  <script src="js/rules.js?v=4"></script>
+  <script src="js/ui.js?v=4"></script>
+  <script src="js/lock.js?v=4"></script>
+  <script src="js/steps.js?v=4"></script>
+  <script src="js/sheet.js?v=4"></script>
+  <script src="js/reference.js?v=4"></script>
+  <script src="js/heroes.js?v=4"></script>
+  <script>App.start();</script>
 </body>
 </html>

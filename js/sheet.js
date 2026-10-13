@@ -1,0 +1,268 @@
+/* Лист персонажа и страница «Как считается» */
+(function () {
+  'use strict';
+  const App = window.App, R = window.Rules, C = window.GM_CONFIG, D = window.GAME_DATA;
+  const esc = App.esc, cap = App.cap, fmt = R.fmt, signed = R.signed, norm = R.norm;
+
+  function sizeName(code) { const s = R.SIZES.find(x => x.id === code); return s ? s.name : code; }
+
+  function render(st, res, interactive) {
+    const race = res.race, d = res.der;
+    if (!race) return '<div class="card empty">Лист появится, когда будет выбрана раса.</div>';
+    const raceTitle = race.isHalf && race.parents && race.parents[0] && race.parents[1]
+      ? `полукровка (${race.parents[0].name} и ${race.parents[1].name})` : race.name;
+    let html = '';
+    if (interactive) {
+      html += `<div class="sheet-actions no-print">
+        <button type="button" class="btn primary" data-act="saveHero">${App.editingId ? 'Сохранить изменения' : 'Сохранить в «Мои герои»'}</button>
+        <button type="button" class="btn" data-act="shareLink">Ссылка для ГМ</button>
+        <button type="button" class="btn" data-act="exportHero">Скачать файл</button>
+        <button type="button" class="btn" data-act="print">Печать / PDF</button>
+        <button type="button" class="btn" data-act="exportImage">Скачать картинку</button>
+        <button type="button" class="btn ghost" data-act="reset">Новый персонаж</button>
+      </div>`;
+      html += checks(res);
+    }
+    html += `<article class="sheet" id="sheet">
+      <header class="sh-head">
+        <div><h2>${esc(st.name || 'Безымянный герой')}</h2>
+        <p>${esc(cap(raceTitle))}, ${res.age ? esc(res.age.title.toLowerCase()) : 'возраст не выбран'}${res.agePct ? ` (${signed(res.agePct)}% от среднего уровня)` : ''}${st.player ? `, игрок: ${esc(st.player)}` : ''}${st.gender ? `, ${esc(st.gender)}` : ''}</p></div>
+        <dl class="sh-badges">
+          <div><dt>Уровень</dt><dd>${fmt(res.level)}</dd></div>
+          <div><dt>ОД</dt><dd>${signed(d.od)}</dd></div>
+          <div><dt>Карма</dt><dd>${signed(d.karma)}</dd></div>
+        </dl>
+      </header>
+      <div class="sh-grid">
+        <section class="sh-block"><h3>Характеристики</h3>
+          <table class="sh-stats"><thead><tr><th></th><th>Раса</th><th>Итог</th></tr></thead><tbody>
+          ${R.STATS.map(k => `<tr><th>${R.STAT_NAMES[k]}</th><td>${fmt(res.baseStats[k])}</td><td><strong>${fmt(res.stats[k])}</strong></td></tr>`).join('')}
+          </tbody></table>
+          <p class="small muted">Характер: ${esc(d.align || '—')}. Размер: ${res.size ? esc(res.size.name.toLowerCase()) : '—'}${res.size && res.size.fx !== 'без эффектов' ? ` (${esc(res.size.fx)})` : ''}. Рук: ${res.hands}.</p>
+        </section>
+        <section class="sh-block"><h3>Параметры</h3><dl class="sh-der">
+          <div><dt>ХП</dt><dd>${fmt(d.hp)}</dd></div><div><dt>Реген ХП</dt><dd>${fmt(d.hpRegen)}</dd></div>
+          <div><dt>МП</dt><dd>${fmt(d.mp)}</dd></div><div><dt>Реген МП</dt><dd>${fmt(d.mpRegen)}</dd></div>
+          <div><dt>Пси</dt><dd>${fmt(d.psi)}</dd></div><div><dt>Живость</dt><dd>${d.viv === null ? '—' : fmt(d.viv)}</dd></div>
+          <div><dt>Уворот</dt><dd>${fmt(d.dodge)}</dd></div><div><dt>Слоты</dt><dd>${fmt(d.slotsUsed)} / ${fmt(d.slots)}</dd></div>
+          <div><dt>Зоркость</dt><dd>${fmt(d.zor)}</dd></div><div><dt>Харизма</dt><dd>${fmt(d.charisma)}</dd></div>
+          <div><dt>Привлекат.</dt><dd>${signed(d.attr)}</dd></div><div><dt>Молитвы</dt><dd>${d.prayers}</dd></div>
+          <div><dt>Ячейки закл.</dt><dd>${d.spellSlots}</dd></div><div><dt>Опыт</dt><dd>${d.expPct ? signed(d.expPct) + '%' : '±0%'}${d.expMul !== 1 ? ' ×' + d.expMul : ''}</dd></div>
+          ${d.magPct ? `<div><dt>Маг. урон</dt><dd>${signed(d.magPct)}%</dd></div>` : ''}
+          ${d.sizeIn || d.sizeOut ? `<div><dt>Урон от размера</dt><dd>получ. ${signed(d.sizeIn)}% / исх. ${signed(d.sizeOut)}%</dd></div>` : ''}
+          ${d.gold ? `<div><dt>Золото</dt><dd>${d.gold}</dd></div>` : ''}
+          ${d.revive ? `<div><dt>Воскрешения</dt><dd>${d.revive}</dd></div>` : ''}
+          ${d.madness ? `<div><dt>Безумие</dt><dd>${d.madness}</dd></div>` : ''}
+        </dl></section>
+        <section class="sh-block"><h3>Таланты</h3><ul class="sh-list">
+          ${R.TALENTS.map(t => { const v = res.talents[t.id]; return v.total ? `<li><span>${t.name}</span><b>${fmt(v.total)}</b></li>` : ''; }).join('') || '<li class="muted">нет</li>'}
+        </ul></section>
+        <section class="sh-block"><h3>Обитание и символы</h3>
+          <p><b>Уровень обитания:</b> ${esc(R.habitatNames(race.habitat).join('; ') || '—')}</p>
+          <p><b>Символы:</b> ${res.symbols.length ? res.symbols.map(s => esc(s.name)).join(', ') : 'нет'}</p>
+          <p class="small muted">Фракцию и религию персонаж получает в игре, выйдя в мир.</p>
+        </section>
+        <section class="sh-block wide"><h3>Особенности</h3>
+          ${res.age ? `<p><b>Возраст (${esc(res.age.title.toLowerCase())}):</b> ${esc(res.age.buff)}</p>` : ''}
+          ${race.bonuses.map(b => `<p><b>Бонус${race.bonuses.length > 1 ? ' (' + esc(b.src) + ')' : ''}${b.freq ? ', ' + esc(b.freq) : ''}:</b> ${esc(b.text)}</p>`).join('')}
+          ${race.penalties.map(b => `<p><b>Штраф${race.penalties.length > 1 ? ' (' + esc(b.src) + ')' : ''}:</b> ${esc(b.text)}</p>`).join('')}
+          ${race.ancestor ? `<p><b>Предок:</b> ${esc(race.ancestor.name)}${race.ancestor.add ? ` (+${race.ancestorRule.pct}% статов)` : ''}${race.ancestor.symbol ? `, знак рода: ${esc(race.ancestor.symbol)}` : ''}</p>` : ''}
+          ${race.id === 'они' && st.oniClan ? `<p><b>Клан:</b> ${esc(st.oniClan)}</p>` : ''}
+        </section>
+        <section class="sh-block wide"><h3>Дар, черты</h3>
+          ${boonText(st, res)}
+          ${traitText(st, res)}
+        </section>
+        <section class="sh-block wide"><h3>Снаряжение</h3>${gearText(st, res)}</section>
+        ${st.look || st.story || st.motive || st.gmBonus ? `<section class="sh-block wide"><h3>Предыстория</h3>
+          ${st.look ? `<p><b>Внешность:</b> ${esc(st.look)}</p>` : ''}
+          ${st.story ? `<p class="pre">${esc(st.story)}</p>` : ''}
+          ${st.motive ? `<p><b>Мотивация:</b> ${esc(st.motive)}</p>` : ''}
+          ${st.gmBonus ? `<p><b>Бонусы за предысторию (ГМ):</b> ${esc(st.gmBonus)}</p>` : ''}</section>` : ''}
+      </div>
+      <footer class="sh-foot small muted">Собрано в «Мастерской героя» по таблицам ${esc(D.meta.source)} (${esc(D.meta.built)}). ${res.ok ? 'Проверка правил пройдена.' : `Не пройдено проверок: ${res.errors.length}.`}</footer>
+    </article>`;
+    return html;
+  }
+
+  function boonText(st, res) {
+    const b = res.boon;
+    if (!b) return '<p><b>Дар / благословение / болезнь:</b> нет</p>';
+    const kind = { gift: 'Тёмный дар', buff: 'Благословение', disease: 'Врождённая болезнь' }[b.kind];
+    const src = b.src;
+    let t = `<p><b>${kind}: ${esc(cap(src.name))}</b> — ${esc(b.kind === 'gift' ? `${src.bonus} / цена: ${src.debuff}` : b.kind === 'buff' ? src.effect : `${src.e1} / ${src.e2}`)}</p>`;
+    const o = st.boonOpt || {};
+    const extra = [];
+    if (o.swapA && o.swapB) extra.push(`меняются местами: ${R.STAT_NAMES[o.swapA]} и ${R.STAT_NAMES[o.swapB]}`);
+    if (o.otherRace) { const r = R.index.race.get(o.otherRace); if (r) extra.push(`бонусы расы «${r.name}»: ${r.bonus}; удвоенный штраф: ${r.penalty}`); }
+    if (o.word) extra.push(`отрицаемое слово: «${o.word}»`);
+    if (o.immunity) extra.push(`иммунитет к: ${o.immunity}`);
+    if (o.prevSkill) extra.push(`физ. навык: ${o.prevSkill}`);
+    if (o.prevSymbol) extra.push(`символ: ${o.prevSymbol}`);
+    if (o.prevStance) extra.push(`стойка: ${o.prevStance}`);
+    ['artifact', 'element', 'parts', 'beasts', 'replicantTrait'].forEach(k => { const r = R.rollView((st.rolls || {})[k]); if (r) extra.push(`бросок: ${r.v}${r.detail ? ' — ' + r.detail : ''}${r.n > 1 ? ` (бросков: ${r.n})` : ''}`); });
+    if (extra.length) t += `<ul class="small">${extra.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+    return t;
+  }
+
+  function traitText(st, res) {
+    const ti = res.traits;
+    const name = k => {
+      const t = R.index.traitPos.get(k) || R.index.traitNeg.get(k);
+      return t ? t : { name: k, effect: '' };
+    };
+    const to = st.traitOpt || {};
+    const extra = k => {
+      if (k === 'калека') return ` (убрано: рук ${to.arms || 0}, ног ${to.legs || 0})`;
+      if (k === 'резистентный' && to.resist) return ` (${to.resist})`;
+      if (k === 'уязвимый' && to.vuln) return ` (${to.vuln})`;
+      if (k === 'тайное знание' && to.secretSymbol) return ` (${to.secretSymbol})`;
+      if (k === 'проклят' && st.rolls && st.rolls.curse) return ` (${st.rolls.curse.v}, ${st.rolls.curse.block}${st.rolls.curse.n > 1 ? `, бросков: ${st.rolls.curse.n}` : ''})`;
+      return '';
+    };
+    const line = (arr, label) => arr.length ? `<p><b>${label}:</b></p><ul class="small">${arr.map(k => { const t = name(k); return `<li><b>${esc(cap(t.name.trim()))}</b>${esc(extra(k))} — ${esc(t.effect)}</li>`; }).join('')}</ul>` : '';
+    return (line(ti.pos, 'Положительные черты') + line(ti.neg, 'Отрицательные черты')) || '<p><b>Черты:</b> нет</p>';
+  }
+
+  function gearText(st, res) {
+    const g = res.gear;
+    const parts = [];
+    if (g.weapon) {
+      const w = g.weapon;
+      parts.push(`<p><b>Оружие:</b> ${esc(w.w.name)} из материала «${esc(w.m ? w.m.name : '—')}» — урон ${w.damageTotal !== undefined ? fmt(w.damageTotal) : '—'}, ${esc(w.w.dt || '')}${w.w.range ? ', дальность ' + esc(w.w.range) : ''}${w.matEffect ? `; материал: ${esc(w.matEffect.total || w.matEffect.text)}` : ''}${w.w.fx ? `; ${esc(w.w.fx)}` : ''}</p>`);
+    }
+    if (g.ammo) parts.push(`<p><b>Боеприпасы:</b> ${esc(g.ammo.a.name)}${g.ammo.m ? ` (${esc(g.ammo.m.name)}, урон ${fmt(g.ammo.damage)})` : ''}</p>`);
+    if (g.armor) {
+      const a = g.armor;
+      parts.push(`<p><b>Броня:</b> ${esc(a.a.name)} из материала «${esc(a.m ? a.m.name : '—')}» — броня ${a.armor !== undefined ? fmt(a.armor) : '—'}, штраф ловкости ${a.pen}${a.matEffect ? `; материал: ${esc(a.matEffect.total || a.matEffect.text)}` : ''}</p>`);
+    }
+    if (g.items.length) parts.push(`<p><b>Предметы:</b> ${g.items.map(i => esc(i.label)).join('; ')}</p>`);
+    if (st.misc) parts.push(`<p><b>Прочее:</b> ${esc(st.misc)}</p>`);
+    return parts.join('') || '<p class="muted">Без снаряжения.</p>';
+  }
+
+  function checks(res) {
+    const errs = res.errors, warns = res.warnings, notes = res.notes;
+    const stepTitle = id => (App.steps.find(s => s.id === id) || {}).short || (App.steps.find(s => s.id === id) || {}).title || id;
+    return `<div class="checks no-print ${errs.length ? 'bad' : 'good'}">
+      <h2>${errs.length ? `Персонаж не готов: ${errs.length} ${App.plural(errs.length, 'ошибка', 'ошибки', 'ошибок')}` : 'Персонаж собран по правилам'}</h2>
+      ${errs.length ? `<ul>${errs.map(e => `<li class="err"><button type="button" class="linklike" data-act="go" data-step="${e.step}">${esc(stepTitle(e.step))}</button>: ${esc(e.msg)}</li>`).join('')}</ul>` : ''}
+      ${warns.length ? `<h3>Замечания</h3><ul>${warns.map(e => `<li class="warn"><button type="button" class="linklike" data-act="go" data-step="${e.step}">${esc(stepTitle(e.step))}</button>: ${esc(e.msg)}</li>`).join('')}</ul>` : ''}
+      ${notes.length ? `<h3>Для ГМ</h3><ul>${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ «Как считается»
+
+  function renderRules(el) {
+    const ages = R.AGES.map(a => {
+      const rg = C.AGE_RANGES[a.id];
+      return `<tr><th>${a.title}</th><td>${rg.min === rg.max ? signed(rg.min) + '%' : `${signed(rg.min)}% … ${signed(rg.max)}%`}</td><td>${signed(a.od)}</td><td>${a.traits}</td><td>${esc(a.buff)}</td></tr>`;
+    }).join('');
+    const sizes = R.SIZES.map(s => `<tr><th>${s.name}</th><td>×${fmt(s.k)}</td><td>${signed(s.od)}</td><td>${esc(s.fx)}</td></tr>`).join('');
+    el.innerHTML = `<div class="page">
+      <h1>Как считается персонаж</h1>
+      <p class="lead">Правила взяты из таблицы игрока (лист «настройка персонажа») и книги ГМ. Там, где таблица допускает два прочтения, указано, какое выбрано; значения без однозначного источника вынесены в js/config.js.</p>
+
+      <h2>1. Раса</h2>
+      <ul>
+        <li>Характеристики, характер, размер и уровень обитания — лист «Расы». Средний уровень расы = (тело + дух + сила + интеллект + ловкость − 25) / 3 (формула из книги ГМ).</li>
+        <li>Расы с ♥ доступны только эволюцией, с ♠ — не игровые: при создании их выбрать нельзя, они есть в справочнике.</li>
+        <li>Полукровка: характеристики — среднее двух родительских рас; числовые бонусы и штрафы родителей делятся пополам (с округлением к нулю); привлекательность −20; размер выбирается из размеров родителей, характер — свободно («настраиваемый»). Особые запреты родителей (например, «не могут держать оружие») у полукровки не применяются автоматически, а выводятся как замечание для ГМ.</li>
+        <li>Цвет бонуса в книге ГМ показывает частоту: ${esc(D.raceLegend.freq.join(', '))} — это выводится рядом с бонусом.</li>
+        <li>Числовые части бонусов и штрафов (ОД, харизма, таланты, зоркость, привлекательность, реген, бонус к оружию, символы) разобраны и учитываются. Условные эффекты («ночью», «в воде», «за союзника»…) только показываются.</li>
+        <li>Дракониды: дракон-предок из раздела «Драконы» листа «Существа»; +10% его статов, знак рода — его символ, размер — на ступень меньше предка. Таррэ: монстр-предок, +10% статов. Скордиты: насекомое-предок из пауков и существ с хитином / инсекто-мясом; размер бонуса в таблице не указан, поэтому предок только отображается. Эноши: зверо-предок — одна из звериных рас, от неё берётся половина бонуса.</li>
+        <li>Они: клан определяет символ и оружие клана (+50); демон-покровитель предлагается по стихии клана.</li>
+      </ul>
+
+      <h2>2. Возраст и очки</h2>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Возраст</th><th>От среднего уровня</th><th>ОД</th><th>Черт каждого типа</th><th>Эффект</th></tr></thead><tbody>${ages}</tbody></table></div>
+      <ul>
+        <li>Уровень персонажа = средний уровень расы × (1 + процент). За уровень — 3 очка характеристик (лист «механики»), поэтому возраст даёт 3 × средний уровень × процент очков. Пример из ТЗ: уровень 100, старец +100% → уровень 200, +300 очков, всего 600.</li>
+        <li>При отрицательном проценте (ребёнок, юный) очки снимаются с характеристик; ни одна не может стать меньше 1.</li>
+        <li>Очки талантов = ⌊уровень / 5⌋ («за каждые 5 имеющихся уровней — 1 очко таланта»).</li>
+        <li>Пожилой — ровно ${signed(C.AGE_RANGES['пожилой'].min)}%, старец — ровно ${signed(C.AGE_RANGES['старец'].min)}% (это верхняя граница возраста). Взрослый — ровно средний уровень. Ребёнок и юный выбирают процент ползунком в своих границах.</li>
+      </ul>
+
+      <p class="note">Фракция и религия со старта не выдаются: их персонаж получает уже в игре, выйдя в мир. Поэтому их бонусы в создании не участвуют.</p>
+
+      <h2>3. Дар, благословение или болезнь</h2>
+      <ul>
+        <li>Из всей колонки — тёмные дары, благословения, болезни — можно взять только одно или ничего.</li>
+        <li>Благословения и болезни на старте — только врождённые (♥). Гомункулам нельзя благословения, болезни, проклятие и снаряжение.</li>
+        <li>В расчёте: «Весы» (обмен двух итоговых характеристик), «Нежить» (сила ×3, тело ×2, интеллект и дух ÷2), «Пустотный» (ХП = дух, нет живости), «Скорость» (+3 ОД, опыт ×2), «Смертельная одержимость» (−1 ОД), «Яркое око» (+50 зоркости, скрытность запрещена), «Угольное зрение» (−40 зоркости), «Антимагия» (0 ячеек), «Священное очищение» (нет регена ХП), «Лазурный фимиам» (реген МП ×2), «Могущество» (+25% ко всем статам), «Любим маной» (реген МП ×4), «Любимое дитя» (+10 молитв), «Наследство» (25 золотых), болезни «Кости-хрящи», «Полицефалия», «Гигантизм», «Карликовость».</li>
+        <li>Случайные эффекты бросаются кнопкой, число бросков сохраняется в листе: «Расхититель древностей» (артефакт), «Проводник стихии» (символ), «Длань» (1–3), «Альфа бестиа» (2–4), «Репликант» без штрафа у выбранной расы (негативная черта), «Проклят» (50/50 — тёмный дар как проклятие или проклятие из нижнего блока).</li>
+      </ul>
+
+      <h2>4. Черты</h2>
+      <ul>
+        <li>Лимит каждого типа — по возрасту (ребёнку черты нельзя). Каждая положительная черта уравновешивается отрицательной.</li>
+        <li>«Немота» и «обычный» уравновешивают 2 положительных, «проклят» — 3, «калека» — 2 за каждую убранную конечность; лишние положительные расширяют и лимит. Гомункулы — ещё 3 свободных, «Предыдущий опыт» — ещё 1.</li>
+        <li>Противоположные черты (сильный/слабый, быстрые/медленные рефлексы, красота/уродство…) взять вместе нельзя. Убранные руки уменьшают число рук для оружия.</li>
+        <li>Если отрицательных больше, чем нужно для баланса, выводится замечание (не ошибка).</li>
+      </ul>
+
+      <h2>5. Производные параметры</h2>
+      <ul>
+        <li>ХП = тело × 2; живость = тело; реген ХП = ⌊тело / 5⌋; МП = дух × 2; пси = дух × 2; реген МП = ⌊дух / 5⌋. Ребёнку +20% к регенам; черты ±5%.</li>
+        <li>Слоты = сила + сумки; оружие и броня занимают слоты по таблице. Уворот = ловкость − штраф ловкости брони ± эффекты материала.</li>
+        <li>ОД у игрока — это только прибавка: возраст + размер + раса + черты + дар (на листе со знаком, например «+2»). Общий запас ОД на игровой день ведёт ГМ.</li>
+        <li>Зоркость = 50 + талант + бонусы; харизма = талант + бонусы; привлекательность в пределах ±100; карма: добро +20, зло −20, остальные 0.</li>
+        <li>Молитвы: 3 в день + бонусы (верующий, любимое дитя, асимару, Иссар, розарий +8, молитвенник +20). Ячейки заклинаний: 5 + хорошая/плохая память ±2, гильдия магов +5, гримуар +20; «обычный» и «Антимагия» обнуляют.</li>
+      </ul>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Размер</th><th>Сырьё и параметры предметов</th><th>ОД</th><th>Урон</th></tr></thead><tbody>${sizes}</tbody></table></div>
+
+      <h2>6. Снаряжение</h2>
+      <ul>
+        <li>Одно оружие и один элемент брони (или щит), монолитные из одного материала стартового списка: ${esc(C.START_MATERIALS.join(', '))}.</li>
+        <li>Урон = урон материала за единицу × единицы, влияющие на урон; броня = броня материала × единицы. Размер меняет количество сырья, урон, броню и требования на свой процент.</li>
+        <li>Эффект материала с пометкой «за единицу» умножается на общее число единиц предмета (у оружия — все единицы: и влияющие на урон, и остальные); «за предмет», «для каждого предмета отдельно», «не стакается» — как в легенде листа материалов. Ловкость и реген ХП из эффектов брони учитываются в параметрах.</li>
+        <li>Требования предмета не запрещают его взять, но выводится штраф: ${esc(['сила −50% урона', 'тело −2 ОД', 'ловкость 50% нанести урон себе', 'интеллект — шанс наложить заклинание на себя', 'дух 50% потерять 25% пси'].join('; '))}.</li>
+        <li>Магическая ткань — «только лёгкое». До ${C.START_ITEMS} разных предметов: сумки, зелья (не сильнее ${C.POTION_MAX}е), еда из таблицы блюд.</li>
+      </ul>
+
+      <h2>Настройки ГМ (js/config.js)</h2>
+      <pre class="cfg">${esc(JSON.stringify(C, null, 2))}</pre>
+      <h2>Закрытые разделы</h2>
+      <p>Бестиарий, навыки, социум, алхимия, артефакты и механики открываются в справочнике только по паролю ГМ; эти разделы зашифрованы. Для создания персонажа пароль не нужен: всё, что требуется мастеру, открыто — предки драконидов, таррэ и скордитов (существа без боссов и легенд: статы и навыки), физические навыки и стойки для «Предыдущего опыта», артефакты для «Расхитителя древностей» (название и эффект). Подробности — дроп, обитание, цены, способы получения — остаются в закрытых разделах.</p>
+      <p class="small muted">Данные собраны из ${esc(D.meta.source)} ${esc(D.meta.built)}. Чтобы обновить сайт после правки таблицы, запустите tools/build_data.py (см. README).</p>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ действия листа
+
+  Object.assign(App.actions, {
+    print() { window.print(); },
+    exportImage() {
+      const run = () => {
+        const el = document.getElementById('sheet');
+        if (!el || !window.html2canvas) { App.toast('Не удалось подготовить картинку'); return; }
+        window.html2canvas(el, { backgroundColor: '#f3ead7', scale: 2 }).then(canvas => {
+          const a = document.createElement('a');
+          a.href = canvas.toDataURL('image/jpeg', 0.92);
+          a.download = (App.state.name || 'герой') + '.jpg';
+          document.body.appendChild(a); a.click(); a.remove();
+        }).catch(() => App.toast('Не удалось подготовить картинку'));
+      };
+      if (window.html2canvas) return run();
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      sc.onload = run;
+      sc.onerror = () => App.toast('Нет доступа к библиотеке картинок — воспользуйтесь «Печать / PDF»');
+      document.head.appendChild(sc);
+      App.toast('Готовлю картинку…');
+    },
+    shareLink() {
+      const url = location.origin + location.pathname + '#hero=' + App.encode(App.state);
+      const done = () => App.toast('Ссылка скопирована — отправьте её ГМ');
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(done, () => prompt('Скопируйте ссылку:', url));
+      else prompt('Скопируйте ссылку:', url);
+    },
+    exportHero() {
+      const name = (App.state.name || 'герой').replace(/[^\wа-яё\- ]/gi, '').trim() || 'герой';
+      App.download(`${name}.json`, JSON.stringify({ format: 'hero-workshop', version: 2, hero: App.state }, null, 2));
+    }
+  });
+
+  window.Sheet = { render, renderRules };
+})();
