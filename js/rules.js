@@ -59,6 +59,12 @@
     { id: 'харизма', name: 'Харизма', max: 100 }
   ];
 
+  // Черты можно брать повторно (эффекты складываются), кроме «состояний», которые не удваиваются
+  const NON_REPEAT = ['язык зверей', 'язык монстров', 'шаманизм', 'лидер', 'немота', 'калека', 'обычный', 'несобранный'];
+  const traitRepeatable = k => !NON_REPEAT.includes(norm(k));
+  // параметр i-го экземпляра черты: resist, resist2, resist3…
+  const optKey = (base, i) => (i ? base + (i + 1) : base);
+
   const KARMA_TEXT = 'персонажи добра получают +20 кармы / зла −20 / нейтралы стартуют с 0';
 
   // Черты: эффекты и противоположные пары (лист «скилы», колонки P–R)
@@ -178,6 +184,7 @@
 
   // ---------------------------------------------------------------- утилиты
 
+  const roundLevel = x => Math.floor(x + 0.5 + 1e-9);   // 0,5 — вверх
   const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
   const r1 = x => Math.round(x * 10) / 10;
   const trunc = x => (x < 0 ? Math.ceil(x) : Math.floor(x));
@@ -270,7 +277,7 @@
     if (!r) return null;
     const res = {
       base: r, id: r.id, name: r.name, isHalf: r.id === 'полукровка',
-      stats: { t: r.t, d: r.d, s: r.s, i: r.i, l: r.l }, lvl: r.lvl,
+      stats: { t: r.t, d: r.d, s: r.s, i: r.i, l: r.l }, lvl: roundLevel(r.lvl),
       align: r.align, size: r.size, habitat: r.habitat,
       factionCell: r.faction, religionCell: r.religion,
       bonuses: [], penalties: [], fx: [], pfx: [], notes: [], ancestor: null, flagsHalf: []
@@ -280,7 +287,7 @@
       res.parents = [A, B];
       if (A && B) {
         STATS.forEach(k => { res.stats[k] = (A[k] + B[k]) / 2; });
-        res.lvl = (A.lvl + B.lvl) / 2;
+        res.lvl = roundLevel((STATS.reduce((a, k) => a + res.stats[k], 0) - 25) / 3);
         res.bonuses.push({ src: `${A.name} (½)`, text: A.bonus }, { src: `${B.name} (½)`, text: B.bonus });
         res.penalties.push({ src: `${A.name} (½)`, text: A.penalty }, { src: `${B.name} (½)`, text: B.penalty });
         res.fx = halve(A.fx).concat(halve(B.fx));
@@ -621,8 +628,9 @@
     out.agePct = pct;
     if (!age) errors.push({ step: 'age', msg: 'Выберите возраст.' });
     const lvl0 = race ? race.lvl : 0;
-    const level = lvl0 * (1 + pct / 100);
-    const agePoints = Math.round(3 * lvl0 * pct / 100);
+    // уровни целые: уровень персонажа округляется до ближайшего, очки = 3 за каждый уровень разницы
+    const level = roundLevel(lvl0 * (1 + pct / 100));
+    const agePoints = 3 * (level - lvl0);
     out.lvl0 = lvl0; out.level = level; out.agePoints = agePoints;
     out.talentPoints = Math.floor(level / 5 + 1e-9);
 
@@ -685,19 +693,28 @@
         traitFx.push([`${tn(rk)} ×2 (репликант)`, d]);
       }
     }
-    allTraits.forEach(k => {
+    const uniq = [...new Set(allTraits)];
+    const cnt = k => allTraits.filter(x => x === k).length;
+    uniq.forEach(k => {
       const fx = TRAIT_FX[k] || {};
       if (fx.opp && allTraits.includes(norm(fx.opp))) errors.push({ step: 'traits', msg: `Черты «${tn(k)}» и «${tn(norm(fx.opp))}» противоположны — взять обе нельзя.` });
+      if (cnt(k) > 1 && !traitRepeatable(k)) errors.push({ step: 'traits', msg: `Черту «${tn(k)}» нельзя взять несколько раз.` });
     });
     const to = st.traitOpt || {};
+    const optList = (base, k) => Array.from({ length: cnt(k) }, (_, i) => String(to[optKey(base, i)] || '').trim());
     if (allTraits.includes('калека') && ((to.arms || 0) + (to.legs || 0)) < 1) errors.push({ step: 'traits', msg: '«Калека»: укажите, сколько конечностей убрать (за каждую +2 положительных).' });
-    if (allTraits.includes('резистентный') && !String(to.resist || '').trim()) warnings.push({ step: 'traits', msg: '«Резистентный»: выберите эффект / тип урона.' });
-    if (allTraits.includes('уязвимый') && !String(to.vuln || '').trim()) warnings.push({ step: 'traits', msg: '«Уязвимый»: выберите эффект / тип урона.' });
-    if (allTraits.includes('резистентный') && allTraits.includes('уязвимый') && norm(to.resist) && norm(to.resist) === norm(to.vuln)) errors.push({ step: 'traits', msg: '«Резистентный» и «Уязвимый» к одному и тому же — противоречие.' });
-    if (allTraits.includes('тайное знание') && !to.secretSymbol) warnings.push({ step: 'traits', msg: '«Тайное знание»: выберите магический символ.' });
+    const resists = optList('resist', 'резистентный'), vulns = optList('vuln', 'уязвимый');
+    if (resists.some(x => !x)) warnings.push({ step: 'traits', msg: '«Резистентный»: выберите эффект / тип урона.' });
+    if (vulns.some(x => !x)) warnings.push({ step: 'traits', msg: '«Уязвимый»: выберите эффект / тип урона.' });
+    const both = resists.filter(x => x && vulns.some(v => norm(v) === norm(x)));
+    if (both.length) errors.push({ step: 'traits', msg: `«Резистентный» и «Уязвимый» к одному и тому же (${both.join(', ')}) — противоречие.` });
+    const secrets = optList('secretSymbol', 'тайное знание');
+    if (secrets.some(x => !x)) warnings.push({ step: 'traits', msg: '«Тайное знание»: выберите магический символ.' });
+    else if (new Set(secrets.map(norm)).size < secrets.length) warnings.push({ step: 'traits', msg: '«Тайное знание»: один и тот же символ выбран дважды.' });
     if (allTraits.includes('проклят')) {
       if (isHomunculus) errors.push({ step: 'traits', msg: 'Гомункулы не могут взять проклятие на старте.' });
-      if (!(st.rolls || {}).curse) warnings.push({ step: 'traits', msg: '«Проклят»: сделайте бросок проклятия (50/50 верхний/нижний блок).' });
+      const missing = Array.from({ length: cnt('проклят') }, (_, i) => optKey('curse', i)).filter(key => !(st.rolls || {})[key]).length;
+      if (missing) warnings.push({ step: 'traits', msg: `«Проклят»: сделайте бросок проклятия${missing > 1 ? ` (осталось ${missing})` : ''} — 50/50 верхний/нижний блок.` });
     }
     const noMagic = allTraits.includes('обычный');
     if (noMagic) allTraits.filter(k => (TRAIT_FX[k] || {}).magic).forEach(k => warnings.push({ step: 'traits', msg: `«${tn(k)}» бесполезна: черта «обычный» лишает магии.` }));
@@ -798,8 +815,10 @@
       const baseV = t.base || 0;
       const total = baseV + inv + bonus;
       const blocked = t.id === 'скрытность' && boon && boon.fx.noStealth;
-      talents[t.id] = { def: t, inv, bonus, bsrc, base: baseV, total, maxInv: Math.max(0, t.max - baseV - Math.max(0, bonus)), blocked };
-      if (inv > talents[t.id].maxInv) errors.push({ step: 'talents', msg: `${t.name}: не выше ${t.max} (вложено ${inv}, с бонусами ${total}).` });
+      // зоркость: базовые 50 и бонусы считаются отдельно от прокачки — предел только у вложенных очков
+      const maxInv = t.base ? t.max : Math.max(0, t.max - Math.max(0, bonus));
+      talents[t.id] = { def: t, inv, bonus, bsrc, base: baseV, total, maxInv, sepBase: !!t.base, blocked };
+      if (inv > maxInv) errors.push({ step: 'talents', msg: t.base ? `${t.name}: вложить можно не больше ${t.max} (вложено ${inv}).` : `${t.name}: не выше ${t.max} (вложено ${inv}, с бонусами ${total}).` });
       if (blocked && inv) errors.push({ step: 'talents', msg: '«Яркое око»: вы не можете применять скрытность — не вкладывайте в неё очки.' });
     });
     out.talents = talents; out.talentSpent = talentSpent;
@@ -901,7 +920,7 @@
       }
     });
     if (race && race.ancestor && race.ancestor.symbol) addSym(race.ancestor.symbol, `знак дракона рода (${race.ancestor.name})`);
-    if (allTraits.includes('тайное знание') && to.secretSymbol) addSym(to.secretSymbol, 'черта «тайное знание»');
+    for (let i = 0; i < cnt('тайное знание'); i++) { const sym = to[optKey('secretSymbol', i)]; if (sym) addSym(sym, 'черта «тайное знание»'); }
     if (boon && boon.fx.option === 'prevExp' && bo.prevSymbol) addSym(bo.prevSymbol, 'благословение «предыдущий опыт»');
     if (boon && boon.fx.roll === 'element' && st.rolls && st.rolls.element) addSym(`${st.rolls.element.v} (усилен ×3)`, '«проводник стихии»');
     out.symbols = symbols;
@@ -921,14 +940,15 @@
   // «Расхититель древностей»: открытый список артефактов (раздел «Артефакты» справочника закрыт)
   function artifactRoll(idx) {
     const a = (D.artifactPool || [])[idx];
-    return a ? { v: a.name, detail: a.effect } : null;
+    return a ? { v: a.name, detail: a.effect, block: a.cursed ? 'проклятый артефакт' : 'артефакт' } : null;
   }
   // бросок из прошлой версии сайта мог сохраниться только номером — показываем название
   function rollView(r) {
-    if (r && r.idx !== undefined && !r.block && /^артефакт №/.test(r.v || '')) return Object.assign({}, r, artifactRoll(r.idx) || {});
+    if (r && r.idx !== undefined && /^артефакт №/.test(r.v || '')) return Object.assign({}, r, artifactRoll(r.idx) || {});
     return r;
   }
   function roll(kind, st) {
+    kind = String(kind).replace(/\d+$/, '');   // curse2, curse3 — повторные броски проклятия
     if (kind === 'artifact') {
       const idx = rnd((D.artifactPool || []).length || 1);
       return Object.assign({ idx }, artifactRoll(idx));
@@ -958,7 +978,7 @@
   }
 
   window.Rules = {
-    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1,
+    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
     get index() { return IX; }

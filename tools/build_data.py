@@ -27,6 +27,7 @@ import getpass
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -348,6 +349,11 @@ RACE_FX_FIX = {
 }
 
 
+def round_level(x):
+    """Уровни — целые: округление до ближайшего (0,5 — вверх)."""
+    return int(math.floor(x + 0.5))
+
+
 def build_races(wb):
     ws = wb["Расы"]
     races = []
@@ -368,7 +374,7 @@ def build_races(wb):
             "evolutionOnly": "♥" in marks,
             "npcOnly": "♠" in marks,
             "t": stats[0], "d": stats[1], "s": stats[2], "i": stats[3], "l": stats[4],
-            "lvl": round(lvl, 4),
+            "lvl": round_level(lvl),
             "align": txt(ws.cell(r, 8).value),
             "habitat": txt(ws.cell(r, 9).value),
             "faction": txt(ws.cell(r, 10).value),
@@ -484,7 +490,7 @@ def build_creatures(wb):
         out.append({
             "n": name, "m": marks,
             "t": st[0], "d": st[1], "s": st[2], "i": st[3], "l": st[4],
-            "lvl": round((sum(st) - 25) / 3, 2),
+            "lvl": round_level((sum(st) - 25) / 3),
             "ch": txt(ws.cell(r, 8).value),
             "hab": txt(ws.cell(r, 9).value),
             "sym": txt(ws.cell(r, 10).value),
@@ -941,8 +947,9 @@ def main():
         elif insect_re.search((c.get("drop") or "") + " " + c["n"]):
             a["ins"] = "other"
         ancestors.append(a)
-    # 4) «Расхититель древностей»: случайный артефакт (название и эффект)
+    # 4) «Расхититель древностей»: случайный артефакт — обычный или проклятый (название и эффект)
     artifact_pool = [{"name": a["name"], "effect": a["effect"]} for a in artifacts if a["g"] == "артефакты"]
+    artifact_pool += [{"name": a["name"], "effect": a["effect"], "cursed": True} for a in artifacts if a["g"] == "проклятые"]
     data = {
         "meta": {"source": src.name, "built": datetime.date.today().isoformat(), "locked": not no_lock},
         "races": races, "raceLegend": race_legend,

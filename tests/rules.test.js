@@ -51,9 +51,10 @@ eq('no stats error', r.errors.filter(e => e.step === 'stats').length, 0);
 // 3. Ребёнок -50%: снимаем очки
 s = st({ raceId: 'империал', ageCat: 'ребёнок', agePct: -50 });
 r = R.compute(s);
-eq('child points', r.agePoints, -80);
+eq('child level integer (53 × 0,5 = 26,5 → 27)', r.level, 27);
+eq('child points = 3 × (27 − 53)', r.agePoints, -78);
 eq('child od', r.der.od, 2);
-eq('child talents', r.talentPoints, Math.floor(53.3333 * 0.5 / 5));
+eq('child talents', r.talentPoints, 5);
 s.traits = ['сильный'];
 r = R.compute(s);
 eq('child no traits', r.errors.some(e => e.step === 'traits'), true);
@@ -182,6 +183,35 @@ for (const k of Object.keys(R.BOON_FX.gift)) if (!I.gift.has(k)) console.log('WA
 for (const k of Object.keys(R.BOON_FX.buff)) if (!I.buff.has(k)) console.log('WARN no buff', k);
 for (const k of Object.keys(R.BOON_FX.disease)) if (!I.disease.has(k)) console.log('WARN no disease', k);
 for (const k of Object.keys(R.TRAIT_FX)) if (!I.traitPos.has(k) && !I.traitNeg.has(k)) console.log('WARN no trait', k);
+// 18a. Уровни целые
+eq('race levels are integers', window.GAME_DATA.races.every(x => Number.isInteger(x.lvl)), true);
+r = R.compute(st({ raceId: 'империал', ageCat: 'юный', agePct: -25 }));
+eq('young level 39,75 → 40', r.level, 40);
+eq('young points', r.agePoints, -39);
+r = R.compute(st({ raceId: 'полукровка', parentA: 'империал', parentB: 'хоббиты', hbSize: 'н', hbAlign: 'нейтрал', ageCat: 'взрослый' }));
+eq('half level integer', Number.isInteger(r.lvl0), true);
+// 18b. Зоркость: база 50 и бонусы отдельно, вложить можно до 100
+r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['зоркий', 'слабый'], talents: { 'зоркость (базовая 50)': 10 } }));
+eq('zor max invest 100', r.talents['зоркость (базовая 50)'].maxInv, 100);
+eq('zor total 50+10+10', r.der.zor, 70);
+r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', talents: { 'зоркость (базовая 50)': 100 } }));
+eq('zor 150 without cap error', r.errors.some(e => /Зоркость/.test(e.msg)), false);
+eq('zor 150', r.der.zor, 150);
+// 18c. Повторяющиеся черты
+r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['сильный', 'сильный', 'щуплый', 'глупость'] }));
+eq('сильный ×2 = +20', r.stats.s, 40);
+eq('repeat traits ok', r.errors.filter(e => e.step === 'traits').length, 0);
+r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['немота', 'немота'] }));
+eq('немота not repeatable', r.errors.some(e => /несколько раз/.test(e.msg)), true);
+r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['резистентный', 'резистентный', 'уязвимый'], traitOpt: { resist: 'огонь', resist2: 'яд', vuln: 'яд' } }));
+eq('resist #2 vs vuln contradiction', r.errors.some(e => /противоречие/.test(e.msg)), true);
+r = R.compute(st({ raceId: 'империал', ageCat: 'старец', agePct: 100, traits: ['тайное знание', 'тайное знание', 'проклят'], traitOpt: { secretSymbol: 'огонь', secretSymbol2: 'вода' } }));
+eq('two secret symbols', r.symbols.filter(x => /тайное/.test(x.src)).length, 2);
+eq('curse2 roll', !!R.roll('curse2'), true);
+// 18d. Расхититель: в пуле есть проклятые артефакты
+const cursedIx = window.GAME_DATA.artifactPool.findIndex(a => a.cursed);
+eq('cursed artifacts in pool', cursedIx > 0, true);
+eq('cursed artifact roll label', R.rollView({ idx: cursedIx, v: 'артефакт №' + (cursedIx + 1), n: 1 }).block, 'проклятый артефакт');
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
@@ -194,7 +224,8 @@ if (process.env.GM_PASSWORD) {
   eq('dragonid same with password', r.stats.t, 250 + 50);
   // открытые списки совпадают с закрытыми разделами
   const full = window.GAME_DATA.artifacts.filter(a => a.g === 'артефакты').map(a => a.name);
-  eq('artifact pool = artifacts', window.GAME_DATA.artifactPool.map(a => a.name), full);
+  const cursedFull = window.GAME_DATA.artifacts.filter(a => a.g === 'проклятые').map(a => a.name);
+  eq('artifact pool = artifacts + cursed', window.GAME_DATA.artifactPool.map(a => a.name), full.concat(cursedFull));
   eq('start actives = actives', window.GAME_DATA.skills.startActives.map(a => a.name), window.GAME_DATA.skills.actives.map(a => a.name));
   const crByName = new Map(window.GAME_DATA.creatures.map(c => [c.n, c]));
   eq('ancestor stats = bestiary', window.GAME_DATA.ancestors.every(a => { const c = crByName.get(a.n); return c && c.t === a.t && c.l === a.l && c.sz === a.sz; }), true);

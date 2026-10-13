@@ -347,9 +347,10 @@
           this.ui[t.dataset.ui] = t.value;
           const target = t.dataset.uiTarget;
           if (target === 'ref') window.Reference.refresh();
-          else if (target === 'heroes') window.Heroes.render(document.getElementById('tab-heroes'));
+          else if (target === 'raceList') this.refreshRaceList();
+          else if (target === 'heroes') this.keepFocus(t, () => window.Heroes.render(document.getElementById('tab-heroes')));
           else if (target === 'live') { const st = this.steps.find(x => x.id === this.step); if (st && st.live) st.live(document.getElementById('work'), this.res); }
-          else this.renderCreate();
+          else this.keepFocus(t, () => this.renderCreate());
           return;
         }
         if (!t.dataset.bind || !t.closest('#tab-create')) return;
@@ -379,6 +380,19 @@
           document.getElementById('ledgerToggle').setAttribute('aria-expanded', 'false');
         }
       });
+    },
+
+    // перерисовка с сохранением фокуса и курсора в поле ввода (чтобы можно было печатать подряд)
+    keepFocus(el, fn) {
+      const key = el.dataset.ui ? `[data-ui="${el.dataset.ui}"]` : el.dataset.bind ? `[data-bind="${el.dataset.bind}"]` : null;
+      let a = null, b = null;
+      try { a = el.selectionStart; b = el.selectionEnd; } catch (e) { /* select без курсора */ }
+      fn();
+      if (!key) return;
+      const n = document.querySelector(key);
+      if (!n || n === document.activeElement) return;
+      n.focus({ preventScroll: true });
+      try { if (a !== null) n.setSelectionRange(a, b); } catch (e) { /* noop */ }
     },
 
     readInput(t) {

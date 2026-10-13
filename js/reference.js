@@ -30,7 +30,7 @@
       return [{ title: 'Все расы', note: `Значки: ♥ — ${esc(D.raceLegend.marks['♥'])}, ♠ — ${esc(D.raceLegend.marks['♠'])}. Цвет бонуса в таблице: ${esc(D.raceLegend.freq.join(', '))}.`,
         tools: `<select data-ui="refRaceF" data-ui-target="ref" aria-label="Фильтр рас"><option value="">все расы (${D.races.length})</option><option value="play" ${f === 'play' ? 'selected' : ''}>игровые</option><option value="evo" ${f === 'evo' ? 'selected' : ''}>только эволюцией ♥</option><option value="npc" ${f === 'npc' ? 'selected' : ''}>не игровые ♠</option></select>`,
         cols: ['Раса', 'Т', 'Д', 'С', 'И', 'Л', 'Ур.', 'Характер', 'Обитание'].concat(gm ? ['Фракция', 'Религия'] : [], ['Размер', 'Бонус', 'Штраф', 'Эволюция']),
-        rows: races.map(r => row([`<b>${esc(cap(r.name))}</b> ${marks(r.marks)}`, r.t, r.d, r.s, r.i, r.l, r.id === 'полукровка' ? 'среднее' : fmt(r.lvl), esc(r.align), esc(R.habitatNames(r.habitat).join('; '))]
+        rows: races.map(r => row([`<b>${esc(cap(r.name))}</b> ${marks(r.marks)}`, r.t, r.d, r.s, r.i, r.l, r.id === 'полукровка' ? 'среднее' : fmt(R.roundLevel(r.lvl)), esc(r.align), esc(R.habitatNames(r.habitat).join('; '))]
           .concat(gm ? [esc(refs(r.faction)), esc(refs(r.religion))] : [], [esc(sizeName(r.size)), esc(r.bonus) + (r.bonusFreq ? ' ' + tag(r.bonusFreq, 'freq') : ''), esc(r.penalty), esc(r.evo)]))) }];
     } },
     { id: 'society', title: 'Социум', locked: true, build() {
@@ -42,7 +42,7 @@
           tools: `<select data-ui="refSocT" data-ui-target="ref" aria-label="Тип общины"><option value="">все типы</option>${types.map(t => `<option ${t === tf ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`,
           cols: ['№', 'Название', 'Т', 'Д', 'С', 'И', 'Л', 'Статус', 'Бонус и дары', 'Тип', 'Вступление'],
           rows: S.groups.filter(g => !tf || g.type === tf).map(g => row([g.row, `<b>${esc(g.name)}</b>${g.demon ? ' ' + tag('столп') : ''}`, ...g.st.map(esc), esc(g.status), esc(g.bonus), esc(g.type), tag(g.join, 'join')])) },
-        { title: 'НПС', cols: ['Имя', 'Т', 'Д', 'С', 'И', 'Л', 'Ур.', 'Квест', 'Награда'], rows: S.npcs.map(n => row(n.map((x, i) => i === 6 ? fmt(parseFloat(x)) : esc(x)))) },
+        { title: 'НПС', cols: ['Имя', 'Т', 'Д', 'С', 'И', 'Л', 'Ур.', 'Квест', 'Награда'], rows: S.npcs.map(n => row(n.map((x, i) => i === 6 ? (Number.isFinite(parseFloat(x)) ? fmt(R.roundLevel(parseFloat(String(x).replace(',', '.')))) : esc(x)) : esc(x)))) },
         { title: 'Квесты', cols: ['Название', 'Завязка', 'Развязка', 'Награда'], rows: S.quests.map(q => row(q.map(esc))) },
         { title: 'Глобальные квесты', cols: ['Название', 'Завязка', 'Развязка', 'Награда'], rows: S.globalQuests.map(q => row(q.map(esc))) }
       ];
@@ -55,7 +55,7 @@
         { title: 'Существа', note: esc(D.creatureLegend.join(' / ')) + '. Особенности — из примечаний к ячейкам листа «Существа». Символ — по номеру строки листа «скилы».',
           tools: `<select data-ui="refBeastSec" data-ui-target="ref" aria-label="Раздел бестиария"><option value="">все разделы (${D.creatures.length})</option>${secs.map(s => `<option value="${esc(s)}" ${s === sec ? 'selected' : ''}>${esc(s)} (${D.creatures.filter(c => c.sec === s).length})</option>`).join('')}</select>`,
           cols: ['Существо', 'Т', 'Д', 'С', 'И', 'Л', 'Ур.', 'Характер', 'Обитание', 'Символ', 'Размер', 'Дроп', 'Особенности'],
-          rows: list.map(c => row([`<b>${esc(c.n)}</b> ${marks(c.m)} ${tag(c.cat)}${c.note ? `<br><span class="muted small">${esc(c.note)}</span>` : ''}`, c.t, c.d, c.s, c.i, c.l, fmt(c.lvl), esc(c.ch), esc(R.habitatNames(c.hab).join('; ') || c.hab), esc(symName(c.sym)), esc(sizeName(c.sz)), esc(c.drop), c.ab.length ? `<ul class="abil">${c.ab.map(([k, t]) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''], c.sec)) },
+          rows: list.map(c => row([`<b>${esc(c.n)}</b> ${marks(c.m)} ${tag(c.cat)}${c.note ? `<br><span class="muted small">${esc(c.note)}</span>` : ''}`, c.t, c.d, c.s, c.i, c.l, fmt(R.roundLevel(c.lvl)), esc(c.ch), esc(R.habitatNames(c.hab).join('; ') || c.hab), esc(symName(c.sym)), esc(sizeName(c.sz)), esc(c.drop), c.ab.length ? `<ul class="abil">${c.ab.map(([k, t]) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''], c.sec)) },
         { title: 'Улучшения монстров', cols: ['Улучшение', 'Т', 'Д', 'С', 'И', 'Л', 'Эффект'], rows: D.creatureUpgrades.map(u => row(u.map(esc))) }
       ];
     } },

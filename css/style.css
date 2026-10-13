@@ -299,6 +299,12 @@ input[type="range"] { width: 100%; margin: 10px 0 2px; accent-color: var(--brass
 .trait.pos.is-on { border-color: var(--plus); background: rgba(127, 199, 155, .1); border-left-width: 5px; }
 .trait.neg.is-on { border-color: var(--minus); background: rgba(228, 141, 132, .1); border-left-width: 5px; }
 .trait:disabled { opacity: .45; cursor: not-allowed; }
+.trait-row { display: flex; gap: 6px; align-items: stretch; }
+.trait-row .trait { flex: 1 1 auto; min-width: 0; }
+.trait-count { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--radius-s); }
+.trait-count output { font-family: var(--font-display); font-size: 1.15rem; line-height: 1; min-width: 1.5em; text-align: center; }
+.trait-count .st-btn { width: 30px; height: 26px; border-radius: var(--radius-s); }
+.tr-n { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--brass); color: var(--brass-ink); font-size: .8rem; font-weight: 700; }
 .tr-name { font-weight: 700; }
 .tr-fx { color: #d8cfba; }
 .tr-why { color: var(--warn); font-size: .82rem; }
@@ -386,7 +392,8 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
 .page li { margin-bottom: 6px; }
 .page-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.cfg { background: var(--ink-2); border: 1px solid var(--line-soft); border-radius: var(--radius-s); padding: 14px; overflow-x: auto; font-size: .85rem; }
+.cfg-tbl th { width: 40%; text-align: left; font-weight: 500; color: var(--muted); vertical-align: top; }
+.cfg-tbl td { vertical-align: top; }
 .hero-list { list-style: none; padding: 0; display: grid; gap: 10px; margin-top: 16px; }
 .hero { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line-soft); border-left: 4px solid var(--ok); border-radius: var(--radius-s); padding: 12px 16px; }
 .hero.bad { border-left-color: var(--err); }

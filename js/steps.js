@@ -57,7 +57,7 @@
 
   // ------------------------------------------------------------ шаг 1: раса
 
-  function raceList(st) {
+  function raceResults(st) {
     const q = norm(App.ui.raceQ || '');
     const al = App.ui.raceAlign || '';
     const sz = App.ui.raceSize || '';
@@ -65,20 +65,28 @@
       .filter(r => !q || norm(r.name).includes(q) || norm(r.bonus).includes(q))
       .filter(r => !al || r.align === al)
       .filter(r => !sz || r.size === sz);
-    const aligns = [...new Set(D.races.filter(r => r.playable).map(r => r.align))].filter(Boolean);
-    return `<div class="picker">
-      <div class="picker-tools">
-        <input type="search" placeholder="Поиск по названию или бонусу" value="${esc(App.ui.raceQ || '')}" data-ui="raceQ" aria-label="Поиск расы">
-        <select data-ui="raceAlign" aria-label="Характер"><option value="">любой характер</option>${aligns.map(a => `<option ${a === al ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
-        <select data-ui="raceSize" aria-label="Размер"><option value="">любой размер</option>${R.SIZES.map(s => `<option value="${s.id}" ${s.id === sz ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
-      </div>
-      <p class="muted small">${list.length} из ${D.races.filter(r => r.playable).length} игровых рас. Расы с пометками ♥ (эволюция) и ♠ (не игровые) — в справочнике.</p>
+    return `<p class="muted small">${list.length} из ${D.races.filter(r => r.playable).length} игровых рас. Расы с пометками ♥ (эволюция) и ♠ (не игровые) — в справочнике.</p>
       <div class="race-list" role="listbox" aria-label="Расы">
         ${list.map(r => `<button type="button" role="option" aria-selected="${r.id === st.raceId}" class="race-opt ${r.id === st.raceId ? 'is-on' : ''}" data-act="pickRace" data-id="${esc(r.id)}">
           <span class="ro-name">${esc(cap(r.name))}</span>
-          <span class="ro-meta">ур. ${fmt(r.lvl)}, ${esc(sizeName(r.size).toLowerCase())}, ${esc(r.align)}</span></button>`).join('') || '<p class="muted">Ничего не найдено — измените фильтр.</p>'}
-      </div></div>`;
+          <span class="ro-meta">ур. ${fmt(R.roundLevel(r.lvl))}, ${esc(sizeName(r.size).toLowerCase())}, ${esc(r.align)}</span></button>`).join('') || '<p class="muted">Ничего не найдено — измените фильтр.</p>'}
+      </div>`;
   }
+
+  function raceList(st) {
+    const al = App.ui.raceAlign || '';
+    const sz = App.ui.raceSize || '';
+    const aligns = [...new Set(D.races.filter(r => r.playable).map(r => r.align))].filter(Boolean);
+    // фильтры обновляют только список (#raceResults), поле поиска не перерисовывается и не теряет фокус
+    return `<div class="picker">
+      <div class="picker-tools">
+        <input type="search" placeholder="Поиск по названию или бонусу" value="${esc(App.ui.raceQ || '')}" data-ui="raceQ" data-ui-target="raceList" aria-label="Поиск расы" autocomplete="off">
+        <select data-ui="raceAlign" data-ui-target="raceList" aria-label="Характер"><option value="">любой характер</option>${aligns.map(a => `<option ${a === al ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+        <select data-ui="raceSize" data-ui-target="raceList" aria-label="Размер"><option value="">любой размер</option>${R.SIZES.map(s => `<option value="${s.id}" ${s.id === sz ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
+      </div>
+      <div id="raceResults">${raceResults(st)}</div></div>`;
+  }
+  App.refreshRaceList = () => { const box = document.getElementById('raceResults'); if (box) box.innerHTML = raceResults(App.state); };
 
   function fxLine(f) {
     const half = (f.half ? ' (½)' : '') + (f.repl ? ' (репликант)' : '');
@@ -165,7 +173,7 @@
     const race = res.race, rule = race.ancestorRule;
     let opts = [{ v: '', t: '— выбрать —' }];
     const A = D.ancestors || [];   // открытый список возможных предков (без боссов и легенд)
-    if (rule.kind === 'dragon') opts = opts.concat(A.filter(c => c.sec === 'Драконы').map(c => ({ v: c.n, t: `${c.n} (ур. ${fmt(c.lvl)}, ${sizeName(c.sz).toLowerCase()})` })));
+    if (rule.kind === 'dragon') opts = opts.concat(A.filter(c => c.sec === 'Драконы').map(c => ({ v: c.n, t: `${c.n} (ур. ${fmt(R.roundLevel(c.lvl))}, ${sizeName(c.sz).toLowerCase()})` })));
     else if (rule.kind === 'insect') {
       opts = opts.concat(A.filter(c => c.ins === 'spider').map(c => ({ v: c.n, t: c.n, group: 'Пауки и насекомые' })));
       opts = opts.concat(A.filter(c => c.ins === 'other').map(c => ({ v: c.n, t: c.n, group: 'Другие существа с хитином / инсекто-мясом' })));
@@ -184,7 +192,7 @@
     const a = race.ancestor;
     if (a && a.creature) {
       const c = a.creature;
-      html += `<div class="anc"><p><strong>${esc(c.n)}</strong> ${c.m.map(m => tag(m)).join('')} — ур. ${fmt(c.lvl)}, ${esc(sizeName(c.sz).toLowerCase())}, ${esc(c.ch)}</p>${statRow(c)}`;
+      html += `<div class="anc"><p><strong>${esc(c.n)}</strong> ${c.m.map(m => tag(m)).join('')} — ур. ${fmt(R.roundLevel(c.lvl))}, ${esc(sizeName(c.sz).toLowerCase())}, ${esc(c.ch)}</p>${statRow(Object.assign({}, c, { lvl: R.roundLevel(c.lvl) }))}`;
       if (a.add) html += `<p>Прибавка +${rule.pct}%: ${R.STATS.map(k => `${R.STAT_SHORT[k]} ${signed(a.add[k])}`).join(', ')}</p>`;
       if (a.symbol) html += `<p>Знак дракона рода: <strong>${esc(a.symbol)}</strong></p>`;
       if (rule.kind === 'dragon') html += `<p>Размер драконида: ${esc(sizeName(race.size))} (предок ${esc(sizeName(c.sz).toLowerCase())} − 1)</p>`;
@@ -234,7 +242,7 @@
       <div><dt>${pts >= 0 ? 'Доп. очки характеристик' : 'Очки к снятию'}</dt><dd>${pts >= 0 ? '+' : '−'}${fmt(Math.abs(pts))}</dd></div>
       <div><dt>Очки талантов</dt><dd>${res.talentPoints}</dd></div>
     </dl>
-    <p class="muted small">Очки: 3 × ${fmt(res.lvl0)} × ${signed(res.agePct)}% = ${signed(pts)}; всего характеристик станет на ${fmt(Math.abs(pts))} ${pts >= 0 ? 'больше' : 'меньше'} расовых. Таланты: ⌊${fmt(res.level)} / 5⌋ = ${res.talentPoints}. ОД от возраста: ${signed(res.age.od)}. Черт: до ${res.age.traits} положительных и ${res.age.traits} отрицательных.</p>`;
+    <p class="muted small">Уровень: ${fmt(res.lvl0)} × ${signed(res.agePct)}% → ${fmt(res.level)} (округляется до целого). Очки: 3 × (${fmt(res.level)} − ${fmt(res.lvl0)}) = ${signed(pts)}; всего характеристик станет на ${fmt(Math.abs(pts))} ${pts >= 0 ? 'больше' : 'меньше'} расовых. Таланты: ⌊${fmt(res.level)} / 5⌋ = ${res.talentPoints}. ОД от возраста: ${signed(res.age.od)}. Черт: до ${res.age.traits} положительных и ${res.age.traits} отрицательных.</p>`;
   }
 
   // ------------------------------------------------------------ шаг 3: дар / благословение / болезнь
@@ -287,13 +295,15 @@
     if (fx.option === 'word') html += `<label>Слово с отрицанием (напр. «несправедливость», «неподвижность», «неудача») <input type="text" data-bind="boonOpt.word" value="${esc(o.word || '')}"></label>`;
     if (fx.option === 'immunity') html += `<label>Тип урона для иммунитета <input type="text" list="dmgTypes" data-bind="boonOpt.immunity" value="${esc(o.immunity || '')}"></label>${dmgDatalist()}`;
     if (fx.option === 'prevExp') {
-      const syms = [{ v: '', t: '— символ —' }].concat(D.skills.symbols.filter(s => s.cat === 'обычная').map(s => ({ v: s.name, t: `${s.name} (${s.req})` })));
+      const syms = [{ v: '', t: '— символ —' }].concat(D.skills.symbols.filter(s => s.cat !== 'запретные знания')
+        .map(s => ({ v: s.name, t: `${s.name} (${s.req})`, group: s.cat === 'порицаемая' ? 'Порицаемые' : 'Обычные' }))
+        .sort((a, b) => (a.group === b.group ? 0 : a.group === 'Обычные' ? -1 : 1)));
       const actList = D.skills.startActives || [], stList = D.skills.startStances || [];   // открытые списки для создания
       const skillField = select('boonOpt.prevSkill', [{ v: '', t: '— физ. навык —' }].concat(actList.map(a => ({ v: a.name, t: `${a.name} (${a.req || 'без требований'})` }))), o.prevSkill);
       const stanceField = select('boonOpt.prevStance', [{ v: '', t: '— стойка —' }].concat(stList.map(s => ({ v: s.name, t: `${s.name} (${s.req})` }))), o.prevStance);
       html += `<p>«Вы можете выбрать 1 физ навык, 1 символ (из разрешённых), 1 стойку и 1 дополнительную положительную черту». Доп. черта выбирается на этапе «Черты» — лимит положительных увеличен на 1.</p>
         <div class="form-grid"><label>Физический навык ${skillField}</label>
-        <label>Магический символ (не запретный и не порицаемый) ${select('boonOpt.prevSymbol', syms, o.prevSymbol)}</label>
+        <label>Магический символ (обычный или порицаемый, не запретный) ${select('boonOpt.prevSymbol', syms, o.prevSymbol)}</label>
         <label>Стойка ${stanceField}</label></div>`;
       const sk = actList.find(a => a.name === o.prevSkill);
       const stc = stList.find(a => a.name === o.prevStance);
@@ -350,12 +360,15 @@
       <div><span>Отрицательные</span><strong>${ti.neg.length} / ${ti.limitNeg}</strong></div>
       <div class="${ti.pos.length > ti.balanceCap ? 'bad' : ti.pos.length === ti.balanceCap ? 'good' : ''}"><span>Баланс</span><strong>${ti.pos.length} : ${ti.balanceCap}</strong></div>
     </div>
-    <p class="muted small">Возраст «${esc(age.title.toLowerCase())}»: до ${age.traits} каждого типа. Каждая положительная черта уравновешивается отрицательной; «немота» и «обычный» уравновешивают 2 положительных, «проклят» — 3, «калека» — 2 за каждую конечность (и на столько же расширяют лимит положительных).${ti.freeSrc.length ? ' Свободные положительные: ' + esc(ti.freeSrc.join(', ')) + '.' : ''} Противоположные черты (сильный / слабый и т.п.) взять вместе нельзя.</p>`;
-    const chosen = new Set(ti.pos.concat(ti.neg));
+    <p class="muted small">Возраст «${esc(age.title.toLowerCase())}»: до ${age.traits} каждого типа. Каждая положительная черта уравновешивается отрицательной; «немота» и «обычный» уравновешивают 2 положительных, «проклят» — 3, «калека» — 2 за каждую конечность (и на столько же расширяют лимит положительных).${ti.freeSrc.length ? ' Свободные положительные: ' + esc(ti.freeSrc.join(', ')) + '.' : ''} Противоположные черты (сильный / слабый и т.п.) взять вместе нельзя. Большинство черт можно взять несколько раз — кнопки «−» и «+» у выбранной черты, эффекты складываются.</p>`;
+    const all = ti.pos.concat(ti.neg);
+    const chosen = new Set(all);
+    const count = k => all.filter(x => x === k).length;
     const col = (list, kind) => list.map(t => {
       const k = norm(t.name);
-      const on = chosen.has(k);
+      const n = count(k), on = n > 0;
       const fx = R.TRAIT_FX[k] || {};
+      const full = (kind === 'pos' && ti.pos.length >= ti.limitPos) || (kind === 'neg' && ti.neg.length >= ti.limitNeg);
       let reason = '';
       if (!on) {
         if (age.traits === 0) reason = 'недоступно ребёнку';
@@ -369,8 +382,14 @@
         if (k === 'проклят' && res.race && res.race.id === 'гомункулы') reason = 'гомункулам нельзя';
       }
       const w = fx.weight ? `<span class="calc-mark">×${fx.weight}</span>` : k === 'калека' ? '<span class="calc-mark">×2 за конечность</span>' : '';
-      return `<button type="button" class="trait ${kind} ${on ? 'is-on' : ''}" data-act="toggleTrait" data-name="${esc(t.name)}" ${reason ? 'disabled' : ''} aria-pressed="${on}">
-        <span class="tr-name">${esc(cap(t.name.trim()))} ${w}</span><span class="tr-fx">${esc(t.effect)}</span>${reason ? `<span class="tr-why">${esc(reason)}</span>` : ''}</button>`;
+      const rep = on && R.traitRepeatable(k);
+      const btn = `<button type="button" class="trait ${kind} ${on ? 'is-on' : ''}" data-act="toggleTrait" data-name="${esc(t.name)}" ${reason ? 'disabled' : ''} aria-pressed="${on}" ${on ? 'title="Убрать черту"' : ''}>
+        <span class="tr-name">${esc(cap(t.name.trim()))} ${w}${n > 1 ? ` <span class="tr-n">×${n}</span>` : ''}</span><span class="tr-fx">${esc(t.effect)}</span>${reason ? `<span class="tr-why">${esc(reason)}</span>` : ''}</button>`;
+      if (!rep) return btn;
+      return `<div class="trait-row">${btn}<span class="trait-count" role="group" aria-label="Сколько раз взять «${esc(t.name.trim())}»">
+        <button type="button" class="st-btn" data-act="traitCount" data-name="${esc(t.name)}" data-d="-1" aria-label="Взять на раз меньше">−</button>
+        <output>${n}</output>
+        <button type="button" class="st-btn" data-act="traitCount" data-name="${esc(t.name)}" data-d="1" ${full ? 'disabled' : ''} aria-label="Взять ещё раз">+</button></span></div>`;
     }).join('');
     html += `<div class="two-col traits"><section><h2 class="h-sec">Положительные</h2><div class="trait-list">${col(D.skills.traitsPos, 'pos')}</div></section>
       <section><h2 class="h-sec">Отрицательные</h2><div class="trait-list">${col(D.skills.traitsNeg, 'neg')}</div></section></div>`;
@@ -382,13 +401,14 @@
         <div class="form-grid"><label>Руки ${stepper('traitOpt.arms', to.arms || 0, { min: 0, max: res.handsBase, label: 'Убрать рук' })}</label>
         <label>Ноги ${stepper('traitOpt.legs', to.legs || 0, { min: 0, max: 2, label: 'Убрать ног' })}</label></div></div>`);
     }
-    if (chosen.has('резистентный')) opts.push(`<div class="opt"><h3>Резистентный: +10% сопротивления</h3><input type="text" list="dmgTypes" data-bind="traitOpt.resist" value="${esc(to.resist || '')}" placeholder="эффект или тип урона" aria-label="Резистентный к"></div>`);
-    if (chosen.has('уязвимый')) opts.push(`<div class="opt"><h3>Уязвимый: −10% сопротивления</h3><input type="text" list="dmgTypes" data-bind="traitOpt.vuln" value="${esc(to.vuln || '')}" placeholder="эффект или тип урона" aria-label="Уязвимый к"></div>`);
+    const times = (k, f) => Array.from({ length: count(k) }, (_, i) => f(R.optKey, i, count(k) > 1 ? ` №${i + 1}` : '')).join('');
+    if (chosen.has('резистентный')) opts.push(`<div class="opt"><h3>Резистентный: +10% сопротивления${count('резистентный') > 1 ? ' (за каждую черту; одинаковые складываются)' : ''}</h3>${times('резистентный', (key, i, nn) => `<input type="text" list="dmgTypes" data-bind="traitOpt.${key('resist', i)}" value="${esc(to[key('resist', i)] || '')}" placeholder="эффект или тип урона${nn}" aria-label="Резистентный к${nn}">`)}</div>`);
+    if (chosen.has('уязвимый')) opts.push(`<div class="opt"><h3>Уязвимый: −10% сопротивления${count('уязвимый') > 1 ? ' (за каждую черту; одинаковые складываются)' : ''}</h3>${times('уязвимый', (key, i, nn) => `<input type="text" list="dmgTypes" data-bind="traitOpt.${key('vuln', i)}" value="${esc(to[key('vuln', i)] || '')}" placeholder="эффект или тип урона${nn}" aria-label="Уязвимый к${nn}">`)}</div>`);
     if (chosen.has('тайное знание')) {
       const syms = [{ v: '', t: '— символ —' }].concat(D.skills.symbols.map(s => ({ v: s.name, t: `${s.name} (${s.req})`, group: cap(s.cat) })).sort((a, b) => a.group.localeCompare(b.group)));
-      opts.push(`<div class="opt"><h3>Тайное знание: любой магический символ со старта</h3>${select('traitOpt.secretSymbol', syms, to.secretSymbol)}</div>`);
+      opts.push(`<div class="opt"><h3>Тайное знание: любой магический символ со старта</h3>${times('тайное знание', (key, i) => select(`traitOpt.${key('secretSymbol', i)}`, syms, to[key('secretSymbol', i)]))}</div>`);
     }
-    if (chosen.has('проклят')) opts.push(`<div class="opt"><h3>Проклят: неснимаемое проклятие</h3><p class="muted small">«При получении проклятия кидается 50/50 для верхнего (тёмные дары как проклятие) и нижнего блока (проклятия)».</p>${rollBox('curse', 'проклятие', st)}</div>`);
+    if (chosen.has('проклят')) opts.push(`<div class="opt"><h3>Проклят: неснимаемое проклятие</h3><p class="muted small">«При получении проклятия кидается 50/50 для верхнего (тёмные дары как проклятие) и нижнего блока (проклятия)».</p>${times('проклят', (key, i, nn) => rollBox(key('curse', i), 'проклятие' + nn, st))}</div>`);
     if (opts.length) html += `<div class="card"><h2>Параметры выбранных черт</h2>${opts.join('')}${dmgDatalist()}</div>`;
     return html;
   }
@@ -464,7 +484,7 @@
       html += `<tr class="${v.blocked ? 'blocked' : ''}"><th scope="row">${t.name}${t.base ? ` <span class="muted small">(база ${t.base})</span>` : ''}</th>
         <td>${v.blocked ? '<span class="muted">запрещено «Ярким оком»</span>' : stepper(`talents.${t.id}`, v.inv, { min: 0, max, label: t.name })}</td>
         <td>${v.bsrc.length ? esc(v.bsrc.join(', ')) : '<span class="muted">—</span>'}</td>
-        <td class="fin">${fmt(v.total)} <span class="muted">/ ${t.max}</span></td>
+        <td class="fin">${fmt(v.total)} ${v.sepBase ? `<span class="muted small">(${v.base} база + ${fmt(v.inv)} вложено${v.bonus ? ` ${signed(v.bonus)} бонусы` : ''}; вложить до ${t.max})</span>` : `<span class="muted">/ ${t.max}</span>`}</td>
         <td class="small">${esc(p ? p.effect : '')}${p && p.chance && /сотом/i.test(p.chance) ? `<br><span class="muted">${esc(p.chance)}</span>` : ''}</td></tr>`;
     });
     html += '</tbody></table>';
@@ -631,12 +651,16 @@
     toggleTrait(b) {
       const st = this.state;
       const name = b.dataset.name;
-      const ix = st.traits.findIndex(t => norm(t) === norm(name));
-      if (ix >= 0) {
-        st.traits.splice(ix, 1);
-        if (norm(name) === 'проклят' && st.rolls) delete st.rolls.curse;
-        if (norm(name) === 'калека') st.traitOpt.arms = st.traitOpt.legs = 0;
-      } else st.traits.push(name);
+      if (st.traits.some(t => norm(t) === norm(name))) dropTrait(st, name, 0);   // убрать все экземпляры
+      else st.traits.push(name);
+      this.changed();
+    },
+    traitCount(b) {
+      const st = this.state;
+      const name = b.dataset.name;
+      const n = st.traits.filter(t => norm(t) === norm(name)).length;
+      if (+b.dataset.d > 0) st.traits.push(name);
+      else dropTrait(st, name, n - 1);
       this.changed();
     },
     inc(b) {
@@ -680,6 +704,19 @@
       this.changed();
     }
   });
+
+  // оставить у черты keep экземпляров; параметры и броски лишних экземпляров стираются
+  function dropTrait(st, name, keep) {
+    const k = norm(name);
+    let seen = 0;
+    st.traits = st.traits.filter(t => norm(t) !== k || ++seen <= keep);
+    const opt = { 'резистентный': 'resist', 'уязвимый': 'vuln', 'тайное знание': 'secretSymbol' }[k];
+    for (let i = keep; i < 10; i++) {
+      if (opt) delete st.traitOpt[R.optKey(opt, i)];
+      if (k === 'проклят' && st.rolls) delete st.rolls[R.optKey('curse', i)];
+    }
+    if (k === 'калека' && !keep) st.traitOpt.arms = st.traitOpt.legs = 0;
+  }
 
   // смена типа предмета сбрасывает его поля
   document.addEventListener('change', e => {
