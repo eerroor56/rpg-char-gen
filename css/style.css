@@ -379,6 +379,22 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
 .sheet { background: #f3ead7; color: #2a2236; border-radius: var(--radius-m); padding: 26px 28px; }
 .sheet .muted { color: #6f6380; }
 .sh-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; border-bottom: 2px solid #2a2236; padding-bottom: 12px; margin-bottom: 16px; }
+.sh-head.has-portrait { align-items: flex-start; }
+.sh-head .sh-title { flex: 1 1 220px; }
+
+/* портреты рас */
+.portrait { margin: 0; display: flex; gap: 6px; }
+.portrait a { display: block; flex: 1 1 0; min-width: 0; line-height: 0; }
+.portrait img { width: 100%; height: auto; object-fit: contain; border-radius: var(--radius-s); }
+.sh-portrait { flex: 0 0 200px; }
+.sh-portrait img { max-height: 280px; border: 3px solid #2a2236; background: #2a2236; box-shadow: 0 2px 0 #c9b48a; }
+.sh-portrait.two { flex-basis: 260px; }
+.card > header.rc-head { flex-wrap: nowrap; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+.rc-head > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.rc-head h2 { margin: 0 6px 0 0; }
+.race-portrait { flex: 0 0 150px; }
+.race-portrait.two { flex-basis: 210px; }
+.race-portrait img { max-height: 210px; border: 1px solid var(--line); background: var(--ink-2); }
 .sh-head h2 { font-size: 2.2rem; margin: 0; }
 .sh-head p { margin: 0; color: #4e4360; }
 .sh-badges { display: flex; gap: 18px; margin: 0; }
@@ -484,6 +500,8 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
   .ref-nav a.is-on { border-bottom-color: var(--brass); }
 }
 @media (max-width: 720px) {
+  .race-portrait, .race-portrait.two { flex-basis: 110px; }
+  .sh-portrait, .sh-portrait.two { flex: 1 1 100%; max-width: 260px; margin: 0 auto; }
   body { font-size: 16px; }
   h1 { font-size: 1.7rem; }
   .topbar { padding: 8px 16px; gap: 12px; }

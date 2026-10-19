@@ -127,8 +127,9 @@
     if (!race) return `<div class="card empty">Выберите расу из списка — здесь появятся её параметры, бонусы и связи с другими таблицами.
       ${window.RandomHero ? `<p class="dice-offer">Не знаете, с чего начать? <button type="button" class="btn dice-btn" data-act="randomFull">${App.DICE}<span>Собрать случайного героя</span></button></p><p class="muted small">Персонаж соберётся по всем правилам. Потом любой шаг можно поправить вручную или перебросить отдельно.</p>` : ''}</div>`;
     const r = race.base;
-    let html = `<article class="card race-card"><header><h2>${esc(cap(race.name))}</h2>
-      ${r.bonusFreq ? tag(r.bonusFreq, 'freq') : ''}</header>`;
+    const pic = App.portrait(race.isHalf && race.parents ? race.parents : [r], 'race-portrait');
+    let html = `<article class="card race-card"><header class="${pic ? 'rc-head' : ''}">${pic}<div><h2>${esc(cap(race.name))}</h2>
+      ${r.bonusFreq ? tag(r.bonusFreq, 'freq') : ''}</div></header>`;
     if (race.isHalf) {
       const opts = [{ v: '', t: '— раса —' }].concat(D.races.filter(x => x.playable && x.id !== 'полукровка').map(x => ({ v: x.id, t: cap(x.name) })));
       html += `<p class="note">Полукровка «получает статы путём сложения статов двух рас и делением их на 2 / имеет половинчатые бонусы и штрафы обеих рас / привлекательность −20». Характер и размер — «настраиваемые».</p>
@@ -477,7 +478,7 @@
       ${item('МП', fmt(d.mp), 'дух × 2')}
       ${item('Пси', fmt(d.psi), 'дух × 2')}
       ${item('Реген МП', fmt(d.mpRegen), d.mpRegenSrc.join(', '))}
-      ${item('ОД', signed(d.od), d.odSrc.join(', '), d.odCond.length ? 'Условно: ' + esc(d.odCond.map(f => signed(f.v)).join(', ')) + ' (в воде / на суше и т.п.)' : '')}
+      ${item('ОД в ход', `${R.odText(d)}${d.odMod ? ` <span class="muted small">= ${d.odTotal}</span>` : ''}`, `база ${d.odBase}; ` + d.odSrc.join(', '), d.odCond.length ? 'Условно: ' + esc(d.odCond.map(f => signed(f.v)).join(', ')) + ' (в воде / на суше и т.п.)' : '')}
       ${item('Уворот', fmt(d.dodge), 'ловкость − штраф брони ± материал')}
       ${item('Слоты', `${fmt(d.slotsUsed)} / ${fmt(d.slots)}`, 'сила + сумки; занято снаряжением')}
       ${item('Зоркость', fmt(d.zor), 'база 50 + талант + бонусы')}

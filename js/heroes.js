@@ -50,7 +50,7 @@
       ...R.STATS.map(k => [R.STAT_NAMES[k], x => x.stats[k], 1]),
       ['ХП', x => x.der.hp, 1], ['МП', x => x.der.mp, 1], ['Пси', x => x.der.psi, 1],
       ['Реген ХП', x => x.der.hpRegen, 1], ['Реген МП', x => x.der.mpRegen, 1],
-      ['ОД', x => x.der.od, 1, true], ['Уворот', x => x.der.dodge, 1], ['Зоркость', x => x.der.zor, 1],
+      ['ОД в ход', x => R.odText(x.der), null], ['Уворот', x => x.der.dodge, 1], ['Зоркость', x => x.der.zor, 1],
       ['Харизма', x => x.der.charisma, 1], ['Привлекательность', x => x.der.attr, 1, true],
       ['Урон оружия', x => x.gear.weapon ? x.gear.weapon.damageTotal : 0, 1],
       ['Броня', x => x.gear.armor && x.gear.armor.armor !== undefined ? x.gear.armor.armor : 0, 1]

@@ -55,8 +55,19 @@
 
   const DICE = '<svg class="dice-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="8.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></svg>';
 
+  // портрет расы (картинки — img/races, список — data/images.js); у полукровки — оба родителя
+  function portrait(races, cls) {
+    const imgs = (window.RACE_IMAGES || {});
+    const list = races.filter(r => r && imgs[r.id]);
+    if (!list.length) return '';
+    return `<figure class="portrait ${cls || ''} ${list.length > 1 ? 'two' : ''}">${list.map(r => {
+      const im = imgs[r.id];
+      return `<a href="${esc(im.src)}" target="_blank" rel="noopener" title="${esc(cap(r.name))} — открыть картинку целиком"><img src="${esc(im.src)}" width="${im.w}" height="${im.h}" alt="${esc(cap(r.name))}" loading="lazy" decoding="async"></a>`;
+    }).join('')}</figure>`;
+  }
+
   const App = {
-    esc, cap, store, DICE,
+    esc, cap, store, DICE, portrait,
     state: null,
     res: null,
     step: 'race',
@@ -301,7 +312,7 @@
         <div class="lg-stats">${stats}</div>
         <dl class="lg-der">
           <div><dt>Уровень</dt><dd>${race ? R.fmt(res.level) : '—'}</dd></div>
-          <div><dt>ОД</dt><dd>${race ? R.signed(d.od) : '—'}</dd></div>
+          <div><dt>ОД в ход</dt><dd>${race ? R.odText(d) : '—'}</dd></div>
           <div><dt>ХП</dt><dd>${race ? R.fmt(d.hp) : '—'}</dd></div>
           <div><dt>МП / Пси</dt><dd>${race ? `${R.fmt(d.mp)} / ${R.fmt(d.psi)}` : '—'}</dd></div>
           <div><dt>Очки характеристик</dt><dd class="${pointsLeft ? 'attn' : ''}">${race && res.age ? (pointsLeft ? `ещё ${R.signed(pointsLeft)}` : 'распределены') : '—'}</dd></div>

@@ -42,6 +42,7 @@ eq('agePoints', r.agePoints, 300);
 eq('total points = level*3', r.level * 3, 600);
 eq('talentPoints', r.talentPoints, 40);
 eq('od elder: только прибавка (возраст −1, размер б 0)', r.der.od, -1);
+eq('elder od text 3 − 1', R.odText(r.der), '3 − 1');
 // 2. Распределение
 s.alloc = { t: 100, d: 100, s: 100, i: 0, l: 0 };
 r = R.compute(s);
@@ -54,6 +55,8 @@ r = R.compute(s);
 eq('child level integer (53 × 0,5 = 26,5 → 27)', r.level, 27);
 eq('child points = 3 × (27 − 53)', r.agePoints, -78);
 eq('child od', r.der.od, 2);
+eq('child od text 3 + 2', R.odText(r.der), '3 + 2');
+eq('child od total', r.der.odTotal, 5);
 eq('child talents', r.talentPoints, 5);
 s.traits = ['сильный'];
 r = R.compute(s);
@@ -218,6 +221,7 @@ s = st({ raceId: 'дракониды', ageCat: 'взрослый', ancestor: 'Д
   weapon: { name: 'длинный лук', mat: 'сталь' } });
 r = R.compute(s);
 eq('GM: size гигантский', r.size.id, 'г');
+eq('Horgen → кость', R.patronSymbol('Horgen'), 'кость');
 eq('GM: T = 250 + 800', r.stats.t, 1050);
 eq('GM: ancestor regen halved', r.race.ancestor.fx.hpRegenPct, 100);
 eq('GM: hp regen 210 × 1,1 × 2 = 462', r.der.hpRegen, 462);

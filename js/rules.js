@@ -958,6 +958,8 @@
     if (boon && boon.fx.od) { od += boon.fx.od; odSrc.push(`«${boon.src.name}» ${signed(boon.fx.od)}`); }
     if (ancFx.od) { od += ancFx.od; odSrc.push(`${ancSrc} ${signed(ancFx.od)}`); }
     der.od = od; der.odMod = od; der.odSrc = odSrc.length ? odSrc : ['нет модификаторов'];
+    der.odBase = C.BASE_OD_TURN || 0; der.odTotal = der.odBase + od;
+    if (race && der.odTotal < 1) warnings.push({ step: 'stats', msg: `ОД в ход: ${odText(der)} = ${der.odTotal} — меньше одного действия за ход.` });
     const condOd = (race ? race.fx.concat(race.pfx) : []).filter(f => f.k === 'od' && f.cond);
     der.odCond = condOd;
     // привлекательность
@@ -1026,6 +1028,13 @@
 
   // ---------------------------------------------------------------- случайные броски
 
+  // ОД в ход: «3 + 1», «3 − 2», «3»
+  function odText(d) {
+    const m = d.odMod !== undefined ? d.odMod : d.od;
+    const b = d.odBase !== undefined ? d.odBase : (C.BASE_OD_TURN || 0);
+    return m ? `${b} ${m > 0 ? '+' : '−'} ${Math.abs(m)}` : `${b}`;
+  }
+
   function rnd(n) { return Math.floor(Math.random() * n); }
   function isLocked() { return !D.creatures; }
   // «Расхититель древностей»: открытый список артефактов (раздел «Артефакты» справочника закрыт)
@@ -1069,7 +1078,7 @@
   }
 
   window.Rules = {
-    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList,
+    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
     get index() { return IX; }
