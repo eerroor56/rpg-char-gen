@@ -268,6 +268,17 @@ for (const race of window.GAME_DATA.races.filter(x => x.playable)) {
 }
 if (frac.length) console.log('fractions:', frac.slice(0, 10));
 eq('no fractional results', frac.length, 0);
+// 18h. Случайный герой: всегда собран по правилам
+require('../js/random.js');
+const RH = window.RandomHero;
+let randBad = 0;
+for (let i = 0; i < 300; i++) { const h = RH.full(); const x = R.compute(h); if (x.errors.length) { randBad++; if (randBad < 4) console.log('random errors', h.raceId, x.errors.map(e => e.msg)); } }
+eq('300 random heroes without errors', randBad, 0);
+s = st({ raceId: 'орки', name: 'Гром' }); RH.fill(s);
+eq('fill keeps race and name', [s.raceId, s.name], ['орки', 'Гром']);
+eq('fill completes hero', R.compute(s).errors.length, 0);
+for (const id of RH.steps) RH.step(s, id);
+eq('rerolled steps keep hero valid', R.compute(s).errors.length, 0);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;

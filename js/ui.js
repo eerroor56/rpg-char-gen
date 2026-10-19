@@ -53,8 +53,10 @@
     "свеживание": "свежевание"
   };
 
+  const DICE = '<svg class="dice-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="8.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></svg>';
+
   const App = {
-    esc, cap, store,
+    esc, cap, store, DICE,
     state: null,
     res: null,
     step: 'race',
@@ -203,7 +205,8 @@
       const scroll = window.scrollY;
       const active = document.activeElement;
       const activeKey = active && active.dataset ? (active.dataset.bind || active.dataset.key) : null;
-      work.innerHTML = `<div class="step-head"><h1>${esc(step.title)}</h1>${step.lead ? `<p class="lead">${step.lead}</p>` : ''}</div>`
+      const canRoll = window.RandomHero && window.RandomHero.steps.includes(step.id);
+      work.innerHTML = `<div class="step-head"><div class="step-title"><h1>${esc(step.title)}</h1>${canRoll ? `<button type="button" class="btn ghost dice-btn small" data-act="randomStep" data-step="${step.id}" title="Перебросить только этот шаг — остальное останется, если не сломается">${DICE}<span>Случайно</span></button>` : ''}</div>${step.lead ? `<p class="lead">${step.lead}</p>` : ''}</div>`
         + step.render(this.state, this.res)
         + this.stepIssues(step.id)
         + this.stepNav(step.id);
@@ -248,7 +251,12 @@
         const label = st === 'err' ? 'есть ошибки' : st === 'warn' ? 'есть замечания' : 'в порядке';
         return `<li><button type="button" data-act="go" data-step="${s.id}" class="rail-item ${s.id === this.step ? 'is-current' : ''}" aria-current="${s.id === this.step ? 'step' : 'false'}">
           <span class="rail-num">${i + 1}</span><span class="rail-title">${esc(s.short || s.title)}</span><span class="dot ${st}" title="${label}"><span class="sr">${label}</span></span></button></li>`;
-      }).join('') + '</ol>';
+      }).join('') + '</ol>'
+        + (window.RandomHero ? `<div class="rail-dice">
+          <button type="button" class="btn dice-btn" data-act="randomFull" title="Собрать случайного персонажа по всем правилам">${DICE}<span>Случайный герой</span></button>
+          ${this.state.raceId ? `<button type="button" class="btn ghost dice-btn" data-act="randomFill" title="Заполнить случайно только то, что ещё не выбрано">${DICE}<span>Дополнить случайно</span></button>` : ''}
+          ${this.prevState ? `<button type="button" class="linklike undo" data-act="randomUndo">Отменить случайный выбор</button>` : ''}
+        </div>` : '');
     },
 
     pentagon(base, fin) {

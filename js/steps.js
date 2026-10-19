@@ -124,7 +124,8 @@
 
   function raceCard(st, res) {
     const race = res.race;
-    if (!race) return '<div class="card empty">Выберите расу из списка — здесь появятся её параметры, бонусы и связи с другими таблицами.</div>';
+    if (!race) return `<div class="card empty">Выберите расу из списка — здесь появятся её параметры, бонусы и связи с другими таблицами.
+      ${window.RandomHero ? `<p class="dice-offer">Не знаете, с чего начать? <button type="button" class="btn dice-btn" data-act="randomFull">${App.DICE}<span>Собрать случайного героя</span></button></p><p class="muted small">Персонаж соберётся по всем правилам. Потом любой шаг можно поправить вручную или перебросить отдельно.</p>` : ''}</div>`;
     const r = race.base;
     let html = `<article class="card race-card"><header><h2>${esc(cap(race.name))}</h2>
       ${r.bonusFreq ? tag(r.bonusFreq, 'freq') : ''}</header>`;
@@ -621,6 +622,19 @@
     </div>`;
   }
 
+  // ------------------------------------------------------------ случайный герой: панель переброса на листе
+
+  function randomBar(st) {
+    if (!window.RandomHero || !st.raceId) return '';
+    const parts = [['race', 'Раса'], ['age', 'Возраст'], ['boon', 'Дар'], ['traits', 'Черты'], ['stats', 'Характеристики'], ['talents', 'Таланты'], ['gear', 'Снаряжение'], ['story', 'Имя и история']];
+    return `<div class="random-bar no-print">
+      <p><b>Перебросить случайно:</b> <span class="muted small">меняется только выбранная часть; что от неё зависит и сломалось — пересоберётся само</span></p>
+      <div class="random-parts">${parts.map(([id, t]) => `<button type="button" class="btn ghost small" data-act="randomStep" data-step="${id}" data-stay>${App.DICE}<span>${t}</span></button>`).join('')}
+        <button type="button" class="btn small" data-act="randomFull">${App.DICE}<span>Всё заново</span></button>
+        ${App.prevState ? '<button type="button" class="btn ghost small" data-act="randomUndo">Отменить</button>' : ''}</div>
+    </div>`;
+  }
+
   // ------------------------------------------------------------ регистрация этапов
 
   App.steps = [
@@ -633,12 +647,46 @@
     { id: 'talents', title: 'Таланты', render: talentsStep },
     { id: 'gear', title: 'Снаряжение', render: gearStep },
     { id: 'story', title: 'Предыстория', render: storyStep },
-    { id: 'summary', title: 'Лист персонажа', short: 'Итог', render: (st, res) => window.Sheet.render(st, res, true) }
+    { id: 'summary', title: 'Лист персонажа', short: 'Итог', render: (st, res) => randomBar(st) + window.Sheet.render(st, res, true) }
   ];
 
   // ------------------------------------------------------------ действия
 
+  // запоминаем персонажа перед случайным броском — чтобы можно было отменить
+  function snapshot() { App.prevState = JSON.parse(JSON.stringify(App.state)); }
+
   Object.assign(App.actions, {
+    randomFull() {
+      snapshot();
+      this.state = window.RandomHero.full();
+      this.editingId = null;
+      this.ui.boonTab = this.state.boon.kind || 'gift';
+      this.changed();
+      this.go('summary');
+      this.toast('Случайный герой готов — поправьте любой шаг или перебросьте часть');
+    },
+    randomFill() {
+      snapshot();
+      window.RandomHero.fill(this.state);
+      this.changed();
+      this.go('summary');
+      this.toast('Пустые шаги заполнены случайно, ваш выбор сохранён');
+    },
+    randomStep(b) {
+      snapshot();
+      const id = b.dataset.step;
+      window.RandomHero.step(this.state, id);
+      if (id === 'boon') this.ui.boonTab = this.state.boon.kind || 'gift';
+      this.changed();
+      this.toast('Шаг переброшен');
+    },
+    randomUndo() {
+      if (!this.prevState) return;
+      this.state = this.prevState;
+      this.prevState = null;
+      this.changed();
+      this.toast('Вернул как было');
+    },
     pickRace(b) {
       const id = b.dataset.id;
       const st = this.state;
