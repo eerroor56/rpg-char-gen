@@ -169,7 +169,9 @@
     'дракониды': { kind: 'dragon', title: 'Дракон-предок', text: '+10% статов дракона предка / навыки дракона предка (50% мощности) / знание знака дракона рода / размер: дракон предок −1', pct: 10, required: true },
     'таррэ': { kind: 'monster', title: 'Монстр-предок', text: 'умение монстра / форма монстра / +10% от статов предка монстра', pct: 10, required: true },
     'скордиты': { kind: 'insect', title: 'Насекомое-предок', text: 'призвать насекомое / бонус от насекомого предка (размер бонуса в таблице не указан — по решению ГМ)', pct: 0, required: false },
-    'эноши': { kind: 'beastRace', title: 'Зверо-предок', text: 'имеют половину от бонуса своего зверо предка', pct: 0, required: false }
+    'эноши': { kind: 'beastRace', title: 'Зверо-предок', text: 'имеют половину от бонуса своего зверо предка', pct: 0, required: false },
+    'тифлинги': { kind: 'demon', title: 'Демонический предок', text: 'символ принадлежности — символ демона-предка, он же стартовый магический символ (демоны из листа «Социум»)', pct: 0, required: true },
+    'асимару': { kind: 'god', title: 'Бог-покровитель', text: 'символ бога по принадлежности — стартовый магический символ (боги из листа «Социум»)', pct: 0, required: true }
   };
 
   const AMMO = {
@@ -185,6 +187,7 @@
   // ---------------------------------------------------------------- утилиты
 
   const roundLevel = x => Math.floor(x + 0.5 + 1e-9);   // 0,5 — вверх
+  const ri = roundLevel;                                  // все итоговые числа на сайте — целые
   const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
   const r1 = x => Math.round(x * 10) / 10;
   const trunc = x => (x < 0 ? Math.ceil(x) : Math.floor(x));
@@ -232,7 +235,7 @@
     return {
       v: 2,
       raceId: '', parentA: '', parentB: '', hbAlign: '', hbSize: '',
-      ancestor: '', oniClan: '',
+      ancestor: '', ancestorAbility: '', oniClan: '',
       ageCat: '', agePct: 0,
       boon: { kind: '', name: '' },
       boonOpt: {},
@@ -264,6 +267,50 @@
     });
   }
 
+  // Навыки предка: у драконидов — 50% мощности. Делятся пополам числа с единицами (%, е, атк, ОД, лвк, урон, хп, мп)
+  // и числа со знаком; кратность (4х), клетки (5к), площадь (3х3) и цена «за 1ОД» не меняются.
+  function halveText(t) {
+    return String(t).replace(/(за\s*)?([+\-−]?)(\d+(?:[.,]\d+)?)(\s*)(%|е(?![а-яё])|атк|АТК|ОД|од(?![а-яё])|лвк|урон|хп|мп)?/g, (all, za, sign, num, sp, unit) => {
+      if (za || (!sign && !unit)) return all;
+      return `${sign}${ri(parseFloat(num.replace(',', '.')) / 2)}${sp}${unit || ''}`;
+    });
+  }
+  // числовые эффекты из текста навыка, которые можно посчитать
+  function abilityFx(text) {
+    const t = String(text).toLowerCase().replace(/\s+/g, ' ');
+    const fx = {};
+    let m;
+    if ((m = t.match(/(\d+)\s*%\s*регенерац/))) fx.hpRegenPct = +m[1];
+    else if (/удвоенн\S*\s+регенерац/.test(t)) fx.hpRegenPct = 100;
+    if ((m = t.match(/(\d+)\s*%\s*вампиризм/))) fx.vamp = +m[1];
+    if ((m = t.match(/\+\s*(\d+)\s*хп(?![а-яё])(?!\s*(?:и\s*мп\s*)?реген)/))) fx.hp = +m[1];
+    if ((m = t.match(/\+\s*(\d+)\s*од(?![а-яё])/))) fx.od = +m[1];
+    if ((m = t.match(/\+\s*(\d+)\s*е?\s*хп регена/)) || (m = t.match(/хп реген\S*\s*\+?\s*(\d+)/))) fx.hpRegen = +m[1];
+    if ((m = t.match(/\+\s*(\d+)\s*е?\s*(?:мп|мана) регена/)) || (m = t.match(/(?:мп|мана) реген\S*\s*\+?\s*(\d+)/))) fx.mpRegen = +m[1];
+    return fx;
+  }
+  function sumFx(list) {
+    const out = {};
+    list.forEach(fx => Object.entries(fx).forEach(([k, v]) => { out[k] = (out[k] || 0) + v; }));
+    return out;
+  }
+
+  // символ бога / демона: настройки ГМ (js/config.js), для демонов запасной вариант — кланы Они
+  function patronSymbol(name) {
+    const map = C.PATRON_SYMBOLS || {};
+    const key = Object.keys(map).find(k => norm(k) === norm(name));
+    if (key && map[key]) return map[key];
+    const clan = ONI_CLANS.find(c => norm(c.demon) === norm(name));
+    return clan ? clan.id : '';
+  }
+
+  // демоны — восемь из листа «Социум»; боги — только те, кому ГМ задал символ в js/config.js
+  function patronList(kind) {
+    if (kind === 'demon') return D.demons || [];
+    const map = C.PATRON_SYMBOLS || {};
+    return (D.gods || []).filter(g => Object.keys(map).some(k => norm(k) === norm(g.name) && map[k]));
+  }
+
   function halve(fx) {
     return fx.map(f => {
       const c = Object.assign({}, f, { half: true });
@@ -286,7 +333,7 @@
       const A = IX.race.get(st.parentA), B = IX.race.get(st.parentB);
       res.parents = [A, B];
       if (A && B) {
-        STATS.forEach(k => { res.stats[k] = (A[k] + B[k]) / 2; });
+        STATS.forEach(k => { res.stats[k] = ri((A[k] + B[k]) / 2); });
         res.lvl = roundLevel((STATS.reduce((a, k) => a + res.stats[k], 0) - 25) / 3);
         res.bonuses.push({ src: `${A.name} (½)`, text: A.bonus }, { src: `${B.name} (½)`, text: B.bonus });
         res.penalties.push({ src: `${A.name} (½)`, text: A.penalty }, { src: `${B.name} (½)`, text: B.penalty });
@@ -323,6 +370,11 @@
           res.bonuses.push({ src: `Зверо-предок: ${ar.name} (½)`, text: ar.bonus });
           res.fx = res.fx.concat(halve(ar.fx).filter(f => !['noWeapon', 'noArmor', 'noStartGear', 'hands'].includes(f.k)));
         }
+      } else if (anc.kind === 'demon' || anc.kind === 'god') {
+        // демон / бог задаёт стартовый магический символ (не дары религии)
+        const dm = patronList(anc.kind).find(d => norm(d.name) === norm(st.ancestor));
+        if (dm) res.ancestor = { kind: anc.kind, name: dm.name, demon: dm, element: patronSymbol(dm.name) || null };
+        else if (String(st.ancestor || '').trim()) res.ancestor = { kind: anc.kind, name: String(st.ancestor).trim(), unknown: true };
       } else {
         const cr = IX.creature.get(norm(st.ancestor));
         if (!cr && String(st.ancestor || '').trim()) res.ancestor = { kind: anc.kind, name: String(st.ancestor).trim(), unknown: true };
@@ -330,8 +382,18 @@
           res.ancestor = { kind: anc.kind, name: cr.n, creature: cr };
           if (anc.pct) {
             res.ancestor.add = {};
-            STATS.forEach(k => { res.ancestor.add[k] = r1(cr[k] * anc.pct / 100); });
+            STATS.forEach(k => { res.ancestor.add[k] = ri(cr[k] * anc.pct / 100); });
           }
+          // навыки предка: дракониды — все навыки на 50% мощности; таррэ — одно выбранное умение
+          const abil = (cr.ab || []).map(([k, t], i) => ({ i, text: anc.kind === 'dragon' ? halveText(t) : t, orig: t }));
+          abil.forEach(a => { a.fx = abilityFx(a.text); });
+          res.ancestor.abilities = abil;
+          if (anc.kind === 'dragon') res.ancestor.fx = sumFx(abil.map(a => a.fx));
+          else if (anc.kind === 'monster') {
+            const pick = abil.find(a => String(a.i) === String(st.ancestorAbility));
+            res.ancestor.picked = pick || null;
+            res.ancestor.fx = pick ? pick.fx : {};
+          } else res.ancestor.fx = {};
           if (anc.kind === 'dragon') {
             const si = sizeIndex(cr.sz);
             if (si !== null) res.size = SIZES[Math.max(0, si - 1)].id;
@@ -416,9 +478,18 @@
     // «2% оглушить» × 3 → «6% оглушить»; иначе показываем множитель текстом
     const m = String(text).match(/^([+\-−]?)(\d+(?:[.,]\d+)?)(\s*%?)(.*)$/);
     if (!m || /[\/]/.test(text)) return null;
-    const v = parseFloat(m[2].replace(',', '.')) * n;
-    return `${m[1]}${fmt(v)}${m[3]}${m[4]}`;
+    const v = ri(parseFloat(m[2].replace(',', '.')) * n);
+    return `${m[1]}${v}${m[3]}${m[4]}`;
   }
+
+  // единицы материала с учётом размера: пересчитанные округляются до целого (6 × 1,4 = 8,4 → 8);
+  // при нормальном размере и для долей единицы (¼, ½) — как в таблице
+  function sizeUnits(u, k) {
+    if (k === 1) return u;
+    const x = u * k;
+    return x >= 1 ? ri(x) : r2(x);
+  }
+  function r2(x) { return Math.round(x * 100) / 100; }
 
   function scaledEffect(eff, units) {
     if (!eff || !eff.t) return null;
@@ -440,17 +511,17 @@
       else if ((m = seg.match(/([+\-−])\s*(\d+)\s*ловкост/))) res.l += (m[1] === '+' ? 1 : -1) * +m[2] * mult;
       if ((m = seg.match(/хп реген\s*\+\s*(\d+)/))) res.hpRegen += +m[1] * mult;
     });
+    res.l = ri(res.l); res.hpRegen = ri(res.hpRegen);
     return res;
   }
 
-  function reqCheck(req, k, stats, halfReq) {
+  // требования предмета — как в таблице, размер их не меняет (решение ГМ); гомункулам — половина
+  function reqCheck(req, stats, halfReq) {
     const out = [];
     for (const [key, v] of Object.entries(req || {})) {
       const sk = REQ_KEY[key];
       if (!sk) continue;
-      let need = Math.ceil(v * k * 100) / 100;
-      if (halfReq) need = need / 2;
-      need = Math.ceil(need);
+      const need = Math.ceil(halfReq ? v / 2 : v);
       const have = stats[sk];
       out.push({ stat: sk, need, have, ok: have >= need });
     }
@@ -479,13 +550,14 @@
       if (!w) errors.push({ step: 'gear', msg: 'Неизвестное оружие.' });
       else {
         const res = { w, m, k: sizeK };
-        res.units = r1(w.u * sizeK); res.unitsNon = r1(w.un * sizeK); res.unitsTotal = r1((w.u + w.un) * sizeK);
+        // размер меняет единицы, влияющие на урон (округляются до целого); остальные единицы — как в таблице
+        res.units = sizeUnits(w.u, sizeK); res.unitsNon = w.un; res.unitsTotal = r2(res.units + w.un);
         if (m) {
-          res.damage = r1(m.dmg * w.u * sizeK);
+          res.damage = ri(m.dmg * res.units);
           res.matEffect = scaledEffect(m.ew, res.unitsTotal);
-          if (norm(w.name) === 'катар') res.armorFromNon = r1(m.dmg * w.un * sizeK);
+          if (norm(w.name) === 'катар') res.armorFromNon = ri(m.dmg * w.un);
         }
-        res.req = reqCheck(w.req, sizeK, stats, halfReq);
+        res.req = reqCheck(w.req, stats, halfReq);
         res.bonus = [];
         (race ? race.fx : []).forEach(f => {
           if ((f.k === 'weapon' || f.k === 'weaponAcc') && f.types.map(norm).includes(norm(w.name)) && !f.cond) {
@@ -495,6 +567,10 @@
         if (race && race.id === 'они' && st.oniClan) {
           const cl = ONI_CLANS.find(c => c.id === st.oniClan);
           if (cl && norm(cl.weapon) === norm(w.name)) res.bonus.push({ kind: 'урон', v: 50, src: `оружие клана (${cl.id})` });
+        }
+        // баситины: «одноручные мечи имеют Х2 урон» — оружие со словом «меч» в названии на одну руку
+        if (race && race.id === 'баситины' && res.damage !== undefined && w.hands === 1 && /(^|\s)меч(\s|$)/.test(norm(w.name))) {
+          res.damage *= 2; res.mul = { v: 2, src: 'баситины: одноручный меч' };
         }
         res.damageTotal = (res.damage || 0) + res.bonus.filter(b => b.kind === 'урон').reduce((a, b) => a + b.v, 0);
         if (!m) errors.push({ step: 'gear', msg: 'Выберите материал оружия (оружие монолитное — из одного материала).' });
@@ -516,7 +592,8 @@
       const m = IX.material.get(norm(st.ammo.mat));
       if (a) {
         const fits = (AMMO[a.name] || []).map(norm).includes(norm(g.weapon.w.name));
-        g.ammo = { a, m, damage: m ? r1(m.dmg * a.u * sizeK) : null, fits };
+        const au = sizeUnits(a.u, sizeK);
+        g.ammo = { a, m, units: au, damage: m ? ri(m.dmg * au) : null, fits };
         if (!fits) warnings.push({ step: 'gear', msg: `«${a.name}» не подходит к «${g.weapon.w.name}».` });
         if (m && !allowedMats.has(norm(m.name))) errors.push({ step: 'gear', msg: `Материал боеприпасов «${m.name}» не входит в стартовый список.` });
       }
@@ -530,11 +607,11 @@
       if (!a) errors.push({ step: 'gear', msg: 'Неизвестный элемент брони.' });
       else {
         const res = { a, m, isShield, k: sizeK };
-        res.units = r1((a.u || 0) * sizeK);
+        res.units = sizeUnits(a.u || 0, sizeK);
         res.pen = a.pen || 0;
         if (flags.noMediumArmorPenalty && a.cls === 'средняя') { res.pen = 0; res.penNote = 'средние доспехи не дают штраф (раса)'; }
         if (m) {
-          res.armor = r1(m.arm * (a.u || 0) * sizeK);
+          res.armor = ri(m.arm * res.units);
           res.matEffect = scaledEffect(m.ea, res.units);
           const se = armorStatEffects(m.ea.t, m.ea.sc === 'за единицу', res.units);
           res.statFx = se;
@@ -544,7 +621,7 @@
           }
           if (!allowedMats.has(norm(m.name))) errors.push({ step: 'gear', msg: `Материал «${m.name}» не входит в стартовый список.` });
         } else errors.push({ step: 'gear', msg: 'Выберите материал брони (монолитная — из одного материала).' });
-        res.req = reqCheck(a.req, sizeK, stats, halfReq);
+        res.req = reqCheck(a.req, stats, halfReq);
         res.req.filter(x => !x.ok).forEach(x => warnings.push({ step: 'gear', msg: `«${a.name}»: не хватает ${STAT_NAMES[x.stat].toLowerCase()} (${fmt(x.have)} из ${x.need}) — штраф: ${REQ_PENALTY[x.stat]}.` }));
         if (C.START_ITEM_MAX_SKILL && a.skill > C.START_ITEM_MAX_SKILL) errors.push({ step: 'gear', msg: `«${a.name}» требует ${a.skill} ур. навыка — выше стартового предела.` });
         g.dodgeMod -= res.pen;
@@ -612,8 +689,11 @@
         else if (!race.ancestor) warnings.push({ step: 'race', msg: `${race.name}: предок не выбран (${race.ancestorRule.title.toLowerCase()}).` });
         else if (race.ancestorNotBeast) warnings.push({ step: 'race', msg: `«${race.ancestor.name}» — не звериная раса; зверо-предок выбирается из звериных рас.` });
         else if (race.ancestor.unknown) {
-          if (race.ancestorRule.required) errors.push({ step: 'race', msg: `Существо «${race.ancestor.name}» не найдено среди возможных предков — выберите из списка.` });
-          else warnings.push({ step: 'race', msg: `Существо «${race.ancestor.name}» не найдено среди возможных предков — проверьте название.` });
+          if (race.ancestorRule.required) errors.push({ step: 'race', msg: `«${race.ancestor.name}» нет среди возможных предков — выберите из списка.` });
+          else warnings.push({ step: 'race', msg: `«${race.ancestor.name}» нет среди возможных предков — проверьте название.` });
+        }
+        else if (race.ancestorRule.kind === 'monster' && race.ancestor.abilities && race.ancestor.abilities.length && !race.ancestor.picked) {
+          warnings.push({ step: 'race', msg: 'Таррэ: выберите умение монстра-предка.' });
         }
       }
       if (race.id === 'они' && !st.oniClan) errors.push({ step: 'race', msg: 'Они: выберите клан (определяет символ и оружие клана +50).' });
@@ -758,7 +838,7 @@
     traitFx.forEach(([k, fx]) => { if (fx && fx.stat) for (const [s, v] of Object.entries(fx.stat)) addFlat(s, v, `черта «${k}»`); });
     if (boon && boon.fx.stat) for (const [s, v] of Object.entries(boon.fx.stat)) addFlat(s, v, `${boon.kind === 'disease' ? 'болезнь' : 'дар'} «${boon.src.name}»`);
     // множители
-    const mulStat = (k, m, src) => { const before = cur[k]; cur[k] = cur[k] * m; br[k].push({ src, v: cur[k] - before, op: '×' + fmt(m) }); };
+    const mulStat = (k, m, src) => { const before = cur[k]; cur[k] = ri(cur[k] * m); br[k].push({ src, v: cur[k] - before, op: '×' + fmt(m) }); };
     if (boon && boon.fx.mul) for (const [s, m] of Object.entries(boon.fx.mul)) mulStat(s, m, `дар «${boon.src.name}»`);
     if (boon && boon.fx.allPct) STATS.forEach(k => mulStat(k, 1 + boon.fx.allPct / 100, `благословение «${boon.src.name}» (+${boon.fx.allPct}%)`));
     if (boon && boon.fx.pct) for (const [s, v] of Object.entries(boon.fx.pct)) mulStat(s, 1 + v / 100, `болезнь «${boon.src.name}» (+${v}%)`);
@@ -770,7 +850,7 @@
       br[b].push({ src: `«Весы»: обмен с «${STAT_NAMES[a]}»`, v: va - vb, op: '⇄' });
     }
     // «эффекты болезней не могут опустить показатели ниже единицы»
-    STATS.forEach(k => { if (race && cur[k] < 1) { br[k].push({ src: 'минимум 1', v: 1 - cur[k], op: '↑' }); cur[k] = 1; } cur[k] = r1(cur[k]); });
+    STATS.forEach(k => { if (race && cur[k] < 1) { br[k].push({ src: 'минимум 1', v: 1 - cur[k], op: '↑' }); cur[k] = 1; } cur[k] = ri(cur[k]); });
     const isVoid = boon && boon.fx.void;
     out.stats = cur; out.statBreak = br; out.baseStats = base; out.alloc = alloc;
 
@@ -833,32 +913,41 @@
     const T = isVoid ? 0 : cur.t, Dh = cur.d;
     const der = {};
     der.hp = isVoid ? Dh : 2 * T;
+    const ancHp = race && race.ancestor && race.ancestor.fx && race.ancestor.fx.hp;
+    if (ancHp) der.hp += ancHp;
     der.viv = isVoid ? null : T;
     // реген хп
     let hpReg = Math.floor(T / 5);
     const hpRegSrc = [`тело/5 = ${Math.floor(T / 5)}`];
     (race ? race.fx : []).forEach(f => { if (f.k === 'hpRegen' && !f.cond) { hpReg += f.v; hpRegSrc.push(`раса +${f.v}`); } });
     if (gear.hpRegenMod) { hpReg += gear.hpRegenMod; hpRegSrc.push(`материал брони ${signed(gear.hpRegenMod)}`); }
+    const ancFx = (race && race.ancestor && race.ancestor.fx) || {};
+    const ancSrc = race && race.ancestor ? `предок ${race.ancestor.name}${race.ancestorRule.kind === 'dragon' ? ' (50%)' : ''}` : '';
+    if (ancFx.hpRegen) { hpReg += ancFx.hpRegen; hpRegSrc.push(`${ancSrc} +${ancFx.hpRegen}`); }
     let hpPct = 0;
     traitFx.forEach(([k, fx]) => { if (fx && fx.hpRegenPct) { hpPct += fx.hpRegenPct; hpRegSrc.push(`«${k}» ${signed(fx.hpRegenPct)}%`); } });
     if (age && age.regenMul) { hpPct += 20; hpRegSrc.push('ребёнок +20%'); }
     hpReg = hpReg * (1 + hpPct / 100);
+    // «200% регенерация» предка — отдельный множитель поверх остальных процентов
+    if (ancFx.hpRegenPct) { hpReg = hpReg * (1 + ancFx.hpRegenPct / 100); hpRegSrc.push(`${ancSrc}: регенерация +${ancFx.hpRegenPct}%`); }
     if (boon && boon.fx.noHpRegen) { hpReg = 0; hpRegSrc.push(`«${boon.src.name}»: реген хп отключён`); }
-    der.hpRegen = r1(hpReg); der.hpRegenSrc = hpRegSrc;
+    der.hpRegen = ri(hpReg); der.hpRegenSrc = hpRegSrc;
+    der.vamp = ancFx.vamp || 0; der.vampSrc = ancFx.vamp ? ancSrc : '';
     der.mp = 2 * Dh; der.psi = 2 * Dh;
     let mpReg = Math.floor(Dh / 5);
     const mpRegSrc = [`дух/5 = ${Math.floor(Dh / 5)}`];
     (race ? race.fx : []).forEach(f => { if (f.k === 'mpRegen' && !f.cond) { mpReg += f.v; mpRegSrc.push(`раса +${f.v}`); } });
+    if (ancFx.mpRegen) { mpReg += ancFx.mpRegen; mpRegSrc.push(`${ancSrc} +${ancFx.mpRegen}`); }
     let mpPct = 0;
     traitFx.forEach(([k, fx]) => { if (fx && fx.mpRegenPct) { mpPct += fx.mpRegenPct; mpRegSrc.push(`«${k}» ${signed(fx.mpRegenPct)}%`); } });
     if (age && age.regenMul) { mpPct += 20; mpRegSrc.push('ребёнок +20%'); }
     mpReg = mpReg * (1 + mpPct / 100);
     (race ? race.fx : []).forEach(f => { if (f.k === 'mpRegenMul' && !f.cond) { mpReg *= f.v; mpRegSrc.push(`раса ×${f.v}`); } });
     if (boon && boon.fx.mpRegenMul) { mpReg *= boon.fx.mpRegenMul; mpRegSrc.push(`«${boon.src.name}» ×${boon.fx.mpRegenMul}`); }
-    der.mpRegen = r1(mpReg); der.mpRegenSrc = mpRegSrc;
+    der.mpRegen = ri(mpReg); der.mpRegenSrc = mpRegSrc;
     der.slots = cur.s + gear.bagSlots; der.slotsUsed = gear.slotsUsed;
     if (der.slotsUsed > der.slots) warnings.push({ step: 'gear', msg: `Снаряжение занимает ${der.slotsUsed} слотов, а доступно ${der.slots} (сила + сумки).` });
-    der.dodge = r1(cur.l + gear.dodgeMod);
+    der.dodge = ri(cur.l + gear.dodgeMod);
     // ОД
     const odSrc = [];
     let od = 0;
@@ -867,6 +956,7 @@
     (race ? race.fx.concat(race.pfx) : []).forEach(f => { if (f.k === 'od' && !f.cond) { od += f.v; odSrc.push(`раса ${signed(f.v)}${f.half ? ' (½)' : ''}`); } });
     traitFx.forEach(([k, fx]) => { if (fx && fx.od) { od += fx.od; odSrc.push(`«${k}» ${signed(fx.od)}`); } });
     if (boon && boon.fx.od) { od += boon.fx.od; odSrc.push(`«${boon.src.name}» ${signed(boon.fx.od)}`); }
+    if (ancFx.od) { od += ancFx.od; odSrc.push(`${ancSrc} ${signed(ancFx.od)}`); }
     der.od = od; der.odMod = od; der.odSrc = odSrc.length ? odSrc : ['нет модификаторов'];
     const condOd = (race ? race.fx.concat(race.pfx) : []).filter(f => f.k === 'od' && f.cond);
     der.odCond = condOd;
@@ -916,10 +1006,11 @@
       if (f.k === 'symbol') addSym(f.id === 'дракон' ? 'символ дракона' : f.id, f.half ? 'раса (½)' : 'раса');
       if (f.k === 'symbolByAffiliation') {
         if (race.id === 'они' && st.oniClan) addSym(`символ клана: ${st.oniClan}`, 'раса (клан)');
-        else addSym('символ покровителя — определится после вступления в веру (в игре)', 'раса');
+        else if (!(race.ancestor && race.ancestor.demon)) addSym('символ покровителя — выберите бога-покровителя', 'раса');
       }
     });
     if (race && race.ancestor && race.ancestor.symbol) addSym(race.ancestor.symbol, `знак дракона рода (${race.ancestor.name})`);
+    if (race && race.ancestor && race.ancestor.demon) addSym(race.ancestor.element ? `символ принадлежности: ${race.ancestor.element}` : 'символ принадлежности — ГМ ещё не задал символ', `${race.ancestorRule.kind === 'god' ? 'бог-покровитель' : 'демон-предок'} ${race.ancestor.name}`);
     for (let i = 0; i < cnt('тайное знание'); i++) { const sym = to[optKey('secretSymbol', i)]; if (sym) addSym(sym, 'черта «тайное знание»'); }
     if (boon && boon.fx.option === 'prevExp' && bo.prevSymbol) addSym(bo.prevSymbol, 'благословение «предыдущий опыт»');
     if (boon && boon.fx.roll === 'element' && st.rolls && st.rolls.element) addSym(`${st.rolls.element.v} (усилен ×3)`, '«проводник стихии»');
@@ -978,7 +1069,7 @@
   }
 
   window.Rules = {
-    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey,
+    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
     get index() { return IX; }

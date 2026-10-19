@@ -947,7 +947,12 @@ def main():
         elif insect_re.search((c.get("drop") or "") + " " + c["n"]):
             a["ins"] = "other"
         ancestors.append(a)
-    # 4) «Расхититель древностей»: случайный артефакт — обычный или проклятый (название и эффект)
+    # 4) демоны-предки тифлингов (символ принадлежности): только имя и описание из листа «Социум»
+    demons = [{"name": g["name"].strip(), "bonus": g["bonus"]} for g in society["groups"] if g.get("demon")]
+    # боги-покровители асимару: религии листа «Социум», кроме демонов и закрытых для вступления
+    gods = [{"name": g["name"].strip(), "bonus": g["bonus"]} for g in society["groups"]
+            if g["type"] == "религия" and not g.get("demon") and g.get("join") not in ("нельзя вступить", "забытое")]
+    # 5) «Расхититель древностей»: случайный артефакт — обычный или проклятый (название и эффект)
     artifact_pool = [{"name": a["name"], "effect": a["effect"]} for a in artifacts if a["g"] == "артефакты"]
     artifact_pool += [{"name": a["name"], "effect": a["effect"], "cursed": True} for a in artifacts if a["g"] == "проклятые"]
     data = {
@@ -960,6 +965,8 @@ def main():
         "items": items,
         "ancestors": ancestors,
         "artifactPool": artifact_pool,
+        "demons": demons,
+        "gods": gods,
         "world": world, "schemes": schemes,
     }
     locked = {

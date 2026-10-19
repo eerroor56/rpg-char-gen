@@ -88,7 +88,7 @@ eq('homunculus no buff', r.errors.some(e => e.step === 'boon'), true);
 // 8. Нежить
 s = st({ raceId: 'империал', ageCat: 'взрослый', religion: 0, boon: { kind: 'gift', name: 'Нежить' } });
 r = R.compute(s);
-eq('нежить s', r.stats.s, 60); eq('нежить t', r.stats.t, 100); eq('нежить i', r.stats.i, 17.5); eq('нежить d', r.stats.d, 25);
+eq('нежить s', r.stats.s, 60); eq('нежить t', r.stats.t, 100); eq('нежить i (17,5 → 18)', r.stats.i, 18); eq('нежить d', r.stats.d, 25);
 // 9. Весы
 s = st({ raceId: 'империал', ageCat: 'взрослый', religion: 0, boon: { kind: 'gift', name: 'весы' }, boonOpt: { swapA: 's', swapB: 't' } });
 r = R.compute(s);
@@ -119,7 +119,7 @@ eq('dragonid no race errors', r.errors.filter(e => e.step === 'race').length, 0)
 r = R.compute(st({ raceId: 'таррэ', ageCat: 'взрослый', ancestor: 'аль-каркаданн' }));
 eq('tarre ancestor +10%', r.race.ancestor.add.t, 15);
 r = R.compute(st({ raceId: 'таррэ', ageCat: 'взрослый', ancestor: 'нет такого' }));
-eq('tarre unknown ancestor is error', r.errors.some(e => /не найдено/.test(e.msg)), true);
+eq('tarre unknown ancestor is error', r.errors.some(e => /нет среди возможных предков/.test(e.msg)), true);
 eq('no bosses among ancestors', window.GAME_DATA.ancestors.some(c => c.sec === 'Боссы' || c.sec === 'легенды'), false);
 eq('insect ancestors', window.GAME_DATA.ancestors.filter(c => c.ins).length > 20, true);
 const art0 = R.roll('artifact');
@@ -131,7 +131,7 @@ eq('enoshi non-beast ancestor warned', r.warnings.some(e => /не зверина
 // 11. Полукровка
 s = st({ raceId: 'полукровка', parentA: 'империал', parentB: 'норды', hbSize: 'н', hbAlign: 'нейтрал', ageCat: 'взрослый' });
 r = R.compute(s);
-eq('half t', r.stats.t, 62.5);
+eq('half t (62,5 → 63)', r.stats.t, 63);
 eq('half attr', r.der.attr, -20);
 eq('half charisma', r.talents['харизма'].bonus, 12);
 // 12. Размер и оружие: гоблин (малый) длинный меч из стали
@@ -139,10 +139,10 @@ s = st({ raceId: 'гоблины', ageCat: 'взрослый', weapon: { name: '
 r = R.compute(s);
 eq('goblin size', r.size.id, 'м');
 eq('goblin od', r.der.od, 1);
-eq('sword dmg', r.gear.weapon.damage, 11 * 3 * 0.6);
-eq('sword req s', r.gear.weapon.req.find(x => x.stat === 's').need, 15);
-eq('armor', r.gear.armor.armor, 9 * 16 * 0.6);
-eq('armor hp regen per unit', r.gear.hpRegenMod, 16 * 0.6);
+eq('sword dmg (3 × 0,6 = 1,8 → 2 ед.)', r.gear.weapon.damage, 11 * 2);
+eq('sword req s — как в таблице', r.gear.weapon.req.find(x => x.stat === 's').need, 25);
+eq('armor (16 × 0,6 = 9,6 → 10 ед.)', r.gear.armor.armor, 9 * 10);
+eq('armor hp regen per unit', r.gear.hpRegenMod, 10);
 // 13. Расовый бонус оружия (орки секиры +30)
 s = st({ raceId: 'орки', ageCat: 'взрослый', weapon: { name: 'секира', mat: 'железо' } });
 r = R.compute(s);
@@ -212,6 +212,62 @@ eq('curse2 roll', !!R.roll('curse2'), true);
 const cursedIx = window.GAME_DATA.artifactPool.findIndex(a => a.cursed);
 eq('cursed artifacts in pool', cursedIx > 0, true);
 eq('cursed artifact roll label', R.rollView({ idx: cursedIx, v: 'артефакт №' + (cursedIx + 1), n: 1 }).block, 'проклятый артефакт');
+// 18e. Пример ГМ: драконид с Драконом алого камня, длинный лук из стали
+s = st({ raceId: 'дракониды', ageCat: 'взрослый', ancestor: 'Дракон алого камня',
+  traits: ['ускоренное заживление', 'ускоренное заживление', 'медленные рефлексы', 'тугоумие'],
+  weapon: { name: 'длинный лук', mat: 'сталь' } });
+r = R.compute(s);
+eq('GM: size гигантский', r.size.id, 'г');
+eq('GM: T = 250 + 800', r.stats.t, 1050);
+eq('GM: ancestor regen halved', r.race.ancestor.fx.hpRegenPct, 100);
+eq('GM: hp regen 210 × 1,1 × 2 = 462', r.der.hpRegen, 462);
+eq('GM: vampirism 30%', r.der.vamp, 30);
+eq('GM: bow damage 6 × 1,4 → 8 ед. × 11 = 88', r.gear.weapon.damageTotal, 88);
+eq('GM: units total 8 + 3 = 11', r.gear.weapon.unitsTotal, 11);
+eq('GM: stun 5% × 11 = 55%', r.gear.weapon.matEffect.total, '55% оглушить');
+r = R.compute(Object.assign(s, { weapon: { name: 'ужасающий лук', mat: 'сталь' } }));
+eq('GM: terrifying bow needs 25 л', r.gear.weapon.req.find(x => x.stat === 'l').need, 25);
+eq('GM: terrifying bow needs 35 с', r.gear.weapon.req.find(x => x.stat === 's').need, 35);
+// 18f. Тифлинги: демонический предок даёт символ принадлежности
+r = R.compute(st({ raceId: 'тифлинги', ageCat: 'взрослый' }));
+eq('tiefling needs demon ancestor', r.errors.some(e => /предка/.test(e.msg)), true);
+r = R.compute(st({ raceId: 'тифлинги', ageCat: 'взрослый', ancestor: 'Diarkon' }));
+eq('tiefling demon symbol', r.symbols.some(x => /тьма/.test(x.name) && /Diarkon/.test(x.src)), true);
+eq('8 demons public', (window.GAME_DATA.demons || []).length, 8);
+r = R.compute(st({ raceId: 'асимару', ageCat: 'взрослый' }));
+eq('asimaru needs god', r.errors.some(e => /предка|покровител/.test(e.msg)), true);
+r = R.compute(st({ raceId: 'асимару', ageCat: 'взрослый', ancestor: 'Ульмар' }));
+eq('asimaru god symbol', r.symbols.some(x => /вода/.test(x.name) && /Ульмар/.test(x.src)), true);
+eq('asimaru one symbol', r.symbols.filter(x => /покровител|принадлежност/.test(x.name)).length, 1);
+eq('gods from GM list only', R.patronList('god').length, 10);
+eq('Культ Кометы is not a god', R.patronList('god').some(g => /комет/i.test(g.name)), false);
+eq('иссар → гравитация', R.patronSymbol('иссар/луна'), 'гравитация');
+eq('Gilltarro → хаос', R.patronSymbol('Gilltarro'), 'хаос');
+r = R.compute(st({ raceId: 'тифлинги', ageCat: 'взрослый', ancestor: 'Gilltarro' }));
+eq('tiefling Gilltarro symbol хаос', r.symbols.some(x => /хаос/.test(x.name)), true);
+r = R.compute(st({ raceId: 'асимару', ageCat: 'взрослый', ancestor: 'Культ Кометы' }));
+eq('asimaru non-god rejected', r.errors.some(e => /нет среди возможных предков/.test(e.msg)), true);
+// баситины: одноручные мечи ×2
+r = R.compute(st({ raceId: 'баситины', ageCat: 'взрослый', weapon: { name: 'длинный меч', mat: 'сталь' } }));
+eq('basitin long sword x2', r.gear.weapon.damage, 11 * 3 * 2);
+r = R.compute(st({ raceId: 'баситины', ageCat: 'взрослый', weapon: { name: 'гигантский меч', mat: 'сталь' } }));
+eq('basitin two-handed sword not x2', r.gear.weapon.mul, undefined);
+r = R.compute(st({ raceId: 'баситины', ageCat: 'взрослый', weapon: { name: 'паноптикум (шакрам с рукоятью меча)', mat: 'сталь' } }));
+eq('basitin panopticum not x2', r.gear.weapon.mul, undefined);
+// 18g. Нигде нет дробных чисел
+let frac = [];
+for (const race of window.GAME_DATA.races.filter(x => x.playable)) {
+  const anc = { 'дракониды': 'Дракон алого камня', 'таррэ': 'аль-каркаданн', 'тифлинги': 'Estar' }[race.id] || '';
+  for (const age of ['ребёнок', 'юный', 'взрослый', 'пожилой', 'старец']) {
+    const x = R.compute(st({ raceId: race.id, ageCat: age, agePct: window.GM_CONFIG.AGE_RANGES[age].def, ancestor: anc, parentA: 'империал', parentB: 'хоббиты', hbSize: 'н', hbAlign: 'нейтрал',
+      weapon: { name: 'нож', mat: 'кость' }, armor: { name: 'тяжёлая кирса', mat: 'камень' } }));
+    const nums = { level: x.level, ...x.stats, hp: x.der.hp, hpRegen: x.der.hpRegen, mpRegen: x.der.mpRegen, dodge: x.der.dodge, zor: x.der.zor,
+      dmg: x.gear.weapon ? x.gear.weapon.damageTotal : 0, arm: x.gear.armor ? x.gear.armor.armor : 0 };
+    for (const [k, v] of Object.entries(nums)) if (!Number.isInteger(v)) frac.push(`${race.id}/${age}/${k}=${v}`);
+  }
+}
+if (frac.length) console.log('fractions:', frac.slice(0, 10));
+eq('no fractional results', frac.length, 0);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
