@@ -194,6 +194,12 @@
       html += `<input type="text" list="monsterList" data-bind="ancestor" data-rerender value="${esc(st.ancestor)}" placeholder="Начните вводить название существа" aria-label="Монстр-предок">
         <datalist id="monsterList">${A.map(c => `<option value="${esc(c.n)}">`).join('')}</datalist>
         <p class="muted small">Боссы и легенды исключены. Список — лист «Существа» (${A.length}).</p>`;
+    } else if (rule.kind === 'ghost') {
+      const maxLvl = res.age ? res.level : race.lvl;
+      const fit = A.filter(c => R.roundLevel(c.lvl) <= maxLvl).sort((x, y) => y.lvl - x.lvl);
+      html += `<input type="text" list="ghostList" data-bind="ancestor" data-rerender value="${esc(st.ancestor)}" placeholder="Начните вводить название существа" aria-label="Призрак-помощник">
+        <datalist id="ghostList">${fit.map(c => `<option value="${esc(c.n)}">ур. ${fmt(R.roundLevel(c.lvl))}</option>`).join('')}</datalist>
+        <p class="muted small">Существа не выше уровня персонажа (сейчас ${fmt(maxLvl)}${res.age ? '' : ' — средний уровень расы; уточнится после выбора возраста'}): ${fit.length} из ${A.length}. Боссы и легенды исключены.</p>`;
     } else {
       html += select('ancestor', opts, st.ancestor);
     }
@@ -205,6 +211,7 @@
     } else if (a && a.creature) {
       const c = a.creature;
       html += `<div class="anc"><p><strong>${esc(c.n)}</strong> ${c.m.map(m => tag(m)).join('')} — ур. ${fmt(R.roundLevel(c.lvl))}, ${esc(sizeName(c.sz).toLowerCase())}, ${esc(c.ch)}</p>${statRow(Object.assign({}, c, { lvl: R.roundLevel(c.lvl) }))}`;
+      if (a.companion) html += `<p class="muted small">Призрак — отдельный персонаж: его статы и навыки не прибавляются к вашим.</p>`;
       if (a.add) html += `<p>Прибавка +${rule.pct}%: ${R.STATS.map(k => `${R.STAT_SHORT[k]} ${signed(a.add[k])}`).join(', ')}</p>`;
       if (a.symbol) html += `<p>Знак дракона рода: <strong>${esc(a.symbol)}</strong></p>`;
       if (rule.kind === 'dragon') html += `<p>Размер драконида: ${esc(sizeName(race.size))} (предок ${esc(sizeName(c.sz).toLowerCase())} − 1)</p>`;
@@ -214,10 +221,10 @@
           html += `<label>Умение монстра (одно, полной силы) ${select('ancestorAbility', [{ v: '', t: '— выбрать —' }].concat(a.abilities.map(x => ({ v: String(x.i), t: x.text.replace(/\s+/g, ' ').slice(0, 120) }))), st.ancestorAbility)}</label>`;
           if (a.picked) html += `<p class="small">${esc(a.picked.text)}${mark(a.picked)}</p>`;
         } else {
-          html += `<p class="muted small">Навыки предка${rule.kind === 'dragon' ? ' — у драконида 50% мощности, числа уже поделены пополам' : ''}:</p>
+          html += `<p class="muted small">${a.companion ? 'Навыки призрака' : 'Навыки предка'}${rule.kind === 'dragon' ? ' — у драконида 50% мощности, числа уже поделены пополам' : ''}:</p>
             <ul class="abil">${a.abilities.map(x => `<li>${esc(x.text)}${mark(x)}</li>`).join('')}</ul>`;
         }
-      } else html += '<p class="muted small">Особых навыков у предка в таблице нет.</p>';
+      } else html += `<p class="muted small">Особых навыков у ${a.companion ? 'этого существа' : 'предка'} в таблице нет.</p>`;
       html += '</div>';
     } else if (a && a.race) {
       html += `<div class="anc"><p>Половина бонуса расы «${esc(cap(a.race.name))}»: ${esc(a.race.bonus)}</p></div>`;
@@ -276,21 +283,39 @@
     if (isHom) html += '<p class="issue warn">Гомункулы: «на начале не могут взять экипировку / проклятие / благословение / болезнь» — доступны только тёмные дары.</p>';
     html += `<div class="seg" role="tablist">${tabs.map(([id, t, n]) => `<button type="button" role="tab" aria-selected="${tab === id}" class="${tab === id ? 'is-on' : ''}" data-act="boonTab" data-id="${id}">${t} <small>${n}</small></button>`).join('')}
       <button type="button" class="${!st.boon.kind ? 'is-on' : ''} none-btn" data-act="pickBoon" data-kind="" data-name="">Ничего не брать</button></div>`;
-    let list = [];
-    if (tab === 'gift') list = D.skills.gifts.map(g => ({ name: g.name, a: g.bonus, b: g.debuff, la: 'Дар', lb: 'Цена' }));
-    if (tab === 'buff') list = D.skills.buffs.filter(b => b.birth).map(b => ({ name: b.name, a: b.effect, b: b.dur ? `длительность: ${b.dur}` : '', la: 'Эффект', lb: '' }));
-    if (tab === 'disease') list = D.skills.diseases.filter(d => d.birth).map(d => ({ name: d.name, a: d.e1, b: d.e2, la: 'Эффект', lb: 'Проявление' }));
+    const list = boonList(tab);
     const blocked = isHom && tab !== 'gift';
     if (res.boon) html += boonOptions(st, res);
-    html += `<div class="boon-list">${list.map(it => {
+    html += `<input type="search" class="boon-search" placeholder="Поиск по названию и эффекту" value="${esc(App.ui.boonQ || '')}" data-ui="boonQ" data-ui-target="boonList" aria-label="Поиск даров" autocomplete="off">`;
+    html += `<div id="boonResults">${boonResults(st, tab, list, blocked)}</div>`;
+    return html;
+  }
+
+  function boonList(tab) {
+    if (tab === 'gift') return D.skills.gifts.map(g => ({ name: g.name, a: g.bonus, b: g.debuff, la: 'Дар', lb: 'Цена' }));
+    if (tab === 'buff') return D.skills.buffs.filter(b => b.birth).map(b => ({ name: b.name, a: b.effect, b: b.dur ? `длительность: ${b.dur}` : '', la: 'Эффект', lb: '' }));
+    return D.skills.diseases.filter(d => d.birth).map(d => ({ name: d.name, a: d.e1, b: d.e2, la: 'Эффект', lb: 'Проявление' }));
+  }
+
+  function boonResults(st, tab, list, blocked) {
+    const q = norm(App.ui.boonQ || '');
+    const shown = q ? list.filter(it => norm(`${it.name} ${it.a} ${it.b}`).includes(q)) : list;
+    if (!shown.length) return `<p class="muted">По запросу «${esc(App.ui.boonQ)}» ничего нет.</p>`;
+    return `<p class="muted small">${q ? `Найдено: ${shown.length} из ${list.length}` : `${list.length}`}</p><div class="boon-list">${shown.map(it => {
       const on = st.boon.kind === tab && norm(st.boon.name) === norm(it.name);
       const fx = (R.BOON_FX[tab] || {})[norm(it.name)];
       return `<button type="button" class="boon ${on ? 'is-on' : ''}" ${blocked ? 'disabled' : ''} data-act="pickBoon" data-kind="${tab}" data-name="${esc(it.name)}" aria-pressed="${on}">
         <span class="boon-name">${esc(cap(it.name))}${fx ? ' <span class="calc-mark" title="учитывается в расчёте">расчёт</span>' : ''}</span>
         <span class="boon-a"><b>${it.la}:</b> ${esc(it.a)}</span>${it.b ? `<span class="boon-b">${it.lb ? `<b>${it.lb}:</b> ` : ''}${esc(it.b)}</span>` : ''}</button>`;
     }).join('')}</div>`;
-    return html;
   }
+  App.refreshBoonList = () => {
+    const box = document.getElementById('boonResults');
+    if (!box) return;
+    const st = App.state, res = App.res;
+    const tab = App.ui.boonTab || (st.boon.kind || 'gift');
+    box.innerHTML = boonResults(st, tab, boonList(tab), res.race && res.race.id === 'гомункулы' && tab !== 'gift');
+  };
 
   function rollBox(key, label, st) {
     const r = R.rollView((st.rolls || {})[key]);
@@ -524,7 +549,7 @@
     let html = `<p class="note">«Игроки могут взять одно оружие и один элемент брони из ограниченного списка / так же 3 разных предмета (сумки / зелья / еда) и прочие мелочи, зелья не сильнее 50е». «Оружие и броня не могут быть кастомными, а только монолитными из одного вида материала».</p>`;
     if (flags.noStartGear) html += `<p class="issue err">${esc(res.race.name)}: «на начале не могут взять экипировку» — этап пропускается.</p>`;
     const size = res.size;
-    if (size && size.k !== 1) html += `<p class="muted small">Размер «${esc(size.name.toLowerCase())}»: сырья ${esc(size.mat)} — единицы материала, влияющие на урон, и единицы брони умножаются на ${fmt(size.k)} и округляются до целого. Требования предметов — как в таблице.</p>`;
+    if (size && size.k !== 1) html += `<p class="muted small">Размер «${esc(size.name.toLowerCase())}»: сырья ${esc(size.mat)} — единицы материала, влияющие на урон, и единицы брони умножаются на ${fmt(size.k)} и округляются до целого; требования предметов меняются на тот же процент (округление вверх).</p>`;
     const mats = C.START_MATERIALS.map(n => R.index.material.get(norm(n))).filter(Boolean);
     const matOpts = kind => [{ v: '', t: '— материал —' }].concat(mats.map(m => ({ v: m.name, t: `${m.name} — ${kind === 'w' ? 'урон' : 'броня'} ${m[kind === 'w' ? 'dmg' : 'arm']}/ед.` })));
     // Оружие

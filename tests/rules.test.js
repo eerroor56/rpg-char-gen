@@ -143,7 +143,7 @@ r = R.compute(s);
 eq('goblin size', r.size.id, 'м');
 eq('goblin od', r.der.od, 1);
 eq('sword dmg (3 × 0,6 = 1,8 → 2 ед.)', r.gear.weapon.damage, 11 * 2);
-eq('sword req s — как в таблице', r.gear.weapon.req.find(x => x.stat === 's').need, 25);
+eq('sword req s × размер (25 × 0,6)', r.gear.weapon.req.find(x => x.stat === 's').need, 15);
 eq('armor (16 × 0,6 = 9,6 → 10 ед.)', r.gear.armor.armor, 9 * 10);
 eq('armor hp regen per unit', r.gear.hpRegenMod, 10);
 // 13. Расовый бонус оружия (орки секиры +30)
@@ -230,8 +230,8 @@ eq('GM: bow damage 6 × 1,4 → 8 ед. × 11 = 88', r.gear.weapon.damageTotal, 
 eq('GM: units total 8 + 3 = 11', r.gear.weapon.unitsTotal, 11);
 eq('GM: stun 5% × 11 = 55%', r.gear.weapon.matEffect.total, '55% оглушить');
 r = R.compute(Object.assign(s, { weapon: { name: 'ужасающий лук', mat: 'сталь' } }));
-eq('GM: terrifying bow needs 25 л', r.gear.weapon.req.find(x => x.stat === 'l').need, 25);
-eq('GM: terrifying bow needs 35 с', r.gear.weapon.req.find(x => x.stat === 's').need, 35);
+eq('GM: terrifying bow needs 25 × 1,4 = 35 л', r.gear.weapon.req.find(x => x.stat === 'l').need, 35);
+eq('GM: terrifying bow needs 35 × 1,4 = 49 с', r.gear.weapon.req.find(x => x.stat === 's').need, 49);
 // 18f. Тифлинги: демонический предок даёт символ принадлежности
 r = R.compute(st({ raceId: 'тифлинги', ageCat: 'взрослый' }));
 eq('tiefling needs demon ancestor', r.errors.some(e => /предка/.test(e.msg)), true);
@@ -272,6 +272,17 @@ for (const race of window.GAME_DATA.races.filter(x => x.playable)) {
 }
 if (frac.length) console.log('fractions:', frac.slice(0, 10));
 eq('no fractional results', frac.length, 0);
+// 18g2. Калаштар: призрак-помощник не выше уровня хозяина
+r = R.compute(st({ raceId: 'калаштар', ageCat: 'взрослый' }));
+eq('kalashtar needs ghost', r.errors.some(e => e.step === 'race'), true);
+const lowGhost = window.GAME_DATA.ancestors.filter(c => R.roundLevel(c.lvl) <= 50)[0];
+const highGhost = window.GAME_DATA.ancestors.filter(c => R.roundLevel(c.lvl) > 500)[0];
+r = R.compute(st({ raceId: 'калаштар', ageCat: 'взрослый', ancestor: lowGhost.n }));
+eq('kalashtar ghost ok', r.errors.filter(e => e.step === 'race').length, 0);
+eq('ghost stats not added', r.stats.t, window.GAME_DATA.races.find(x => x.id === 'калаштар').t);
+r = R.compute(st({ raceId: 'калаштар', ageCat: 'взрослый', ancestor: highGhost.n }));
+eq('kalashtar ghost too strong', r.errors.some(e => /сильнее хозяина/.test(e.msg)), true);
+eq('уничтожители not playable', window.GAME_DATA.races.find(x => x.id === 'уничтожители').playable, false);
 // 18h. Случайный герой: всегда собран по правилам
 require('../js/random.js');
 const RH = window.RandomHero;

@@ -1,0 +1,20 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "**/.*",
+      "tools/**",
+      "tests/**",
+      "README.md",
+      "**/*.xlsm"
+    ],
+    "headers": [
+      { "source": "**/*.@(js|css|webp)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }
+    ]
+  }
+}

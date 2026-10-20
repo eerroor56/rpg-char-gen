@@ -56,14 +56,17 @@
   const DICE = '<svg class="dice-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="8.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></svg>';
 
   // портрет расы (картинки — img/races, список — data/images.js); у полукровки — оба родителя
-  function portrait(races, cls) {
+  // plain — без ссылки на картинку (для карточек, которые сами являются ссылками)
+  function portrait(races, cls, plain) {
     const imgs = (window.RACE_IMAGES || {});
     const list = races.filter(r => r && imgs[r.id]);
     if (!list.length) return '';
-    return `<figure class="portrait ${cls || ''} ${list.length > 1 ? 'two' : ''}">${list.map(r => {
+    const tag = plain ? 'span' : 'figure';
+    return `<${tag} class="portrait ${cls || ''} ${list.length > 1 ? 'two' : ''}">${list.map(r => {
       const im = imgs[r.id];
-      return `<a href="${esc(im.src)}" target="_blank" rel="noopener" title="${esc(cap(r.name))} — открыть картинку целиком"><img src="${esc(im.src)}" width="${im.w}" height="${im.h}" alt="${esc(cap(r.name))}" loading="lazy" decoding="async"></a>`;
-    }).join('')}</figure>`;
+      const img = `<img src="${esc(im.src)}" width="${im.w}" height="${im.h}" alt="${plain ? '' : esc(cap(r.name))}" loading="lazy" decoding="async">`;
+      return plain ? `<span class="pic">${img}</span>` : `<a href="${esc(im.src)}" target="_blank" rel="noopener" title="${esc(cap(r.name))} — открыть картинку целиком">${img}</a>`;
+    }).join('')}</${tag}>`;
   }
 
   const App = {
@@ -115,11 +118,15 @@
     // ------------------------------------------------------------ маршруты
     route() {
       const h = location.hash.replace(/^#/, '');
-      const [tab, sub] = h.split('/');
-      const tabs = ['create', 'heroes', 'ref', 'rules'];
-      const prevTab = this.tab, prevRef = this.ui.refSection;
+      const [tab, sub, sub2] = h.split('/');
+      const tabs = ['create', 'heroes', 'game', 'ref', 'rules'];
+      const prevTab = this.tab, prevRef = this.ui.refSection, prevPath = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
       this.tab = tabs.includes(tab) ? tab : 'create';
-      if (prevTab !== this.tab || (this.tab === 'ref' && sub && sub !== prevRef)) window.scrollTo({ top: 0 });
+      if (this.tab === 'game') this.ui.gamePath = [sub, sub2].filter(Boolean);
+      if (this.tab === 'heroes') this.ui.heroId = sub || null;
+      const path = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
+      if (prevTab !== this.tab || (this.tab === 'ref' && sub && sub !== prevRef) || path !== prevPath) window.scrollTo({ top: 0 });
+      if (this.tab !== 'game' && window.Game) window.Game.leave();
       if (this.tab === 'create' && sub && this.steps.some(s => s.id === sub)) this.step = sub;
       if (this.tab === 'ref') this.ui.refSection = sub || this.ui.refSection;
       document.querySelectorAll('.tab-pane').forEach(p => { p.hidden = p.id !== 'tab-' + this.tab; });
@@ -204,6 +211,7 @@
     render() {
       if (this.tab === 'create') this.renderCreate();
       if (this.tab === 'heroes') window.Heroes.render(document.getElementById('tab-heroes'));
+      if (this.tab === 'game') window.Game.render(document.getElementById('tab-game'));
       if (this.tab === 'ref') window.Reference.render(document.getElementById('tab-ref'));
       if (this.tab === 'rules') window.Sheet.renderRules(document.getElementById('tab-rules'));
     },
@@ -217,7 +225,7 @@
       const active = document.activeElement;
       const activeKey = active && active.dataset ? (active.dataset.bind || active.dataset.key) : null;
       const canRoll = window.RandomHero && window.RandomHero.steps.includes(step.id);
-      work.innerHTML = `<div class="step-head"><div class="step-title"><h1>${esc(step.title)}</h1>${canRoll ? `<button type="button" class="btn ghost dice-btn small" data-act="randomStep" data-step="${step.id}" title="Перебросить только этот шаг — остальное останется, если не сломается">${DICE}<span>Случайно</span></button>` : ''}</div>${step.lead ? `<p class="lead">${step.lead}</p>` : ''}</div>`
+      work.innerHTML = (window.Game ? window.Game.banner() : '') + `<div class="step-head"><div class="step-title"><h1>${esc(step.title)}</h1>${canRoll ? `<button type="button" class="btn ghost dice-btn small" data-act="randomStep" data-step="${step.id}" title="Перебросить только этот шаг — остальное останется, если не сломается">${DICE}<span>Случайно</span></button>` : ''}</div>${step.lead ? `<p class="lead">${step.lead}</p>` : ''}</div>`
         + step.render(this.state, this.res)
         + this.stepIssues(step.id)
         + this.stepNav(step.id);
@@ -367,8 +375,11 @@
           const target = t.dataset.uiTarget;
           if (target === 'ref') window.Reference.refresh();
           else if (target === 'raceList') this.refreshRaceList();
+          else if (target === 'boonList') this.refreshBoonList();
           else if (target === 'heroes') this.keepFocus(t, () => window.Heroes.render(document.getElementById('tab-heroes')));
           else if (target === 'live') { const st = this.steps.find(x => x.id === this.step); if (st && st.live) st.live(document.getElementById('work'), this.res); }
+          else if (target === 'none') { /* только запомнить значение */ }
+          else if (target === 'dev') { if (this.devCtx) this.keepFocus(t, () => this.devCtx.render()); }
           else this.keepFocus(t, () => this.renderCreate());
           return;
         }

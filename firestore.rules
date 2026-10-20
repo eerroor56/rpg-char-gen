@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// Правила доступа к базе «Мастерской героя» (Firebase → Firestore → Rules).
+// Скопируйте этот файл целиком во вкладку Rules и нажмите Publish.
+//
+//   campaigns/{cid}                      кампания: ГМ, участники, код приглашения, текущая сессия
+//   campaigns/{cid}/characters/{chid}    персонажи: лист создания (state), очки развития (prog), выданное ГМ (gm)
+//   campaigns/{cid}/events/{eid}         журнал: кто что сделал (записи не меняются)
+//   campaigns/{cid}/sessions/{n}         игровые сессии и итоги
+//   campaigns/{cid}/private/{pid}        заметки ГМ, которые видит только ГМ
+//   joinCodes/{code}                     код приглашения → кампания
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function campPath(cid) { return /databases/$(database)/documents/campaigns/$(cid); }
+    function camp(cid) { return get(campPath(cid)).data; }
+    function isMember(cid) { return signedIn() && me() in camp(cid).members; }
+    function isGM(cid) { return signedIn() && camp(cid).gm == me(); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function isText(v, n) { return v is string && v.size() <= n; }
+
+    // ---- кампании: читают участники, меняет ГМ; игрок может только вписать или вычеркнуть себя
+    match /campaigns/{cid} {
+      function joining() {
+        let oldM = resource.data.members;
+        let newM = request.resource.data.members;
+        return changed().hasOnly(['members', 'memberNames'])
+          && !(me() in oldM)
+          && me() in newM
+          && newM.size() == oldM.size() + 1
+          && newM.hasAll(oldM)
+          && request.resource.data.memberNames.diff(resource.data.memberNames).affectedKeys().hasOnly([me()]);
+      }
+      function renaming() {
+        return changed().hasOnly(['memberNames'])
+          && me() in resource.data.members
+          && request.resource.data.memberNames.diff(resource.data.memberNames).affectedKeys().hasOnly([me()]);
+      }
+      function leaving() {
+        return changed().hasOnly(['members'])
+          && me() in resource.data.members
+          && resource.data.gm != me()
+          && request.resource.data.members == resource.data.members.removeAll([me()]);
+      }
+
+      allow get, list: if signedIn() && me() in resource.data.members;
+      allow create: if signedIn()
+        && request.resource.data.gm == me()
+        && request.resource.data.members == [me()]
+        && isText(request.resource.data.name, 120);
+      allow update: if signedIn() && (
+        (resource.data.gm == me() && request.resource.data.gm == me()
+          && me() in request.resource.data.members && isText(request.resource.data.name, 120))
+        || joining()
+        || renaming()
+        || leaving());
+      allow delete: if signedIn() && resource.data.gm == me();
+    }
+
+    // ---- коды приглашения: прочитать можно, зная код; создаёт и удаляет только ГМ своей кампании
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.gm == me()
+        && getAfter(campPath(request.resource.data.cid)).data.gm == me()
+        && getAfter(campPath(request.resource.data.cid)).data.code == code;
+      allow delete: if signedIn() && resource.data.gm == me();
+    }
+
+    // ---- персонажи
+    match /campaigns/{cid}/characters/{chid} {
+      // игрок не трогает то, что выдаёт ГМ (gm), и не меняет лист создания после утверждения
+      function ownerEdit() {
+        let k = changed();
+        return !k.hasAny(['gm', 'owner', 'createdMs'])
+          && (!k.hasAny(['status']) || (resource.data.status in ['draft', 'review'] && request.resource.data.status in ['draft', 'review']))
+          && (!k.hasAny(['state']) || resource.data.status in ['draft', 'review']);
+      }
+
+      allow read: if isMember(cid);
+      allow create: if isMember(cid)
+        && request.resource.data.owner == me()
+        && (isGM(cid) || (request.resource.data.status in ['draft', 'review'] && !('gm' in request.resource.data)));
+      allow update: if (isGM(cid) && request.resource.data.owner == resource.data.owner)
+        || (isMember(cid) && resource.data.owner == me() && ownerEdit());
+      allow delete: if isGM(cid)
+        || (signedIn() && resource.data.owner == me() && resource.data.status in ['draft', 'review']);
+    }
+
+    // ---- журнал кампании: пишет участник от своего имени; о персонаже — только его владелец или ГМ
+    match /campaigns/{cid}/events/{eid} {
+      allow read: if isMember(cid);
+      allow create: if isMember(cid)
+        && request.resource.data.by == me()
+        && isText(request.resource.data.text, 2000)
+        && (request.resource.data.get('chid', null) == null
+          || isGM(cid)
+          || getAfter(/databases/$(database)/documents/campaigns/$(cid)/characters/$(request.resource.data.chid)).data.owner == me());
+      allow delete: if isGM(cid);
+    }
+
+    // ---- сессии: видят все участники, ведёт ГМ
+    match /campaigns/{cid}/sessions/{sid} {
+      allow read: if isMember(cid);
+      allow write: if isGM(cid);
+    }
+
+    // ---- личные заметки ГМ
+    match /campaigns/{cid}/private/{pid} {
+      allow read, write: if isGM(cid);
+    }
+  }
+}

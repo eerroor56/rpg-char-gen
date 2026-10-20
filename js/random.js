@@ -19,7 +19,8 @@
   const errorsOf = (st, step) => R.compute(st).errors.filter(e => e.step === step);
   const REQ = { 'т': 't', 'д': 'd', 'с': 's', 'и': 'i', 'л': 'l' };
   // требования предмета ({л: 15, с: 18}) против характеристик; гомункулам — половина
-  const fits = (req, stats, half) => Object.entries(req || {}).every(([k, v]) => !REQ[k] || (stats[REQ[k]] || 0) >= Math.ceil(half ? v / 2 : v));
+  // требования растут вместе с размером (как в Rules.reqCheck)
+  const fits = (req, stats, half, sk = 1) => Object.entries(req || {}).every(([k, v]) => { if (!REQ[k]) return true; let n = Math.round(v * sk * 100) / 100; if (half) n /= 2; return (stats[REQ[k]] || 0) >= Math.ceil(n); });
   const reqOk = (req, stats) => {
     for (const m of String(req || '').matchAll(/(\d+)\s*([тдсилТДСИЛ])/g)) if ((stats[REQ[m[2].toLowerCase()]] || 0) < +m[1]) return false;
     return true;
@@ -81,15 +82,24 @@
       const c = pick(chance(0.85) && withAb.length ? withAb : A);
       if (c) { st.ancestor = c.n; st.ancestorAbility = c.ab && c.ab.length ? String(rnd(c.ab.length)) : ''; }
     } else if (rule.kind === 'insect') st.ancestor = (pick(A.filter(c => c.ins)) || {}).n || '';
+    else if (rule.kind === 'ghost') {
+      const r = R.compute(st);
+      const maxLvl = r.age ? r.level : (r.race ? r.race.lvl : 0);
+      st.ancestor = (pick(A.filter(c => R.roundLevel(c.lvl) <= maxLvl)) || {}).n || '';
+    }
     else if (rule.kind === 'beastRace') st.ancestor = (pick(D.races.filter(x => x.playable && x.faction === '30')) || {}).id || '';
     else st.ancestor = (pick(R.patronList(rule.kind)) || {}).name || '';
   }
 
   function rollAge(st) {
-    const id = weighted([['ребёнок', 1], ['юный', 2], ['взрослый', 4], ['пожилой', 2], ['старец', 1]]);
-    const rg = C.AGE_RANGES[id];
-    st.ageCat = id;
-    st.agePct = rg.min === rg.max ? rg.min : rg.min + rnd(rg.max - rg.min + 1);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const id = weighted([['ребёнок', 1], ['юный', 2], ['взрослый', 4], ['пожилой', 2], ['старец', 1]]);
+      const rg = C.AGE_RANGES[id];
+      st.ageCat = id;
+      st.agePct = rg.min === rg.max ? rg.min : rg.min + rnd(rg.max - rg.min + 1);
+      const r = R.compute(st);
+      if (!r.race || r.der.odTotal >= 1) return;     // возраст не должен оставить без ОД в ход
+    }
   }
 
   function doRoll(st, key) {
@@ -183,6 +193,8 @@
       }
       st.traits = traits; st.traitOpt = opt;
       if (errorsOf(st, 'traits').length) continue;
+      const rr = R.compute(st);
+      if (rr.der.odTotal < 1 && rr.der.odTotal < res0.der.odTotal) continue;   // черты не должны оставить без ОД
       // параметры выбранных черт
       const count = k => traits.filter(n => norm(n) === k).length;
       const resist = shuffle(DMG);
@@ -260,7 +272,7 @@
       // оружие: по рукам и, если получится, по требованиям
       if (!res.flags.noWeapon) {
         const half = res.race.id === 'гомункулы';
-        const ws = D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name) && !(w.hands > res.hands) && fits(w.req, res.stats, half));
+        const ws = D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name) && !(w.hands > res.hands) && fits(w.req, res.stats, half, res.size ? res.size.k : 1));
         const w = pick(ws);                 // если персонажу ничего не по силам — без оружия
         if (w) {
           st.weapon = { name: w.name, mat: pick(mats) };
@@ -272,7 +284,7 @@
       if (!res.flags.noArmor && res.race.id !== 'тэтре' && chance(0.9)) {
         const twoHanded = (D.gear.weapons.find(w => w.name === st.weapon.name) || {}).hands >= 2 && res.hands <= 2;
         const half = res.race.id === 'гомункулы';
-        const a = pick(D.gear.armor.concat(twoHanded ? [] : D.gear.shields.filter(s => !s.upgrade)).filter(x => fits(x.req, res.stats, half)));
+        const a = pick(D.gear.armor.concat(twoHanded ? [] : D.gear.shields.filter(s => !s.upgrade)).filter(x => fits(x.req, res.stats, half, res.size ? res.size.k : 1)));
         if (a) {
           const light = ['лёгкая', 'одежда'].includes(a.cls);
           st.armor = { name: a.name, mat: pick(mats.filter(m => light || norm(m) !== 'магическая ткань')) };
@@ -308,8 +320,13 @@
     let res = R.compute(st);
     const bad = step => res.errors.some(e => e.step === step);
     if (!res.race) { rollRace(st); res = R.compute(st); }
-    if (bad('race')) { rollAncestor(st); if (st.raceId === 'они' && !st.oniClan) st.oniClan = pick(R.ONI_CLANS).id; res = R.compute(st); }
     if (!res.age) { rollAge(st); res = R.compute(st); }
+    for (let i = 0; i < 4 && bad('race'); i++) {        // предок / призрак не подошёл — сменить его, а если не выходит, и возраст
+      if (i === 2) rollAge(st);
+      rollAncestor(st);
+      if (st.raceId === 'они' && !st.oniClan) st.oniClan = pick(R.ONI_CLANS).id;
+      res = R.compute(st);
+    }
     if (bad('boon')) { rollBoon(st); res = R.compute(st); }
     if (bad('traits')) { rollTraits(st); res = R.compute(st); }
     if (bad('stats')) { rollStats(st); res = R.compute(st); }

@@ -245,13 +245,11 @@ def parse_race_fx(text, is_penalty=False):
             for m in re.finditer(r"зор[а-я]*\s*\+\s*(\d+)", seg):
                 fx.append({"k": "zor", "v": int(m.group(1)), "cond": cond})
         # ОД
-        m = re.search(r"(?:доп\.?\s*)?([+\-−]?\s*\d+)\s*од\b|од\s*([+\-−]\s*\d+)", seg)
+        # только «+2ОД», «ОД-1», «доп 3 ОД»; «через 9ОД», «за 1ОД» — длительность и цена, не бонус
+        m = re.search(r"доп\.?\s*(\d+)\s*од\b|([+\-−]\s*\d+)\s*од\b|од\s*([+\-−]\s*\d+)", seg)
         if m:
-            raw = (m.group(1) or m.group(2)).replace(" ", "").replace("−", "-")
-            v = int(raw)
-            if "доп" in seg and v > 0:
-                pass
-            fx.append({"k": "od", "v": v, "cond": cond})
+            raw = (m.group(1) or m.group(2) or m.group(3)).replace(" ", "").replace("−", "-")
+            fx.append({"k": "od", "v": int(raw), "cond": cond})
         # регенерации
         m = re.search(r"(?:хп реген|реген хп)\s*\+?\s*(\d+)", seg)
         if m:

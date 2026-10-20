@@ -27,7 +27,7 @@
       const f = App.ui.refRaceF || '';
       const races = D.races.filter(r => !f || (f === 'play' && r.playable) || (f === 'evo' && r.evolutionOnly) || (f === 'npc' && r.npcOnly));
       const gm = gmOpen();   // фракция и религия расы — только для ГМ (игрокам они выдаются в игре)
-      return [{ title: 'Все расы', note: `Значки: ♥ — ${esc(D.raceLegend.marks['♥'])}, ♠ — ${esc(D.raceLegend.marks['♠'])}. Цвет бонуса в таблице: ${esc(D.raceLegend.freq.join(', '))}.`,
+      return [{ title: 'Все расы', note: `Значки: ♥ — ${esc(D.raceLegend.marks['♥'])}, ♠ — ${esc(D.raceLegend.marks['♠'])}. ${D.races.some(r => r.bonusFreq) ? ` Цвет бонуса в таблице: ${esc(D.raceLegend.freq.join(', '))}.` : ''}`,
         tools: `<select data-ui="refRaceF" data-ui-target="ref" aria-label="Фильтр рас"><option value="">все расы (${D.races.length})</option><option value="play" ${f === 'play' ? 'selected' : ''}>игровые</option><option value="evo" ${f === 'evo' ? 'selected' : ''}>только эволюцией ♥</option><option value="npc" ${f === 'npc' ? 'selected' : ''}>не игровые ♠</option></select>`,
         cols: ['Раса', 'Т', 'Д', 'С', 'И', 'Л', 'Ур.', 'Характер', 'Обитание'].concat(gm ? ['Фракция', 'Религия'] : [], ['Размер', 'Бонус', 'Штраф', 'Эволюция']),
         rows: races.map(r => row([`<b>${esc(cap(r.name))}</b> ${marks(r.marks)}`, r.t, r.d, r.s, r.i, r.l, r.id === 'полукровка' ? 'среднее' : fmt(R.roundLevel(r.lvl)), esc(r.align), esc(R.habitatNames(r.habitat).join('; '))]

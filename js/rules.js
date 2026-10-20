@@ -171,6 +171,7 @@
     'скордиты': { kind: 'insect', title: 'Насекомое-предок', text: 'призвать насекомое / бонус от насекомого предка (размер бонуса в таблице не указан — по решению ГМ)', pct: 0, required: false },
     'эноши': { kind: 'beastRace', title: 'Зверо-предок', text: 'имеют половину от бонуса своего зверо предка', pct: 0, required: false },
     'тифлинги': { kind: 'demon', title: 'Демонический предок', text: 'символ принадлежности — символ демона-предка, он же стартовый магический символ (демоны из листа «Социум»)', pct: 0, required: true },
+    'калаштар': { kind: 'ghost', title: 'Призрак-помощник', text: 'дух любого существа не выше уровня хозяина, сохранивший разум и навыки и неразрывно связанный с хозяином', pct: 0, required: true },
     'асимару': { kind: 'god', title: 'Бог-покровитель', text: 'символ бога по принадлежности — стартовый магический символ (боги из листа «Социум»)', pct: 0, required: true }
   };
 
@@ -379,7 +380,7 @@
         const cr = IX.creature.get(norm(st.ancestor));
         if (!cr && String(st.ancestor || '').trim()) res.ancestor = { kind: anc.kind, name: String(st.ancestor).trim(), unknown: true };
         if (cr) {
-          res.ancestor = { kind: anc.kind, name: cr.n, creature: cr };
+          res.ancestor = { kind: anc.kind, name: cr.n, creature: cr, companion: anc.kind === 'ghost' };
           if (anc.pct) {
             res.ancestor.add = {};
             STATS.forEach(k => { res.ancestor.add[k] = ri(cr[k] * anc.pct / 100); });
@@ -515,13 +516,16 @@
     return res;
   }
 
-  // требования предмета — как в таблице, размер их не меняет (решение ГМ); гомункулам — половина
-  function reqCheck(req, stats, halfReq) {
+  // требования предмета меняются на процент размера («статы и требования оружия и брони меняются
+  // на тот же процент» — лист «механики»), округление вверх; гомункулам — половина
+  function reqCheck(req, k, stats, halfReq) {
     const out = [];
     for (const [key, v] of Object.entries(req || {})) {
       const sk = REQ_KEY[key];
       if (!sk) continue;
-      const need = Math.ceil(halfReq ? v / 2 : v);
+      let need = Math.round(v * k * 100) / 100;
+      if (halfReq) need = need / 2;
+      need = Math.ceil(need);
       const have = stats[sk];
       out.push({ stat: sk, need, have, ok: have >= need });
     }
@@ -557,7 +561,7 @@
           res.matEffect = scaledEffect(m.ew, res.unitsTotal);
           if (norm(w.name) === 'катар') res.armorFromNon = ri(m.dmg * w.un);
         }
-        res.req = reqCheck(w.req, stats, halfReq);
+        res.req = reqCheck(w.req, sizeK, stats, halfReq);
         res.bonus = [];
         (race ? race.fx : []).forEach(f => {
           if ((f.k === 'weapon' || f.k === 'weaponAcc') && f.types.map(norm).includes(norm(w.name)) && !f.cond) {
@@ -621,7 +625,7 @@
           }
           if (!allowedMats.has(norm(m.name))) errors.push({ step: 'gear', msg: `Материал «${m.name}» не входит в стартовый список.` });
         } else errors.push({ step: 'gear', msg: 'Выберите материал брони (монолитная — из одного материала).' });
-        res.req = reqCheck(a.req, stats, halfReq);
+        res.req = reqCheck(a.req, sizeK, stats, halfReq);
         res.req.filter(x => !x.ok).forEach(x => warnings.push({ step: 'gear', msg: `«${a.name}»: не хватает ${STAT_NAMES[x.stat].toLowerCase()} (${fmt(x.have)} из ${x.need}) — штраф: ${REQ_PENALTY[x.stat]}.` }));
         if (C.START_ITEM_MAX_SKILL && a.skill > C.START_ITEM_MAX_SKILL) errors.push({ step: 'gear', msg: `«${a.name}» требует ${a.skill} ур. навыка — выше стартового предела.` });
         g.dodgeMod -= res.pen;
@@ -713,6 +717,16 @@
     const agePoints = 3 * (level - lvl0);
     out.lvl0 = lvl0; out.level = level; out.agePoints = agePoints;
     out.talentPoints = Math.floor(level / 5 + 1e-9);
+    // --- развитие после создания (уровни за опыт, вложенные очки, фракция / религия)
+    const prog = st.prog || null;
+    const levelsUp = prog ? Math.max(0, Math.floor(+prog.levels || 0)) : 0;
+    out.levelStart = level; out.levelsUp = levelsUp;
+    out.talentPointsStart = out.talentPoints;
+    if (levelsUp) { out.level = level + levelsUp; out.talentPoints = Math.floor(out.level / 5 + 1e-9); }
+    // призрак-помощник Калаштара — не выше уровня хозяина
+    if (race && race.ancestor && race.ancestor.companion && roundLevel(race.ancestor.creature.lvl) > level) {
+      errors.push({ step: 'race', msg: `Призрак-помощник «${race.ancestor.name}» (ур. ${roundLevel(race.ancestor.creature.lvl)}) сильнее хозяина (ур. ${level}) — выберите существо не выше вашего уровня.` });
+    }
 
     // --- фракция и религия на старте не выдаются (их получают в игре)
     const aff = { faction: null, religion: null };
@@ -837,11 +851,28 @@
     if (race && race.ancestor && race.ancestor.add) STATS.forEach(k => addFlat(k, race.ancestor.add[k], `предок ${race.ancestor.name} (+${race.ancestorRule.pct}%)`));
     traitFx.forEach(([k, fx]) => { if (fx && fx.stat) for (const [s, v] of Object.entries(fx.stat)) addFlat(s, v, `черта «${k}»`); });
     if (boon && boon.fx.stat) for (const [s, v] of Object.entries(boon.fx.stat)) addFlat(s, v, `${boon.kind === 'disease' ? 'болезнь' : 'дар'} «${boon.src.name}»`);
+    // развитие: очки за новые уровни (3 за уровень) и бонусы общин к статам
+    const progAlloc = Object.assign({ t: 0, d: 0, s: 0, i: 0, l: 0 }, (prog && prog.alloc) || {});
+    const progSpent = STATS.reduce((a, k) => a + Math.max(0, +progAlloc[k] || 0), 0);
+    if (prog) {
+      STATS.forEach(k => { const v = +progAlloc[k] || 0; if (v < 0) errors.push({ step: 'progress', msg: `${STAT_NAMES[k]}: очки развития нельзя снимать.` }); else addFlat(k, v, 'развитие: новые уровни'); });
+      if (progSpent > 3 * levelsUp) errors.push({ step: 'progress', msg: `Очков развития вложено ${progSpent}, а получено ${3 * levelsUp} (3 за уровень).` });
+      else if (progSpent < 3 * levelsUp) warnings.push({ step: 'progress', msg: `Не распределено очков характеристик за новые уровни: ${3 * levelsUp - progSpent}.` });
+    }
+    const groupMul = [];
+    ((prog && prog.groups) || []).forEach(g => (g.st || []).forEach((raw, i) => {
+      const p = parseGroupStat(raw), k = STATS[i];
+      if (!p || !k) return;
+      if (p.op === 'add') addFlat(k, p.v, `${g.kind || 'община'} «${g.name}»`);
+      if (p.op === 'mul') groupMul.push([k, p.v, `${g.kind || 'община'} «${g.name}»`]);
+    }));
+    out.prog = prog ? { levelsUp, statPoints: 3 * levelsUp, statSpent: progSpent, alloc: progAlloc } : null;
     // множители
     const mulStat = (k, m, src) => { const before = cur[k]; cur[k] = ri(cur[k] * m); br[k].push({ src, v: cur[k] - before, op: '×' + fmt(m) }); };
     if (boon && boon.fx.mul) for (const [s, m] of Object.entries(boon.fx.mul)) mulStat(s, m, `дар «${boon.src.name}»`);
     if (boon && boon.fx.allPct) STATS.forEach(k => mulStat(k, 1 + boon.fx.allPct / 100, `благословение «${boon.src.name}» (+${boon.fx.allPct}%)`));
     if (boon && boon.fx.pct) for (const [s, v] of Object.entries(boon.fx.pct)) mulStat(s, 1 + v / 100, `болезнь «${boon.src.name}» (+${v}%)`);
+    groupMul.forEach(([k, m, src]) => mulStat(k, m, src));
     // весы
     if (boon && boon.fx.option === 'swap' && bo.swapA && bo.swapB && bo.swapA !== bo.swapB && STATS.includes(bo.swapA) && STATS.includes(bo.swapB)) {
       const a = bo.swapA, b = bo.swapB, va = cur[a], vb = cur[b];
@@ -881,8 +912,12 @@
     let talentSpent = 0;
     const raceTalent = {};
     (race ? race.fx.concat(race.pfx) : []).forEach(f => { if (f.k === 'talent' && !f.cond) raceTalent[f.id] = (raceTalent[f.id] || 0) + f.v; });
+    let talentSpentStart = 0, talentSpentUp = 0;
     TALENTS.forEach(t => {
-      const inv = Math.max(0, +((st.talents || {})[t.id]) || 0);
+      const invStart = Math.max(0, +((st.talents || {})[t.id]) || 0);
+      const invUp = prog ? Math.max(0, +((prog.talents || {})[t.id]) || 0) : 0;
+      const inv = invStart + invUp;
+      talentSpentStart += invStart; talentSpentUp += invUp;
       talentSpent += inv;
       let bonus = raceTalent[t.id] || 0;
       const bsrc = bonus ? [`раса ${signed(bonus)}`] : [];
@@ -897,13 +932,21 @@
       const blocked = t.id === 'скрытность' && boon && boon.fx.noStealth;
       // зоркость: базовые 50 и бонусы считаются отдельно от прокачки — предел только у вложенных очков
       const maxInv = t.base ? t.max : Math.max(0, t.max - Math.max(0, bonus));
-      talents[t.id] = { def: t, inv, bonus, bsrc, base: baseV, total, maxInv, sepBase: !!t.base, blocked };
+      talents[t.id] = { def: t, inv, invStart, invUp, bonus, bsrc, base: baseV, total, maxInv, sepBase: !!t.base, blocked };
       if (inv > maxInv) errors.push({ step: 'talents', msg: t.base ? `${t.name}: вложить можно не больше ${t.max} (вложено ${inv}).` : `${t.name}: не выше ${t.max} (вложено ${inv}, с бонусами ${total}).` });
       if (blocked && inv) errors.push({ step: 'talents', msg: '«Яркое око»: вы не можете применять скрытность — не вкладывайте в неё очки.' });
     });
     out.talents = talents; out.talentSpent = talentSpent;
-    if (talentSpent > out.talentPoints) errors.push({ step: 'talents', msg: `Очков талантов потрачено ${talentSpent} из ${out.talentPoints}.` });
-    else if (race && age && talentSpent < out.talentPoints) warnings.push({ step: 'talents', msg: `Не распределено очков талантов: ${out.talentPoints - talentSpent}.` });
+    if (!prog) {
+      if (talentSpent > out.talentPoints) errors.push({ step: 'talents', msg: `Очков талантов потрачено ${talentSpent} из ${out.talentPoints}.` });
+      else if (race && age && talentSpent < out.talentPoints) warnings.push({ step: 'talents', msg: `Не распределено очков талантов: ${out.talentPoints - talentSpent}.` });
+    } else {
+      const upPoints = out.talentPoints - out.talentPointsStart;
+      if (talentSpentStart > out.talentPointsStart) errors.push({ step: 'talents', msg: `Очков талантов при создании потрачено ${talentSpentStart} из ${out.talentPointsStart}.` });
+      if (talentSpentUp > upPoints) errors.push({ step: 'progress', msg: `Очков талантов за новые уровни вложено ${talentSpentUp}, а получено ${upPoints}.` });
+      else if (talentSpentUp < upPoints) warnings.push({ step: 'progress', msg: `Не распределено очков талантов за новые уровни: ${upPoints - talentSpentUp}.` });
+      Object.assign(out.prog, { talentPoints: upPoints, talentSpent: talentSpentUp });
+    }
 
     // --- снаряжение
     const gear = computeGear(st, { race, sizeK, stats: cur, errors, warnings, flags, hands });

@@ -8,7 +8,42 @@
   const list = () => App.store.get(KEY, []);
   const write = l => { if (!App.store.set(KEY, l)) App.toast('Не удалось сохранить: хранилище браузера недоступно'); };
 
+  // развитие сохранённого героя (без ГМ: опыт и награды игрок начисляет сам)
+  function renderDev(el, id) {
+    const l = list();
+    const h = l.find(x => x.id === id);
+    if (!h) { el.innerHTML = `<div class="page"><p class="crumbs"><a href="#heroes">Мои герои</a></p><div class="card empty">Герой не найден — возможно, удалён.</div></div>`; return; }
+    window.Dev.own('h:' + id);
+    const rec = JSON.parse(JSON.stringify(h));
+    App.devCtx = {
+      record: rec,
+      perms: { gm: true, owner: true },
+      save(patch, text) {
+        const all = list(), x = all.find(y => y.id === id);
+        if (!x) throw new Error('герой удалён');
+        Object.assign(x, JSON.parse(JSON.stringify(patch)));
+        x.log = (x.log || []).concat({ at: Date.now(), text });
+        x.savedAt = Date.now();
+        write(all);
+        return Promise.resolve();
+      },
+      render: () => App.keepFocus(document.activeElement || el, () => renderDev(el, id))
+    };
+    const v = window.Dev.compute(rec);
+    const race = v.res.race;
+    el.innerHTML = window.Dev.page({
+      record: rec,
+      perms: App.devCtx.perms,
+      crumbs: '<a href="#heroes">Мои герои</a>',
+      sub: `${race ? esc(cap(race.name)) + ', ' : ''}ур. ${fmt(v.res.level)}${v.lv.levels ? ` (при создании ${fmt(v.res0.level)})` : ''}`,
+      notice: '<p class="muted small">Здесь вы сами себе ГМ: опыт, общины и добычу вписываете сами, всё хранится в этом браузере. Чтобы развитие вёл ГМ, добавьте героя в кампанию во вкладке «Игра».</p>',
+      actions: `<button type="button" class="btn" data-act="openHero" data-id="${esc(id)}">Лист создания в мастере</button>`,
+      log: (h.log || []).slice().reverse()
+    });
+  }
+
   function render(el) {
+    if (App.ui.heroId) { renderDev(el, App.ui.heroId); return; }
     const heroes = list();
     const q = R.norm(App.ui.heroQ || '');
     const rows = heroes.filter(h => !q || R.norm(h.state.name).includes(q) || R.norm(h.state.raceId).includes(q))
@@ -23,7 +58,7 @@
       <p class="muted">Персонажи хранятся только в этом браузере. Чтобы перенести их или показать ГМ, скачайте файл или отправьте ссылку с листа персонажа.</p>
       ${heroes.length > 4 ? `<input type="search" data-ui="heroQ" data-ui-target="heroes" value="${esc(App.ui.heroQ || '')}" placeholder="Поиск по имени или расе" aria-label="Поиск героя">` : ''}
       ${rows.length ? `<ul class="hero-list">${rows.map(h => {
-        const res = R.compute(App.migrate(h.state));
+        const res = window.Dev.compute(JSON.parse(JSON.stringify(h))).res;
         const race = res.race;
         return `<li class="hero ${res.ok ? 'ok' : 'bad'}">
           <div class="hero-main"><h2>${esc(h.state.name || 'Безымянный герой')}</h2>
@@ -31,6 +66,7 @@
             <p class="small ${res.ok ? 'good-text' : 'bad-text'}">${res.ok ? 'собран по правилам' : `ошибок: ${res.errors.length}`}${h.savedAt ? `, сохранён ${new Date(h.savedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}` : ''}</p></div>
           <div class="hero-act">
             <button type="button" class="btn" data-act="openHero" data-id="${h.id}">Открыть</button>
+            <a class="btn" href="#heroes/${esc(h.id)}">Развитие</a>
             <button type="button" class="btn ghost" data-act="copyHero" data-id="${h.id}">Копия</button>
             <button type="button" class="btn ghost danger" data-act="deleteHero" data-id="${h.id}">Удалить</button>
           </div></li>`;
@@ -43,7 +79,7 @@
     const a = heroes.find(h => h.id === App.ui.cmpA) || heroes[0];
     const b = heroes.find(h => h.id === App.ui.cmpB) || heroes[1];
     const opt = sel => heroes.map(h => `<option value="${h.id}" ${h.id === sel.id ? 'selected' : ''}>${esc(h.state.name || 'Безымянный герой')}</option>`).join('');
-    const ra = R.compute(App.migrate(a.state)), rb = R.compute(App.migrate(b.state));
+    const ra = window.Dev.compute(JSON.parse(JSON.stringify(a))).res, rb = window.Dev.compute(JSON.parse(JSON.stringify(b))).res;
     const rows = [
       ['Раса', x => x.race ? cap(x.race.name) : '—', null],
       ['Уровень', x => x.level, 1],
@@ -72,10 +108,10 @@
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        const arr = Array.isArray(data.heroes) ? data.heroes.map(h => h.state || h) : data.hero ? [data.hero] : data.raceId !== undefined ? [data] : [];
+        const arr = Array.isArray(data.heroes) ? data.heroes.map(h => (h.state ? h : { state: h })) : data.hero ? [{ state: data.hero }] : data.raceId !== undefined ? [{ state: data }] : [];
         if (!arr.length) throw new Error('empty');
         const l = list();
-        arr.forEach(s => l.push({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), savedAt: Date.now(), state: App.migrate(s) }));
+        arr.forEach(h => l.push(Object.assign({}, h, { id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), savedAt: Date.now(), state: App.migrate(h.state) })));
         write(l);
         App.toast(`Загружено персонажей: ${arr.length}`);
         if (App.tab === 'heroes') render(document.getElementById('tab-heroes'));
@@ -120,7 +156,7 @@
       const h = l.find(x => x.id === b.dataset.id);
       if (!h) return;
       const copy = JSON.parse(JSON.stringify(h));
-      copy.id = 'h' + Date.now().toString(36);
+      copy.id = 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       copy.savedAt = Date.now();
       copy.state.name = (copy.state.name || 'Герой') + ' (копия)';
       l.push(copy);
