@@ -12,7 +12,9 @@ R.init(window.GAME_DATA);
 const esc = s => String(s === undefined || s === null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 window.App = { esc, cap: s => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1), actions: {}, ui: {}, migrate: s => Object.assign(R.newState(), JSON.parse(JSON.stringify(s))), portrait: () => '', toast() {}, store: { get: (k, d) => d, set: () => true } };
 require('../js/random.js');
+require('../js/craft.js');
 require('../js/progress.js');
+require('../js/inventory.js');
 require('../js/cloud.js');
 const Dev = window.Dev, C = window.Cloud, RH = window.RandomHero;
 
@@ -78,6 +80,73 @@ const html = Dev.panel({ record: { state: st, gm: { xp: xp2 }, prog: { alloc: {}
 eq('panel shows level', html.includes('Уровень и опыт') && html.includes('Очки за новые уровни'), true);
 const ro = Dev.panel({ record: { state: st, gm: { xp: 0 } }, perms: {} }).html;
 eq('read-only panel has no grant buttons', ro.includes('data-act="devXp"'), false);
+
+// ---- кастомное снаряжение (лист «механики»: ковка, крафтильня)
+const K = window.Craft;
+const ctxN = { sizeK: 1, stats: { t: 100, d: 100, s: 100, i: 100, l: 100 } };
+const sword = parts => ({ id: 'x', kind: 'weapon', base: 'длинный меч', craft: { parts } });
+let c = K.compute(sword([{ mat: 'сталь', u: 2, role: 'dmg' }, { mat: 'мифрил', u: 1, role: 'dmg' }, { mat: 'сталь', u: 1.5, role: 'non' }]), ctxN);
+eq('mixed damage 2×11 + 1×36', c.damage, 58);
+eq('mixed: no unit warnings', c.warnings, []);
+eq('steel per-unit effect × 3,5 ед.', c.effects.find(e => /^сталь/.test(e.src)).text, '18% оглушить');
+eq('mithril effect once', c.effects.some(e => /^мифрил/.test(e.src) && /мультиатаку/.test(e.text)), true);
+c = K.compute(sword([{ mat: 'сталь', u: 2.6, role: 'dmg' }, { mat: 'мифрил', u: 0.4, role: 'dmg' }, { mat: 'сталь', u: 1.5, role: 'non' }]), ctxN);
+eq('under half an ingot: no effect', c.effects.some(e => /^мифрил/.test(e.src)), false);
+eq('under half an ingot: still adds damage', c.damage, Math.round(2.6 * 11 + 0.4 * 36));
+c = K.compute(sword([{ mat: 'сталь', u: 2, role: 'dmg' }]), ctxN);
+eq('unit shortage warned', c.warnings.length, 2);
+const s3 = [{ mat: 'сталь', u: 3, role: 'dmg' }, { mat: 'сталь', u: 1.5, role: 'non' }];
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3, sharpen: 2 } }, ctxN);
+eq('sharpen ×2 = +50%', c.damage, Math.round(33 * 1.5));
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3, quality: 3, coat: ['серебро'] } }, ctxN);
+eq('enhanced craft 3Х', c.damage, 99);
+eq('coating gives metal effect', c.effects.some(e => /напыление: серебро/.test(e.src)), true);
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: [{ mat: 'сфалерит', u: 3, role: 'dmg' }, { mat: 'таумий', u: 1.5, role: 'non' }], glyphs: [{ sym: 'огонь' }, { sym: 'лёд' }, { sym: 'тьма' }, { sym: 'свет' }] } }, ctxN);
+eq('sphalerite +2 glyphs', c.glyphMax, 5);
+eq('thaumium doubles glyph power: 105 × 50% × 2', c.glyphPower, 105);
+eq('4 glyphs within limit', c.warnings.some(w => /Глифов/.test(w)), false);
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: [{ mat: 'рубин', u: 3, role: 'dmg' }, { mat: 'рубин', u: 1.5, role: 'non' }], modules: ['пружина'] } }, ctxN);
+eq('crystal weapon', c.crystal, true);
+eq('crystal weapon has no module sockets', c.warnings.some(w => /гнёзд/.test(w)), true);
+c = K.compute({ kind: 'armor', base: 'тяжёлая кирса', craft: { parts: [{ mat: 'сталь', u: 8 }, { mat: 'мифрил', u: 8 }] } }, ctxN);
+eq('mixed armor 8×30 + 8×100', c.armor, 1040);
+eq('mithril halves armour agility penalty', c.pen, 5);
+eq('cuirass goes on body', c.cat, 'body');
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3 } }, { sizeK: 1.4, stats: ctxN.stats });
+eq('giant needs 3 × 1,4 → 4 units', c.needDmg, 4);
+// стартовое снаряжение в инвентаре = расчёт мастера
+let mism = 0;
+for (let i = 0; i < 200; i++) {
+  const h = RH.full(), r0 = R.compute(h);
+  const inv = K.startInventory(h, r0);
+  const cx = { sizeK: r0.size ? r0.size.k : 1, stats: r0.stats, halfReq: r0.race.id === 'гомункулы', race: r0.race, oniClan: h.oniClan, flags: r0.flags };
+  const e2 = K.equipStats(inv.items, inv.equip, cx, r0.hands);
+  const w = e2.weapons.find(x => x.kind === 'weapon');
+  if (r0.gear.weapon && r0.gear.weapon.m && (!w || w.damage !== r0.gear.weapon.damageTotal)) mism++;
+  if (R.ri(r0.stats.l + e2.statFx.l - e2.pen) !== r0.der.dodge || e2.slotsUsed !== r0.der.slotsUsed) mism++;
+}
+eq('start gear in inventory matches the wizard', mism, 0);
+// надеть: двуручное занимает две руки, новое оружие вытесняет его целиком
+const slots = K.slotsFor(2);
+const two = { id: 'a', kind: 'weapon', base: 'двуручный меч', craft: { parts: [] } };
+let r = window.Inv.equipInto({}, two, { cat: 'hand', hands: 2 }, null, slots);
+eq('two-hander takes both hands', [r.equip.hand1, r.equip.hand2], ['a', 'a']);
+r = window.Inv.equipInto(r.equip, { id: 'b', kind: 'weapon' }, { cat: 'hand', hands: 1 }, 'hand1', slots);
+eq('new weapon displaces two-hander', [r.equip.hand1, r.equip.hand2 || null, r.displaced], ['b', null, ['a']]);
+r = window.Inv.equipInto({}, { id: 'r', kind: 'jewelry' }, { cat: 'ring' }, null, slots);
+eq('ring goes to first ring slot', r.equip.ring1, 'r');
+eq('10 ring slots', slots.filter(x => x.cat === 'ring').length, 10);
+// состояния от ГМ меняют статы, кошелёк переносит старое золото
+v = Dev.compute({ state: st, gm: { effects: [{ id: 'e1', kind: 'disease', name: 'кости-хрящи', mods: K.parseStatMods('ловкость +20 / -40 тело') }] } });
+eq('disease mods applied', [v.res.stats.l - res0.stats.l, v.res.stats.t - res0.stats.t], [20, -40]);
+v = Dev.compute({ state: st, gm: { gold: 7 } });
+eq('legacy gold → wallet', v.inv.wallet.з, 7 + (res0.der.gold || 0));
+eq('money formatting', K.money(1050203), '1 пл 5 з 2 се 3 м');
+eq('price parsing', K.priceCopper('1(з),50(се)'), 15000);
+eq('drop parsing', K.parseDrop('перо 10, серебро'), [{ name: 'перо', qty: 10 }, { name: 'серебро', qty: 1 }]);
+eq('stat mods: «сила/ловкость-20»', K.parseStatMods('сила/ловкость-20').map(m => m.stat + m.v), ['s-20', 'l-20']);
+eq('stat mods: «дух -2Х» halves', K.parseStatMods('дух -2Х')[0].v, 0.5);
+eq('stat mods: percent ignored', K.parseStatMods('ловкость +20%'), []);
 
 // ---- облако в браузере: те же правила, что в firestore.rules
 (async () => {

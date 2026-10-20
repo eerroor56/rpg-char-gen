@@ -8,7 +8,10 @@
  * Запись персонажа (и в браузере, и в облаке):
  *   { state — то, что собрано в мастере,
  *     prog  — что распределяет игрок: { alloc: {t,d,s,i,l}, talents: {id: n} },
- *     gm    — что выдаёт ГМ: { xp, groups: [...], learned: [...], items: [...], gold, notes } }
+ *     gm    — что выдаёт ГМ: { xp, groups, learned, items (инвентарь), invInit, wallet, effects },
+ *     equip — что надето: { слот: id предмета } (меняют игрок и ГМ),
+ *     notes — заметки игрока и ГМ }
+ * Инвентарь, кошелёк и состояния — js/craft.js (расчёты) и js/inventory.js (интерфейс).
  * Панель работает с App.devCtx = { record, perms: {gm, owner}, save(patch, text), log, title, back }.
  */
 (function () {
@@ -29,7 +32,8 @@
   function normalize(rec) {
     rec.prog = Object.assign({ alloc: zero(), talents: {} }, rec.prog || {});
     rec.prog.alloc = Object.assign(zero(), rec.prog.alloc || {});
-    rec.gm = Object.assign({ xp: 0, groups: [], learned: [], items: [], gold: 0 }, rec.gm || {});
+    rec.gm = Object.assign({ xp: 0, groups: [], learned: [], items: [], effects: [] }, rec.gm || {});
+    if (!Array.isArray(rec.gm.effects)) rec.gm.effects = [];
     if (typeof rec.notes !== 'string') rec.notes = '';
     return rec;
   }
@@ -40,9 +44,28 @@
     const state = App.migrate(rec.state);
     const res0 = R.compute(state);
     const lv = levelsFromXp(res0.level, rec.gm.xp);
-    const prog = { levels: lv.levels, alloc: rec.prog.alloc, talents: rec.prog.talents, groups: rec.gm.groups };
+    // состояния от ГМ (проклятия, болезни, эффекты) с прибавками и множителями к статам
+    const mods = [];
+    rec.gm.effects.forEach(e => (e.mods || []).forEach(m => mods.push({ stat: m.stat, op: m.op, v: m.v, src: `${(window.Craft && window.Craft.EFFECT_KINDS[e.kind] || 'эффект').toLowerCase()} «${e.name}»` })));
+    const prog = { levels: lv.levels, alloc: rec.prog.alloc, talents: rec.prog.talents, groups: rec.gm.groups, mods };
     const res = R.compute(Object.assign({}, state, { prog }));
-    return { state, res0, res, lv };
+    const v = { state, res0, res, lv };
+    // инвентарь и экипировка: урон, броня, уворот и слоты считаются по тому, что надето сейчас
+    if (window.Craft && res.race) {
+      const K = window.Craft;
+      v.inv = K.inventoryOf(rec, state, res0);
+      v.ctx = { sizeK: res.size ? res.size.k : 1, stats: res.stats, halfReq: res.race.id === 'гомункулы', race: res.race, oniClan: state.oniClan, flags: res.flags, creatures: creatures() };
+      const eq = K.equipStats(v.inv.items, v.inv.equip, v.ctx, res.hands);
+      v.eq = eq;
+      const d = res.der;
+      d.dodge = R.ri(res.stats.l + eq.statFx.l - eq.pen);
+      d.slots = res.stats.s + eq.bagSlots;
+      d.slotsUsed = eq.slotsUsed;
+      const dReg = eq.statFx.hpRegen - ((res.gear && res.gear.hpRegenMod) || 0);
+      if (dReg) { d.hpRegen = Math.max(0, d.hpRegen + dReg); (d.hpRegenSrc || []).push(`надетая броня ${signed(dReg)}`); }
+      d.armor = eq.armor; d.magicArmor = eq.magicArmor;
+    }
+    return v;
   }
 
   // опыт за существо = его уровню, с бонусами персонажа к опыту
@@ -159,19 +182,6 @@
     }
     html += '</section>';
 
-    // предметы и золото
-    const items = rec.gm.items || [];
-    html += `<section class="dev-card"><h2>Предметы и золото</h2>
-      <p class="small dev-gold">Золото: <b>${fmt(rec.gm.gold || 0)}</b>${perms.gm ? ` <input type="number" class="mini-num" data-ui="devGold" data-ui-target="none" value="${esc(App.ui.devGold !== undefined ? App.ui.devGold : (rec.gm.gold || 0))}" aria-label="Золото"> <button type="button" class="btn small" data-act="devGold">Сохранить</button>` : ''}</p>
-      ${items.length ? `<ul class="dev-list">${items.map((x, i) => `<li><span>${esc(x.name)}${x.qty > 1 ? ' ×' + x.qty : ''}${x.note ? ` <span class="muted small">— ${esc(x.note)}</span>` : ''}</span>${perms.gm ? `<button type="button" class="linklike small" data-act="devItemDel" data-key="${i}">убрать</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Предметов, полученных в игре, пока нет.</p>'}`;
-    if (perms.gm) {
-      html += `<div class="dev-row"><input type="text" list="devItemList" data-ui="devItemName" data-ui-target="none" value="${esc(App.ui.devItemName || '')}" placeholder="предмет или артефакт">
-        <input type="number" class="mini-num" min="1" data-ui="devItemQty" data-ui-target="none" value="${esc(App.ui.devItemQty || 1)}" aria-label="Количество">
-        <button type="button" class="btn small" data-act="devItemAdd">Выдать</button></div>
-        <datalist id="devItemList">${itemNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
-    }
-    html += '</section>';
-
     // заметки
     html += `<section class="dev-card"><h2>Заметки</h2>
       ${(perms.gm || perms.owner) ? `<textarea rows="4" data-ui="devNotes" data-ui-target="none" placeholder="что важно помнить о персонаже: клятвы, долги, знакомые">${esc(App.ui.devNotes !== undefined ? App.ui.devNotes : (rec.notes || ''))}</textarea>
@@ -199,7 +209,7 @@
     parts.push(`<p><b>Уровень:</b> ${fmt(v.res.level)}${v.lv.levels ? ` (при создании ${fmt(v.res0.level)})` : ''}; опыт ${fmt(v.lv.xpInto)} / ${fmt(v.lv.need)} до следующего</p>`);
     if ((g.groups || []).length) parts.push(`<p><b>Общины:</b> ${g.groups.map(x => esc(x.name) + (x.quests ? ` (заданий: ${x.quests})` : '')).join(', ')}</p>`);
     if ((g.learned || []).length) parts.push(`<p><b>Изучено в игре:</b> ${g.learned.map(x => esc(x.name)).join(', ')}</p>`);
-    if ((g.items || []).length || g.gold) parts.push(`<p><b>Добыто:</b> ${(g.items || []).map(x => esc(x.name) + (x.qty > 1 ? ' ×' + x.qty : '')).join(', ')}${g.gold ? `${(g.items || []).length ? '; ' : ''}золото: ${fmt(g.gold)}` : ''}</p>`);
+    if (window.Inv && v.inv) parts.push(window.Inv.sheetExtra(v, rec));
     if (rec.notes) parts.push(`<p class="pre small">${esc(rec.notes)}</p>`);
     return `<section class="sh-block wide"><h3>Развитие</h3>${parts.join('')}</section>`;
   }
@@ -208,14 +218,19 @@
   //   o = { record, perms, crumbs, sub, notice, actions, log, devLocked, privateBox }
   function page(o) {
     const v = compute(o.record);
-    const tab = ['dev', 'sheet', 'log'].includes(App.ui.devTab) ? App.ui.devTab : 'dev';
+    const tab = ['dev', 'gear', 'fx', 'sheet', 'log'].includes(App.ui.devTab) ? App.ui.devTab : 'dev';
     const race = v.res.race;
     const pics = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'dev-portrait') : '';
     let body;
-    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, { extra: sheetBlock(o.record, v) });
+    const I = window.Inv;
+    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, { extra: sheetBlock(o.record, v), gearHtml: I ? I.sheetGear(v) : '' });
     else if (tab === 'log') body = logList(o.log);
-    else body = o.devLocked ? `<div class="card note">${o.devLocked}</div>` : panel(o).html;
-    const tabs = [['dev', 'Развитие'], ['sheet', 'Лист персонажа'], ['log', 'Журнал']];
+    else if (o.devLocked) body = `<div class="card note">${o.devLocked}</div>`;
+    else if (tab === 'gear' && I) body = I.gearTab(o, v);
+    else if (tab === 'fx' && I) body = I.effectsTab(o, v);
+    else body = panel(o).html;
+    const nfx = (o.record.gm && o.record.gm.effects || []).length;
+    const tabs = [['dev', 'Развитие'], ['gear', 'Снаряжение'], ['fx', `Состояния${nfx ? ` <small>${nfx}</small>` : ''}`], ['sheet', 'Лист персонажа'], ['log', 'Журнал']];
     return `<div class="page dev-page">
       ${o.crumbs ? `<p class="crumbs">${o.crumbs}</p>` : ''}
       <header class="dev-head">${pics}<div><h1>${esc(o.record.state.name || 'Безымянный герой')}</h1>
@@ -233,7 +248,7 @@
     if (App.ui.devFor === id) return;
     App.ui.devFor = id;
     App.ui.devDraft = { alloc: zero(), talents: {} };
-    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devItemName', 'devItemQty', 'devGold', 'devNotes', 'devGroup', 'gPriv'].forEach(k => { App.ui[k] = undefined; });
+    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ'].forEach(k => { App.ui[k] = undefined; });
   }
 
   function sumVals(o) { return Object.values(o || {}).reduce((a, x) => a + (+x || 0), 0); }
@@ -241,6 +256,13 @@
   // ------------------------------------------------------------ действия (App.devCtx задаёт текущего персонажа)
 
   const ctx = () => App.devCtx;
+  // перерисовка откладывается и склеивается: поле, теряющее фокус во время перерисовки, не ломает страницу
+  let pending = false;
+  const rerender = () => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => { pending = false; if (ctx()) ctx().render(); }, 0);
+  };
   async function commit(patch, text) {
     const c = ctx();
     if (!c) return;
@@ -250,12 +272,12 @@
     } catch (e) {
       App.toast('Не сохранилось: ' + (e && e.message ? e.message : e));
     }
-    c.render();
+    rerender();
   }
   const gmCopy = () => JSON.parse(JSON.stringify(normalize(ctx().record).gm));
 
   Object.assign(App.actions, {
-    devTab(b) { App.ui.devTab = b.dataset.v; if (ctx()) ctx().render(); },
+    devTab(b) { App.ui.devTab = b.dataset.v; rerender(); },
     devXp() {
       const n = Math.floor(+App.ui.devXpAmount || 0);
       if (n <= 0) { App.toast('Укажите, сколько опыта начислить'); return; }
@@ -282,7 +304,7 @@
       const draft = App.ui.devDraft || (App.ui.devDraft = { alloc: zero(), talents: {} });
       const box = kind === 'alloc' ? draft.alloc : draft.talents;
       box[key] = Math.max(0, (box[key] || 0) + d);
-      ctx().render();
+      rerender();
     },
     // число очков можно вписать сразу, не нажимая «+» десятки раз
     devSet(t) {
@@ -299,9 +321,9 @@
       }
       box[key] = Math.min(want, Math.max(0, room));
       if (want > box[key]) App.toast(`Больше ${box[key]} сюда не вложить`);
-      ctx().render();
+      rerender();
     },
-    devResetPoints() { App.ui.devDraft = { alloc: zero(), talents: {} }; ctx().render(); },
+    devResetPoints() { App.ui.devDraft = { alloc: zero(), talents: {} }; rerender(); },
     devSavePoints() {
       const rec = normalize(ctx().record);
       const draft = App.ui.devDraft || { alloc: zero(), talents: {} };
@@ -347,27 +369,6 @@
       const gm = gmCopy(); const x = gm.learned.splice(+b.dataset.key, 1)[0];
       if (x) commit({ gm }, `Убрано из изученного: «${x.name}»`);
     },
-    devItemAdd() {
-      const name = String(App.ui.devItemName || '').trim();
-      if (!name) { App.toast('Впишите предмет'); return; }
-      const qty = Math.max(1, Math.floor(+App.ui.devItemQty || 1));
-      const gm = gmCopy();
-      const same = gm.items.find(x => norm(x.name) === norm(name));
-      if (same) same.qty = (same.qty || 1) + qty; else gm.items.push({ name, qty });
-      App.ui.devItemName = ''; App.ui.devItemQty = 1;
-      commit({ gm }, `Получено: «${name}»${qty > 1 ? ' ×' + qty : ''}`);
-    },
-    devItemDel(b) {
-      const gm = gmCopy(); const x = gm.items.splice(+b.dataset.key, 1)[0];
-      if (x) commit({ gm }, `Убран предмет «${x.name}»`);
-    },
-    devGold() {
-      const gm = gmCopy(); const before = gm.gold || 0;
-      gm.gold = Math.max(0, Math.floor(+App.ui.devGold || 0));
-      App.ui.devGold = undefined;
-      if (gm.gold === before) return;
-      commit({ gm }, `Золото: ${before} → ${gm.gold}`);
-    },
     devNotes() {
       const notes = String(App.ui.devNotes !== undefined ? App.ui.devNotes : (ctx().record.notes || ''));
       App.ui.devNotes = undefined;
@@ -376,5 +377,5 @@
     }
   });
 
-  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sumVals };
+  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sumVals, commit, gmCopy, creatures, zero };
 })();

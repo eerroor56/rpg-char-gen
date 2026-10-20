@@ -866,6 +866,13 @@
       if (p.op === 'add') addFlat(k, p.v, `${g.kind || 'община'} «${g.name}»`);
       if (p.op === 'mul') groupMul.push([k, p.v, `${g.kind || 'община'} «${g.name}»`]);
     }));
+    // состояния, выданные ГМ (проклятия, болезни, эффекты): прибавки к статам и множители
+    ((prog && prog.mods) || []).forEach(m => {
+      const k = STATS.includes(m.stat) ? m.stat : null, v = +m.v;
+      if (!k || !Number.isFinite(v) || !v) return;
+      if (m.op === 'mul') { if (v > 0 && v !== 1) groupMul.push([k, v, m.src || 'эффект']); }
+      else addFlat(k, v, m.src || 'эффект');
+    });
     out.prog = prog ? { levelsUp, statPoints: 3 * levelsUp, statSpent: progSpent, alloc: progAlloc } : null;
     // множители
     const mulStat = (k, m, src) => { const before = cur[k]; cur[k] = ri(cur[k] * m); br[k].push({ src, v: cur[k] - before, op: '×' + fmt(m) }); };
@@ -1124,6 +1131,7 @@
     init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
+    sizeUnits, scaledEffect, multiplyEffect, reqCheck, armorStatEffects, REQ_PENALTY, ri,
     get index() { return IX; }
   };
 })();

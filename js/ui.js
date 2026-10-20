@@ -361,8 +361,31 @@
     // ------------------------------------------------------------ события
     bind() {
       const root = document.body;
+      // если между нажатием и отпусканием кнопку перерисовали (поле ввода потеряло фокус и обновило
+      // страницу), нажимаем такую же кнопку в новой разметке — иначе нажатие терялось бы
+      root.addEventListener('pointerdown', e => {
+        const b = e.target.closest && e.target.closest('[data-act]');
+        if (!b) { this._down = null; return; }
+        const sel = `[data-act="${CSS.escape(b.dataset.act)}"]` + ['v', 'key', 'id', 'step', 'status', 'd', 'k']
+          .filter(k => b.dataset[k] !== undefined).map(k => `[data-${k}="${CSS.escape(b.dataset[k])}"]`).join('');
+        this._down = { el: b, sel };
+      }, true);
+      root.addEventListener('pointerup', () => {
+        const d = this._down;
+        this._down = null;
+        if (!d || d.el.isConnected) return;
+        this._lost = { sel: d.sel, done: false };
+        const lost = this._lost;
+        setTimeout(() => {
+          if (this._lost === lost) this._lost = null;
+          const n = document.querySelector(lost.sel);
+          if (lost.done || !n || n.disabled) return;
+          n.click();
+        }, 0);
+      }, true);
       root.addEventListener('click', e => {
         const b = e.target.closest('[data-act]');
+        if (b && e.isTrusted && this._lost && b.matches(this._lost.sel)) this._lost.done = true;   // браузер сам дошёл до новой кнопки
         if (!b) return;
         const act = b.dataset.act;
         const handler = this.actions[act];
