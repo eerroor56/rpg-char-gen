@@ -1,4 +1,4 @@
-const firebaseConfig = {
+window.firebaseConfig = {
   apiKey: "AIzaSyCRu1xGPQp7GfQlRu3Rco4m00nEBC_3d0M",
   authDomain: "rpg-char-gen.firebaseapp.com",
   projectId: "rpg-char-gen",
