@@ -260,14 +260,20 @@
     camps: {},            // кэш кампаний (для номера текущей сессии в журнале)
     op,
 
-    configured() { return local || !!(window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && window.FIREBASE_CONFIG.projectId); },
+    // настройки из js/firebase-config.js; годится и вставка из Firebase как есть («const firebaseConfig = …»)
+    config() {
+      let c = window.FIREBASE_CONFIG;
+      if (!c) { try { c = typeof firebaseConfig !== 'undefined' ? firebaseConfig : null; } catch (e) { c = null; } }  // eslint-disable-line no-undef
+      return c && c.apiKey && c.projectId ? c : null;
+    },
+    configured() { return local || !!this.config(); },
 
     init() {
       if (this._init) return this._init;
       this._init = (async () => {
         try {
           if (!this.configured()) return false;
-          A = local ? localAdapter() : await firebaseAdapter(window.FIREBASE_CONFIG);
+          A = local ? localAdapter() : await firebaseAdapter(this.config());
           this.mode = A.mode;
           await new Promise(ok => {
             let first = true;
