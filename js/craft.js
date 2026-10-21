@@ -258,6 +258,11 @@
 
     // требования, штраф, слоты, руки
     out.req = base.req ? R.reqCheck(base.req, k, ctx.stats || { t: 0, d: 0, s: 0, i: 0, l: 0 }, ctx.halfReq) : [];
+    // число после дроби в требованиях («2л, 25с / 13») — уровень ремесла, чтобы игрок изготовил предмет сам;
+    // выданный ГМ предмет от этого не зависит, поэтому только сравниваем с навыком персонажа
+    out.skill = typeof base.skill === 'number' ? base.skill : null;
+    out.craftHave = typeof ctx.craft === 'number' ? ctx.craft : null;
+    out.skillOk = out.skill === null || out.craftHave === null ? null : out.craftHave >= out.skill;
     out.pen = isArmor ? (model === 'L' ? 0 : (base.pen || 0)) : 0;
     if (out.pen && ctx.flags && ctx.flags.noMediumArmorPenalty && base.cls === 'средняя') { out.pen = 0; out.notes.push('Средние доспехи не дают штраф (раса).'); }
     // мифрил в броне: «сокращает штраф ловкости брони в 2 раза»

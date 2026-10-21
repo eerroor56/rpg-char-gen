@@ -597,6 +597,31 @@ input[type="number"].mini-num { flex: 0 0 96px; width: 96px; display: inline-blo
 .dev-log li, .feed li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); margin: 0; }
 .feed li.ev-session { border-left: 3px solid var(--brass); padding-left: 10px; }
 .feed li.ev-create { border-left: 3px solid var(--ok); padding-left: 10px; }
+.feed li.ev-roll { border-left: 3px solid var(--warn); padding-left: 10px; }
+.roll-ev { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.roll-ev .dice-ic { color: var(--warn); }
+.roll-num { font-size: 1.15em; color: var(--warn); font-variant-numeric: tabular-nums; }
+.roll-num.edge, .dice-face.edge { color: var(--focus); text-shadow: 0 0 12px rgba(243, 213, 143, .45); }
+/* бросок d100 */
+.dice-box { margin: 18px 0; }
+.page .dice-box h2 { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; margin: 0 0 10px; }
+.dice-box h2 .dice-ic { color: var(--brass); }
+.dice-row { display: flex; align-items: center; gap: 16px; }
+.dice-face { flex: none; width: 92px; height: 92px; display: grid; place-items: center; border: 2px solid var(--brass); border-radius: 18px;
+  background: var(--ink-2); font: 2.6rem/1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.dice-face.empty { color: var(--muted); border-style: dashed; }
+.dice-face.fresh { animation: dice-roll .5s ease-out; }
+@keyframes dice-roll { 0% { transform: rotate(-200deg) scale(.6); opacity: .2; } 70% { transform: rotate(12deg) scale(1.06); opacity: 1; } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dice-face.fresh { animation: none; } }
+.dice-ctl { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.dice-ctl input { width: 100%; }
+.dice-ctl .btn { justify-self: start; }
+.dice-hist { margin: 10px 0 0; color: var(--muted); }
+.dice-hist span { display: inline-block; min-width: 2.2em; text-align: center; padding: 1px 6px; margin: 2px 2px 0 0; border: 1px solid var(--line); border-radius: 999px; color: var(--text); }
+.dice-box p.muted { margin: 8px 0 0; }
+.dice-box.compact .dice-face { width: 64px; height: 64px; font-size: 1.9rem; border-radius: 14px; }
+.page .dice-box.compact h2 { font-size: 1.15rem; }
+@media (max-width: 520px) { .dice-face { width: 72px; height: 72px; font-size: 2rem; } .dice-row { gap: 12px; } }
 .pre { white-space: pre-wrap; }
 textarea { width: 100%; }
 

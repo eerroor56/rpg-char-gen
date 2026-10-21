@@ -147,6 +147,8 @@
   }
 
   // карточка выбранного предмета
+  // уровень ремесла, нужный игроку, чтобы изготовить предмет самому (число после дроби в таблице)
+  const skillText = c => (c.skill === null || c.skill === undefined ? '' : `<span class="${c.skillOk === false ? 'req-bad' : c.skillOk ? 'req-ok' : ''}">ремесло ур. ${c.skill}</span>${c.craftHave !== null && c.craftHave !== undefined ? ` <span class="muted small">(у персонажа ${fmt(c.craftHave)})</span>` : ''}`);
   function itemCard(it, c, perms, isWorn) {
     const canEquip = perms.gm || perms.owner;
     const parts = ((it.craft || {}).parts || []).filter(p => p.mat);
@@ -160,6 +162,7 @@
         ${kv('Тип урона', c.base && c.base.dt ? esc(c.base.dt) : '')}
         ${kv('Дальность', c.base && c.base.range ? esc(c.base.range) : '')}
         ${kv('Требования', reqs)}
+        ${kv('Изготовить самому', skillText(c))}
         ${kv('Руки', c.hands || '')}
         ${kv('Штраф ловкости', c.pen || '')}
         ${kv('Гнёзда для камней', K.CRAFTABLE.includes(it.kind) && c.base ? `${c.sockets}${((it.craft || {}).inlays || []).length ? `, занято ${((it.craft || {}).inlays || []).length}` : ''}` : '')}
@@ -332,7 +335,7 @@
     const kv = (t, x) => `<span><b>${App.cap(t)}:</b> ${x}</span>`;
     return `<div class="craft-preview">
       ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '')) : '', c.armor !== null && c.armor !== undefined ? kv('броня', fmt(c.armor) + (c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : '')) : '', c.pen ? kv('штраф ловк.', c.pen) : '',
-        c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', kv('гнёзда для камней', c.sockets), c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
+        c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', kv('гнёзда для камней', c.sockets), c.skill !== null && c.skill !== undefined ? kv('изготовить самому', skillText(c)) : '', c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
       ${c.effects.length ? `<ul class="fx-list small">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}</li>`).join('')}</ul>` : ''}
       ${c.warnings.length ? `<ul class="small item-warn">${c.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
       ${c.notes.length ? `<ul class="small item-warn">${c.notes.map(w => `<li class="muted">${esc(w)}</li>`).join('')}</ul>` : ''}

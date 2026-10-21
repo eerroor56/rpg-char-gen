@@ -122,6 +122,11 @@ eq('table «slots» = gem sockets', c.sockets, 2);
 c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3, inlays: ['рубин', 'сапфир', 'алмаз'] } }, ctxN);
 eq('too many gems warned', c.warnings.some(w => /гнёзд/.test(w)), true);
 eq('bag takes no slot', K.compute({ kind: 'item', name: 'малая сумка' }, ctxN).slots, 0);
+// «2л, 25с / 13»: после дроби — уровень ремесла, чтобы изготовить предмет самому
+eq('req text', R.reqText({ 'л': 2, 'с': 25 }), 'Л 2, С 25');
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3 } }, Object.assign({}, ctxN, { craft: 10 }));
+eq('craft skill from table', [c.skill, c.craftHave, c.skillOk], [13, 10, false]);
+eq('craft skill met', K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3 } }, Object.assign({}, ctxN, { craft: 13 })).skillOk, true);
 // стартовое снаряжение в инвентаре = расчёт мастера
 let mism = 0;
 for (let i = 0; i < 200; i++) {
@@ -184,6 +189,10 @@ eq('stat mods: percent ignored', K.parseStatMods('ловкость +20%'), []);
   await denied('player cannot start session', () => C.startSession(cid));
   await C.updateCharacter(cid, chid, { status: 'draft' }, 'забирает');
   await C.updateCharacter(cid, chid, { notes: 'клятва' }, 'заметки');
+  await C.roll(cid, 57, 'проверка ловкости', chid, 'Гром');
+  await C.roll(cid, 3, '');
+  const rolls = await new Promise(ok => { const u = C.watchEvents(cid, rows => { u(); ok(rows.filter(e => e.kind === 'roll')); }); });
+  eq('dice rolls in journal', rolls.map(e => [e.roll, e.why, e.chid || null, e.byName]).sort((a, b) => a[0] - b[0]), [[3, '', null, 'Петя'], [57, 'проверка ловкости', chid, 'Петя']]);
 
   await C.signIn('gm@test', 'x');
   eq('gm back', C.uid(), gmUid);

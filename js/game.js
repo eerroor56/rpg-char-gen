@@ -71,6 +71,42 @@
     if (a && a.dataset && a.dataset.ui && G.el.contains(a)) App.keepFocus(a, paint); else paint();
   }
 
+  // ------------------------------------------------------------ бросок d100
+  // Честный бросок 1–100: криптографический генератор браузера, без перекоса (лишние значения отбрасываются).
+  function d100() {
+    const cr = window.crypto || window.msCrypto;
+    if (!cr || !cr.getRandomValues) return Math.floor(Math.random() * 100) + 1;
+    const a = new Uint32Array(1), lim = 4294967200;   // наибольшее кратное 100, меньшее 2^32
+    do { cr.getRandomValues(a); } while (a[0] >= lim);
+    return a[0] % 100 + 1;
+  }
+  // o: { cid } — бросок в журнал кампании; { cid, chid, chName } — за персонажа; {} — без записи
+  function diceBox(o) {
+    o = o || {};
+    const last = App.ui.gDiceLast, hist = App.ui.gDiceHist || [];
+    const fresh = last && Date.now() - last.ms < 900;
+    const hint = o.cid ? (o.chid ? `Бросок за «${esc(o.chName || 'персонажа')}» попадёт в журнал кампании — его увидят ГМ и игроки.` : 'Результат попадает в журнал кампании — его видят ГМ и все игроки.')
+      : 'Бросок никуда не записывается — в кампании результат попадает в журнал.';
+    return `<section class="card dice-box${o.compact ? ' compact' : ''}" data-o="${esc(JSON.stringify(o))}">
+      <h2>${App.DICE}<span>Бросок d100${o.chid ? ` за «${esc(o.chName || 'персонажа')}»` : ''}</span></h2>
+      <div class="dice-row">
+        <div class="dice-face${fresh ? ' fresh' : ''}${last ? '' : ' empty'}${last && (last.n === 1 || last.n === 100) ? ' edge' : ''}" aria-live="polite" aria-label="Результат броска">${last ? last.n : '—'}</div>
+        <div class="dice-ctl">
+          <input type="text" data-ui="gDiceWhy" data-ui-target="none" value="${esc(App.ui.gDiceWhy || '')}" maxlength="200" placeholder="за что бросок (необязательно)" aria-label="За что бросок">
+          <button type="button" class="btn primary" data-act="gRoll">Бросить d100</button>
+        </div>
+      </div>
+      ${hist.length > 1 ? `<p class="small dice-hist">Предыдущие: ${hist.slice(1, 9).map(h => `<span title="${esc(h.why || '')}">${h.n}</span>`).join(' ')}</p>` : ''}
+      <p class="muted small">${hint}</p></section>`;
+  }
+  function redrawDice(box) {
+    let o = {};
+    try { o = JSON.parse(box.dataset.o || '{}'); } catch (e) { /* noop */ }
+    const tmp = document.createElement('div');
+    tmp.innerHTML = diceBox(o);
+    box.replaceWith(tmp.firstElementChild);
+  }
+
   // ------------------------------------------------------------ вход
   function render(el) {
     G.el = el;
@@ -105,7 +141,8 @@
       <div class="card"><h2>Онлайн-игра ещё не подключена</h2>
         <p>Чтобы ГМ видел, кто какого персонажа создал, начислял опыт и вёл кампанию, сайту нужно бесплатное облачное хранилище Firebase (от Google).
         Владелец сайта настраивает его один раз, примерно за 15 минут: пошаговая инструкция — в файле <b>README.md</b>, раздел «Игра онлайн».</p>
-        <p class="muted">Пока можно собирать героев и вести их развитие во вкладке «Мои герои» — там всё хранится в этом браузере.</p></div></div>`;
+        <p class="muted">Пока можно собирать героев и вести их развитие во вкладке «Мои герои» — там всё хранится в этом браузере.</p></div>
+      ${diceBox({})}</div>`;
   }
 
   function initError() {
@@ -135,6 +172,7 @@
         </form>
       </div>
       ${C.mode === 'local' ? '<p class="muted small">Тестовый режим (?cloud=local): всё хранится в этом браузере, вход — по любому имени.</p>' : ''}
+      ${diceBox({})}
     </div>`;
   }
 
@@ -185,6 +223,7 @@
           <label>Код <input name="code" required autocomplete="off" maxlength="12" placeholder="ABC234" class="code-input"></label>
           <button type="submit" class="btn primary">Войти в кампанию</button><p class="lock-msg" role="alert"></p></form>
       </div>
+      ${diceBox({})}
     </div>`;
   }
 
@@ -284,7 +323,7 @@
       <p class="muted">${gm ? 'Вы ГМ этой кампании.' : `ГМ: ${esc(camp.gmName || '—')}.`} ${s.active ? `<b class="live">Идёт сессия ${s.n}.</b>` : ''}</p>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       <div class="camp-grid">
-        <div class="camp-main">${charsHtml}${feedHtml}</div>
+        <div class="camp-main">${charsHtml}${diceBox({ cid })}${feedHtml}</div>
         <aside class="camp-side">${sessionHtml}${inviteHtml}${membersHtml}${sessionsHtml}${privHtml}${settingsHtml}</aside>
       </div></div>`;
   }
@@ -305,9 +344,12 @@
     if (!events) return '<p class="muted small">Загружаю…</p>';
     if (!events.length) return '<p class="muted small">Записей пока нет.</p>';
     const alive = new Set((chars || []).map(x => x.id));
+    const body = e => (e.kind === 'roll' && typeof e.roll === 'number'
+      ? `<span class="roll-ev">${App.DICE}d100: <b class="roll-num${e.roll === 1 || e.roll === 100 ? ' edge' : ''}">${e.roll}</b>${e.why ? ` — ${esc(e.why)}` : ''}</span>`
+      : esc(e.text));
     return `<ol class="feed">${events.map(e => `<li class="ev-${esc(e.kind || 'note')}">
       <span class="muted small">${when(e.ms)}${e.session ? ` · <span class="tag">сессия ${e.session}</span>` : ''}</span>
-      <span>${e.chid && e.chName ? (alive.has(e.chid) ? `<a href="#game/${esc(cid)}/${esc(e.chid)}"><b>${esc(e.chName)}</b></a>: ` : `<b>${esc(e.chName)}</b>: `) : ''}${esc(e.text)}${e.kind === 'note' || e.kind === 'dev' ? ` <span class="muted small">— ${esc(e.byName || '')}</span>` : ''}</span></li>`).join('')}</ol>`;
+      <span>${e.chid && e.chName ? (alive.has(e.chid) ? `<a href="#game/${esc(cid)}/${esc(e.chid)}"><b>${esc(e.chName)}</b></a>: ` : `<b>${esc(e.chName)}</b>: `) : ''}${body(e)}${['note', 'dev', 'roll'].includes(e.kind) ? ` <span class="muted small">— ${esc(e.byName || '')}</span>` : ''}</span></li>`).join('')}</ol>`;
   }
 
   function deniedPage() {
@@ -371,7 +413,7 @@
       perms: { gm, owner },
       crumbs: `<a href="#game">Кампании</a> › <a href="#game/${esc(cid)}">${esc(camp.name)}</a>`,
       sub: `${race ? esc(cap(race.name)) + ', ' : ''}ур. ${fmt(v.res.level)} · игрок: ${esc(ch.ownerName || '—')}${owner ? ' (вы)' : ''} · <span class="tag st-${esc(st)}">${STATUS[st] || esc(st)}</span>`,
-      notice: (G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : '') + notice,
+      notice: (G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : '') + notice + ((gm || owner) && st === 'active' ? diceBox({ cid, chid, chName: ch.name || 'Безымянный герой', compact: true }) : ''),
       actions: acts.join(''),
       log: (events || []).map(e => ({ at: e.ms, text: e.text, byName: e.byName, session: e.session })),
       devLocked: ['draft', 'review'].includes(st) ? 'Развитие начнётся, когда ГМ утвердит персонажа: тогда появятся опыт, уровни, фракции, предметы и заметки.' : '',
@@ -388,6 +430,18 @@
   }
 
   Object.assign(App.actions, {
+    gRoll(b) {
+      const box = b.closest('.dice-box');
+      let o = {};
+      try { o = JSON.parse((box && box.dataset.o) || '{}'); } catch (e) { /* noop */ }
+      const n = d100();
+      const why = String(App.ui.gDiceWhy || '').trim().slice(0, 200);
+      App.ui.gDiceLast = { n, ms: Date.now() };
+      App.ui.gDiceHist = [{ n, why }].concat(App.ui.gDiceHist || []).slice(0, 12);
+      App.ui.gDiceWhy = '';
+      if (box) redrawDice(box);
+      if (o.cid && C.user) run(() => C.roll(o.cid, n, why, o.chid, o.chName));
+    },
     gGoogle() { run(() => C.google()); },
     gAuthMode() { App.ui.gAuthMode = App.ui.gAuthMode === 'signup' ? 'signin' : 'signup'; paint(); },
     gReset() {

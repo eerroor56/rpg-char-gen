@@ -315,6 +315,12 @@
       };
     },
     note(cid, text, chid, chName) { return A.batch([this.eventOp(cid, chid, chName, text, 'note')]); },
+    // бросок d100: текст — для старых версий сайта и журнала персонажа, число и «за что» — отдельными полями
+    roll(cid, n, why, chid, chName) {
+      const op = this.eventOp(cid, chid, chName, `Бросок d100: ${n}${why ? ' — ' + why : ''}`, 'roll');
+      Object.assign(op.data, { roll: n, why: why || '' });
+      return A.batch([op]);
+    },
 
     // ---- кампании
     async myCampaigns() {

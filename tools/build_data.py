@@ -445,6 +445,10 @@ def build_society(wb):
 # ---------------------------------------------------------------- creatures
 
 CREATURE_FILL = {"th9": "дракон", "th5": "босс", "th7": "легенда"}
+# Правки ГМ, которых пока нет в таблице: название существа → поля. Когда ГМ поправит таблицу, строку можно убрать.
+CREATURE_FIX = {
+    "меганерва": {"sz": "с"},   # размер «с — средний» вместо «м — малый»
+}
 
 
 def build_creatures(wb):
@@ -499,6 +503,8 @@ def build_creatures(wb):
             "cat": CREATURE_FILL.get(fill_key(ws.cell(r, 1))),
             "ab": abil,
         })
+    for c in out:
+        c.update(CREATURE_FIX.get(c["n"].lower(), {}))
     legend = [txt(ws.cell(r, 14).value) for r in range(2, 15) if txt(ws.cell(r, 14).value)]
     return out, upgrades, legend
 
@@ -860,6 +866,9 @@ def build_misc(wb):
 
 # ---------------------------------------------------------------- world & mechanics
 
+FIRST_REGION = "Кочиметэль"   # места в начале списка до первого выделенного региона (по словам ГМ)
+
+
 def build_world(wb):
     ws = wb["миростроение"]
     layers = []
@@ -868,7 +877,7 @@ def build_world(wb):
         if code:
             layers.append({"code": code, "name": txt(ws.cell(r, 2).value), "effect": txt(ws.cell(r, 3).value)})
     places = []
-    region = ""
+    region = FIRST_REGION
     for r in range(2, 20):
         a = txt(ws.cell(r, col("G")).value)
         if not a:

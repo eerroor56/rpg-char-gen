@@ -39,6 +39,7 @@
   }
 
   const units = x => typeof x === 'number' ? x.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
+  const optReq = x => { const r = R.reqText(x.req); return (r ? ', ' + r : '') + (typeof x.skill === 'number' ? `, ремесло ${x.skill}` : ''); };
   function sizeName(code) {
     const s = R.SIZES.find(x => x.id === code);
     return s ? s.name : code === 'наст' ? 'Настраиваемый' : (code || '—');
@@ -555,7 +556,7 @@
     const matOpts = kind => [{ v: '', t: '— материал —' }].concat(mats.map(m => ({ v: m.name, t: `${m.name} — ${kind === 'w' ? 'урон' : 'броня'} ${m[kind === 'w' ? 'dmg' : 'arm']}/ед.` })));
     // Оружие
     const groups = { 'ближний бой': 'Ближний бой', 'стрелковое': 'Стрелковое', 'магическое': 'Магическое (сфера, гримуар, жезл, посох)', 'молитвенное': 'Молитвенное', 'инструмент': 'Инструменты', 'снаряды': 'Метательное (расходник)' };
-    const wOpts = [{ v: '', t: '— без оружия —' }].concat(D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name)).map(w => ({ v: w.name, t: `${w.name} (${units(w.u)}+${units(w.un)} ед., ${w.reqRaw})`, group: groups[w.group] || w.group })));
+    const wOpts = [{ v: '', t: '— без оружия —' }].concat(D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name)).map(w => ({ v: w.name, t: `${w.name} (${units(w.u)}+${units(w.un)} ед.${optReq(w)})`, group: groups[w.group] || w.group })));
     html += `<div class="two-col gear"><section class="card"><h2>Оружие</h2>${flags.noWeapon ? `<p class="issue err">${esc(res.race.name)}: «не могут держать в руках оружия и инструменты».</p>` : ''}
       <div class="form-grid"><label>Тип ${select('weapon.name', wOpts, st.weapon.name)}</label><label>Материал ${select('weapon.mat', matOpts('w'), st.weapon.mat)}</label></div>
       ${g.weapon ? weaponCard(g.weapon, res) : ''}`;
@@ -567,8 +568,8 @@
     html += '</section>';
     // Броня
     const aOpts = [{ v: '', t: '— без брони —' }];
-    D.gear.armor.forEach(a => aOpts.push({ v: a.name, t: `${a.name} (${fmt(a.u)} ед., ${a.reqRaw}, штраф ловк. ${a.pen})`, group: { 'лёгкая': 'Лёгкая', 'средняя': 'Средняя', 'тяжёлая': 'Тяжёлая', 'джаггернаут': 'Джаггернаутская', 'одежда': 'Одежда' }[a.cls] }));
-    D.gear.shields.filter(s => !s.upgrade).forEach(s => aOpts.push({ v: s.name, t: `${s.name} (${fmt(s.u)} ед., ${s.reqRaw}, штраф ловк. ${s.pen})`, group: 'Щиты' }));
+    D.gear.armor.forEach(a => aOpts.push({ v: a.name, t: `${a.name} (${fmt(a.u)} ед.${optReq(a)}, штраф ловк. ${a.pen})`, group: { 'лёгкая': 'Лёгкая', 'средняя': 'Средняя', 'тяжёлая': 'Тяжёлая', 'джаггернаут': 'Джаггернаутская', 'одежда': 'Одежда' }[a.cls] }));
+    D.gear.shields.filter(s => !s.upgrade).forEach(s => aOpts.push({ v: s.name, t: `${s.name} (${fmt(s.u)} ед.${optReq(s)}, штраф ловк. ${s.pen})`, group: 'Щиты' }));
     html += `<section class="card"><h2>Элемент брони</h2>
       <div class="form-grid"><label>Тип ${select('armor.name', aOpts, st.armor.name)}</label><label>Материал ${select('armor.mat', matOpts('a'), st.armor.mat)}</label></div>
       ${g.armor ? armorCard(g.armor, res) : ''}</section></div>`;
@@ -605,7 +606,7 @@
       ${kv('Дальность', esc(w.w.range || '—'))}
       ${kv('Требования', reqList(w.req))}
       ${kv('Гнёзда для камней / руки', `${w.w.slots ?? '—'} / ${w.w.hands ?? '—'}`)}
-      ${kv('Ур. навыка (ремесло)', w.w.skill ?? '—')}
+      ${kv('Ремесло, чтобы изготовить самому', typeof w.w.skill === 'number' ? `ур. ${w.w.skill}` : '—')}
     </dl>
     <ul class="fx-list">${w.w.fx ? `<li><b>Свойство:</b> ${esc(w.w.fx)}</li>` : ''}${effectLine(w.matEffect, 'Материал в оружии')}</ul>`;
   }
@@ -618,7 +619,7 @@
       ${kv('Штраф ловкости', `${a.pen}${a.penNote ? ` <span class="muted">(${esc(a.penNote)})</span>` : ''}`)}
       ${kv('Требования', reqList(a.req))}
       ${kv('Гнёзда для камней', a.a.slots ?? '—')}
-      ${kv('Ур. навыка (ремесло)', a.a.skill ?? '—')}
+      ${kv('Ремесло, чтобы изготовить самому', typeof a.a.skill === 'number' ? `ур. ${a.a.skill}` : '—')}
     </dl>
     <ul class="fx-list">${a.a.fx ? `<li>${esc(a.a.fx)}</li>` : ''}${effectLine(a.matEffect, 'Материал в броне')}${a.statFx && (a.statFx.l || a.statFx.hpRegen) ? `<li class="muted">Учтено: ${a.statFx.l ? `ловкость ${signed(a.statFx.l)}` : ''} ${a.statFx.hpRegen ? `реген ХП ${signed(a.statFx.hpRegen)}` : ''}</li>` : ''}</ul>`;
   }

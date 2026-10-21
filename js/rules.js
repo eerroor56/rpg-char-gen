@@ -16,6 +16,9 @@
   const STAT_NAMES = { t: 'Тело', d: 'Дух', s: 'Сила', i: 'Интеллект', l: 'Ловкость' };
   const STAT_SHORT = { t: 'Т', d: 'Д', s: 'С', i: 'И', l: 'Л' };
   const REQ_KEY = { 'т': 't', 'д': 'd', 'с': 's', 'и': 'i', 'л': 'l' };
+  // «2л, 25с / 13» в таблице: до дроби — характеристики (→ «Л 2, С 25»), после — уровень навыка «ремесло»,
+  // нужный, чтобы игрок изготовил предмет сам (item.skill)
+  const reqText = req => Object.entries(req || {}).map(([k, v]) => `${STAT_SHORT[REQ_KEY[k]] || k.toUpperCase()} ${String(v).replace('.', ',')}`).join(', ');
 
   // Возраст (лист «настройка персонажа», Этап 1)
   const AGES = [
@@ -1133,7 +1136,7 @@
     init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
-    sizeUnits, scaledEffect, multiplyEffect, reqCheck, armorStatEffects, REQ_PENALTY, ri,
+    sizeUnits, scaledEffect, multiplyEffect, reqCheck, reqText, armorStatEffects, REQ_PENALTY, ri,
     get index() { return IX; }
   };
 })();
