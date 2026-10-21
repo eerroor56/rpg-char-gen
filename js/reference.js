@@ -157,6 +157,7 @@
     { id: 'world', title: 'Мир', build() {
       const W = D.world;
       const blocks = [
+        ...(window.WorldMap && window.WORLD_MAP ? [{ custom: () => window.WorldMap.html() }] : []),
         { title: 'Уровни мира', note: 'На эти коды ссылается колонка «уровень обитания» рас и существ.', cols: ['Код', 'Название', 'Эффект / условие'], rows: W.layers.map(l => row([`<b>${esc(l.code)}</b>`, esc(l.name), esc(l.effect)])) },
         { title: 'Улучшенная география', cols: ['Место', 'Эффект на монстров', 'Эффект на игрока'], rows: W.places.filter(p => !p.isRegion).map(p => row([esc(p.name), esc(p.monsters), esc(p.players)], '', p.region ? cap(p.region) : 'Вне регионов')) }
       ];
@@ -213,6 +214,7 @@
     };
     const html = blocks.map((b, bi) => {
       const key = cur.id + ':' + bi;
+      if (b.custom) return q ? '' : b.custom();
       if (b.grid) {
         return `<section class="ref-block"><h2>${esc(b.title)}</h2>${b.note ? `<p class="muted small">${App.sentCap(b.note)}</p>` : ''}<div class="tbl-wrap"><table class="tbl grid">${b.grid.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`;
       }
@@ -234,6 +236,7 @@
       return `<section class="ref-block">${head}${table(b, rows, key)}</section>`;
     }).join('');
     box.innerHTML = html || `<div class="card empty">По запросу «${esc(App.ui.refQ)}» в разделе ничего нет.</div>`;
+    if (window.WorldMap) window.WorldMap.mount(box);
   }
 
   Object.assign(App.actions, {
