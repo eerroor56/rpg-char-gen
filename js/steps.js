@@ -38,9 +38,10 @@
       <tbody><tr>${R.STATS.map(k => `<td>${fmt(o[k])}</td>`).join('')}${o.lvl !== undefined ? `<td>${fmt(o.lvl)}</td>` : ''}</tr></tbody></table>`;
   }
 
+  const units = x => typeof x === 'number' ? x.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
   function sizeName(code) {
     const s = R.SIZES.find(x => x.id === code);
-    return s ? s.name : (code || '—');
+    return s ? s.name : code === 'наст' ? 'Настраиваемый' : (code || '—');
   }
 
   function groupName(row) {
@@ -206,11 +207,11 @@
     const a = race.ancestor;
     if (a && a.demon) {
       const who = rule.kind === 'god' ? 'боге' : 'демоне';
-      html += `<div class="anc"><p><strong>${esc(a.name)}</strong> — стартовый магический символ: <strong>${esc(a.element || 'ещё не задан ГМ')}</strong></p>
+      html += `<div class="anc">${App.entityPic(a.name, 'anc-pic')}<p><strong>${esc(cap(a.name))}</strong> — стартовый магический символ: <strong>${esc(a.element || 'ещё не задан ГМ')}</strong></p>
         <p class="muted small">О ${who} (лист «Социум»): ${esc(a.demon.bonus)}. От ${rule.kind === 'god' ? 'бога' : 'демона'} при создании берётся только символ; остальное — дары веры, их получают в игре.</p></div>`;
     } else if (a && a.creature) {
       const c = a.creature;
-      html += `<div class="anc"><p><strong>${esc(c.n)}</strong> ${c.m.map(m => tag(m)).join('')} — ур. ${fmt(R.roundLevel(c.lvl))}, ${esc(sizeName(c.sz).toLowerCase())}, ${esc(c.ch)}</p>${statRow(Object.assign({}, c, { lvl: R.roundLevel(c.lvl) }))}`;
+      html += `<div class="anc">${App.entityPic(c.n, 'anc-pic')}<p><strong>${esc(cap(c.n))}</strong> ${c.m.map(m => tag(m)).join('')} — ур. ${fmt(R.roundLevel(c.lvl))}, ${esc(sizeName(c.sz).toLowerCase())}, ${esc(c.ch)}</p>${statRow(Object.assign({}, c, { lvl: R.roundLevel(c.lvl) }))}`;
       if (a.companion) html += `<p class="muted small">Призрак — отдельный персонаж: его статы и навыки не прибавляются к вашим.</p>`;
       if (a.add) html += `<p>Прибавка +${rule.pct}%: ${R.STATS.map(k => `${R.STAT_SHORT[k]} ${signed(a.add[k])}`).join(', ')}</p>`;
       if (a.symbol) html += `<p>Знак дракона рода: <strong>${esc(a.symbol)}</strong></p>`;
@@ -227,7 +228,7 @@
       } else html += `<p class="muted small">Особых навыков у ${a.companion ? 'этого существа' : 'предка'} в таблице нет.</p>`;
       html += '</div>';
     } else if (a && a.race) {
-      html += `<div class="anc"><p>Половина бонуса расы «${esc(cap(a.race.name))}»: ${esc(a.race.bonus)}</p></div>`;
+      html += `<div class="anc">${App.portrait([a.race], 'anc-pic')}<p>Половина бонуса расы «${esc(cap(a.race.name))}»: ${esc(a.race.bonus)}</p></div>`;
     } else if (st.ancestor) {
       html += '<p class="issue warn">Существо с таким названием не найдено среди возможных предков — выберите из подсказок.</p>';
     }
@@ -505,7 +506,7 @@
       ${item('Реген МП', fmt(d.mpRegen), d.mpRegenSrc.join(', '))}
       ${item('ОД в ход', `${R.odText(d)}${d.odMod ? ` <span class="muted small">= ${d.odTotal}</span>` : ''}`, `база ${d.odBase}; ` + d.odSrc.join(', '), d.odCond.length ? 'Условно: ' + esc(d.odCond.map(f => signed(f.v)).join(', ')) + ' (в воде / на суше и т.п.)' : '')}
       ${item('Уворот', fmt(d.dodge), 'ловкость − штраф брони ± материал')}
-      ${item('Слоты', `${fmt(d.slotsUsed)} / ${fmt(d.slots)}`, 'сила + сумки; занято снаряжением')}
+      ${item('Слоты', `${fmt(d.slotsUsed)} / ${fmt(d.slots)}`, 'сила + сумки; каждый предмет — 1 слот')}
       ${item('Зоркость', fmt(d.zor), 'база 50 + талант + бонусы')}
       ${item('Харизма', fmt(d.charisma), 'талант + бонусы; 0,5% скидки за очко')}
       ${item('Привлекательность', signed(d.attr), d.attrSrc.join(', ') || 'нет модификаторов', '±25 от характера НПС, ±25 за мировоззрение, +15 своя раса, +10 религия, +10 фракция')}
@@ -554,7 +555,7 @@
     const matOpts = kind => [{ v: '', t: '— материал —' }].concat(mats.map(m => ({ v: m.name, t: `${m.name} — ${kind === 'w' ? 'урон' : 'броня'} ${m[kind === 'w' ? 'dmg' : 'arm']}/ед.` })));
     // Оружие
     const groups = { 'ближний бой': 'Ближний бой', 'стрелковое': 'Стрелковое', 'магическое': 'Магическое (сфера, гримуар, жезл, посох)', 'молитвенное': 'Молитвенное', 'инструмент': 'Инструменты', 'снаряды': 'Метательное (расходник)' };
-    const wOpts = [{ v: '', t: '— без оружия —' }].concat(D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name)).map(w => ({ v: w.name, t: `${w.name} (${w.u}+${w.un} ед., ${w.reqRaw})`, group: groups[w.group] || w.group })));
+    const wOpts = [{ v: '', t: '— без оружия —' }].concat(D.gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name)).map(w => ({ v: w.name, t: `${w.name} (${units(w.u)}+${units(w.un)} ед., ${w.reqRaw})`, group: groups[w.group] || w.group })));
     html += `<div class="two-col gear"><section class="card"><h2>Оружие</h2>${flags.noWeapon ? `<p class="issue err">${esc(res.race.name)}: «не могут держать в руках оружия и инструменты».</p>` : ''}
       <div class="form-grid"><label>Тип ${select('weapon.name', wOpts, st.weapon.name)}</label><label>Материал ${select('weapon.mat', matOpts('w'), st.weapon.mat)}</label></div>
       ${g.weapon ? weaponCard(g.weapon, res) : ''}`;
@@ -566,8 +567,8 @@
     html += '</section>';
     // Броня
     const aOpts = [{ v: '', t: '— без брони —' }];
-    D.gear.armor.forEach(a => aOpts.push({ v: a.name, t: `${a.name} (${a.u} ед., ${a.reqRaw}, штраф ловк. ${a.pen})`, group: { 'лёгкая': 'Лёгкая', 'средняя': 'Средняя', 'тяжёлая': 'Тяжёлая', 'джаггернаут': 'Джаггернаутская', 'одежда': 'Одежда' }[a.cls] }));
-    D.gear.shields.filter(s => !s.upgrade).forEach(s => aOpts.push({ v: s.name, t: `${s.name} (${s.u} ед., ${s.reqRaw}, штраф ловк. ${s.pen})`, group: 'Щиты' }));
+    D.gear.armor.forEach(a => aOpts.push({ v: a.name, t: `${a.name} (${fmt(a.u)} ед., ${a.reqRaw}, штраф ловк. ${a.pen})`, group: { 'лёгкая': 'Лёгкая', 'средняя': 'Средняя', 'тяжёлая': 'Тяжёлая', 'джаггернаут': 'Джаггернаутская', 'одежда': 'Одежда' }[a.cls] }));
+    D.gear.shields.filter(s => !s.upgrade).forEach(s => aOpts.push({ v: s.name, t: `${s.name} (${fmt(s.u)} ед., ${s.reqRaw}, штраф ловк. ${s.pen})`, group: 'Щиты' }));
     html += `<section class="card"><h2>Элемент брони</h2>
       <div class="form-grid"><label>Тип ${select('armor.name', aOpts, st.armor.name)}</label><label>Материал ${select('armor.mat', matOpts('a'), st.armor.mat)}</label></div>
       ${g.armor ? armorCard(g.armor, res) : ''}</section></div>`;
@@ -576,7 +577,7 @@
     for (let i = 0; i < C.START_ITEMS; i++) html += itemSlot(st, i);
     html += `</div>
       <label>Прочие мелочи <textarea data-bind="misc" rows="2" placeholder="Верёвка, огниво, фляга…">${esc(st.misc)}</textarea></label></section>`;
-    html += `<p class="small">Слоты инвентаря: занято ${fmt(res.der.slotsUsed)} из ${fmt(res.der.slots)} (сила ${fmt(res.stats.s)}${g.bagSlots ? ` + сумки ${g.bagSlots}` : ''}). Рук: ${res.hands}.</p>`;
+    html += `<p class="small">Слоты инвентаря: занято ${fmt(res.der.slotsUsed)} из ${fmt(res.der.slots)} (сила ${fmt(res.stats.s)}${g.bagSlots ? ` + сумки ${g.bagSlots}` : ''}; каждый предмет — 1 слот, сумки места не занимают). Рук: ${res.hands}.</p>`;
     return html;
   }
 
@@ -596,14 +597,14 @@
     const k = w.k;
     return `<dl class="kv-list compact">
       ${kv('Материал', w.m ? `${esc(w.m.name)}: ${w.m.dmg} урона за ед.` : '—')}
-      ${kv('Единиц материала', `всего <strong>${fmt(w.unitsTotal)}</strong>: ${fmt(w.units)} влияют на урон${k !== 1 ? ` <span class="muted">(${fmt(w.w.u)} × ${fmt(k)} = ${fmt(Math.round(w.w.u * k * 100) / 100)} → ${fmt(w.units)})</span>` : ''} + ${fmt(w.unitsNon)} не влияют`)}
+      ${kv('Единиц материала', `всего <strong>${fmt(w.unitsTotal)}</strong>: ${fmt(w.units)} влияют на урон${k !== 1 ? ` <span class="muted">(${units(w.w.u)} × ${fmt(k)} = ${fmt(Math.round(w.w.u * k * 100) / 100)} → ${fmt(w.units)})</span>` : ''} + ${fmt(w.unitsNon)} не влияют`)}
       ${kv('Урон', w.damage !== undefined ? `<strong>${fmt(w.damageTotal)}</strong>${w.mul ? ` <span class="muted">(×${w.mul.v} — ${esc(w.mul.src)})</span>` : ''}${w.bonus.length ? ` <span class="muted">(${fmt(w.damage)} ${w.bonus.map(b => `${b.kind === 'урон' ? '+' + b.v : ''} ${b.kind === 'урон' ? esc(b.src) : ''}`).join(' ')})</span>` : ''}` : '—')}
       ${w.bonus.filter(b => b.kind === 'точность').map(b => kv('Точность', `+${b.v} (${esc(b.src)})`)).join('')}
       ${w.armorFromNon !== undefined ? kv('Броня катара', fmt(w.armorFromNon)) : ''}
       ${kv('Тип урона', esc(w.w.dt || '—'))}
       ${kv('Дальность', esc(w.w.range || '—'))}
       ${kv('Требования', reqList(w.req))}
-      ${kv('Слоты / руки', `${w.w.slots ?? '—'} / ${w.w.hands ?? '—'}`)}
+      ${kv('Гнёзда для камней / руки', `${w.w.slots ?? '—'} / ${w.w.hands ?? '—'}`)}
       ${kv('Ур. навыка (ремесло)', w.w.skill ?? '—')}
     </dl>
     <ul class="fx-list">${w.w.fx ? `<li><b>Свойство:</b> ${esc(w.w.fx)}</li>` : ''}${effectLine(w.matEffect, 'Материал в оружии')}</ul>`;
@@ -616,7 +617,7 @@
       ${kv('Броня', a.armor !== undefined ? `<strong>${fmt(a.armor)}</strong>` : '—')}
       ${kv('Штраф ловкости', `${a.pen}${a.penNote ? ` <span class="muted">(${esc(a.penNote)})</span>` : ''}`)}
       ${kv('Требования', reqList(a.req))}
-      ${kv('Слоты', a.a.slots ?? '—')}
+      ${kv('Гнёзда для камней', a.a.slots ?? '—')}
       ${kv('Ур. навыка (ремесло)', a.a.skill ?? '—')}
     </dl>
     <ul class="fx-list">${a.a.fx ? `<li>${esc(a.a.fx)}</li>` : ''}${effectLine(a.matEffect, 'Материал в броне')}${a.statFx && (a.statFx.l || a.statFx.hpRegen) ? `<li class="muted">Учтено: ${a.statFx.l ? `ловкость ${signed(a.statFx.l)}` : ''} ${a.statFx.hpRegen ? `реген ХП ${signed(a.statFx.hpRegen)}` : ''}</li>` : ''}</ul>`;

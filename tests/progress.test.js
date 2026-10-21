@@ -112,14 +112,22 @@ c = K.compute({ kind: 'armor', base: 'тяжёлая кирса', craft: { parts
 eq('mixed armor 8×30 + 8×100', c.armor, 1040);
 eq('mithril halves armour agility penalty', c.pen, 5);
 eq('cuirass goes on body', c.cat, 'body');
-c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3 } }, { sizeK: 1.4, stats: ctxN.stats });
-eq('giant needs 3 × 1,4 → 4 units', c.needDmg, 4);
+c = K.compute({ kind: 'weapon', base: 'длинный меч', size: 'г', craft: { parts: s3 } }, { sizeId: 'н', stats: ctxN.stats });
+eq('giant-sized sword needs 3 × 1,4 → 4 units', c.needDmg, 4);
+eq('size mismatch noted', c.notes.some(n => /рост/.test(n)), true);
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3 } }, { sizeId: 'г', stats: ctxN.stats });
+eq('items do not follow the wearer size', c.needDmg, 3);
+eq('one item — one inventory slot', c.slots, 1);
+eq('table «slots» = gem sockets', c.sockets, 2);
+c = K.compute({ kind: 'weapon', base: 'длинный меч', craft: { parts: s3, inlays: ['рубин', 'сапфир', 'алмаз'] } }, ctxN);
+eq('too many gems warned', c.warnings.some(w => /гнёзд/.test(w)), true);
+eq('bag takes no slot', K.compute({ kind: 'item', name: 'малая сумка' }, ctxN).slots, 0);
 // стартовое снаряжение в инвентаре = расчёт мастера
 let mism = 0;
 for (let i = 0; i < 200; i++) {
   const h = RH.full(), r0 = R.compute(h);
   const inv = K.startInventory(h, r0);
-  const cx = { sizeK: r0.size ? r0.size.k : 1, stats: r0.stats, halfReq: r0.race.id === 'гомункулы', race: r0.race, oniClan: h.oniClan, flags: r0.flags };
+  const cx = { sizeId: r0.size ? r0.size.id : 'н', stats: r0.stats, halfReq: r0.race.id === 'гомункулы', race: r0.race, oniClan: h.oniClan, flags: r0.flags };
   const e2 = K.equipStats(inv.items, inv.equip, cx, r0.hands);
   const w = e2.weapons.find(x => x.kind === 'weapon');
   if (r0.gear.weapon && r0.gear.weapon.m && (!w || w.damage !== r0.gear.weapon.damageTotal)) mism++;

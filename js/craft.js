@@ -101,21 +101,28 @@
   }
 
   // ------------------------------------------------------------ расчёт кастомного предмета
-  // ctx: { sizeK, stats, halfReq, race, oniClan, creatures }
+  // ctx: { sizeId (рост персонажа), stats, halfReq, race, oniClan, creatures }
+  // У предмета свой размер (item.size): ГМ может выдать гигантскому дракону копьё мышиного размера —
+  // под рост персонажа предмет сам не подстраивается. По умолчанию — нормальный.
+  const sizeOf = id => R.SIZES.find(x => x.id === id) || R.SIZES.find(x => x.id === 'н');
+  const isBag = it => /сумка/i.test(it.name || '');
+  // «1 предмет занимает 1 слот» (стопка одинаковых — тоже 1, см. INVENTORY в config.js); сумки места не занимают
+  const slotsOf = it => (isBag(it) || it.slots === 0 ? 0 : 1);
   function compute(item, ctx) {
     ctx = ctx || {};
-    const k = ctx.sizeK || 1;
+    const size = sizeOf(item.size);
+    const k = size.k;
     const kind = item.kind;
     const cr = item.craft || {};
     const base = baseOf(kind, item.base || item.name);
     const out = { item, kind, base, cat: slotCat(item), effects: [], warnings: [], notes: [], glyphs: [],
-      damage: null, armor: null, pen: 0, req: [], statFx: { l: 0, hpRegen: 0 }, hands: 0, slots: 0, mult: [], bonus: [] };
+      damage: null, armor: null, pen: 0, req: [], statFx: { l: 0, hpRegen: 0 }, hands: 0, slots: slotsOf(item), sockets: 0, mult: [], bonus: [], size };
     if (!CRAFTABLE.includes(kind)) {
-      out.slots = num(item.slots);
       if (item.effect) out.effects.push({ src: KIND_NAMES[kind] || 'эффект', text: item.effect });
       return out;
     }
-    if (!base) { out.warnings.push('Неизвестная основа предмета.'); out.slots = num(item.slots); return out; }
+    if (ctx.sizeId && size.id !== ctx.sizeId) out.notes.push(`Сделан под рост «${size.name.toLowerCase()}», а персонаж — «${sizeOf(ctx.sizeId).name.toLowerCase()}».`);
+    if (!base) { out.warnings.push('Неизвестная основа предмета.'); return out; }
     const isWeapon = kind === 'weapon' || kind === 'ammo';
     const isArmor = kind === 'armor' || kind === 'shield' || kind === 'prosthesis';
     const parts = (cr.parts || []).filter(p => p && p.mat && num(p.u) > 0).map(p => ({ mat: material(p.mat), name: p.mat, u: r2(num(p.u)), role: p.role === 'non' ? 'non' : 'dmg' }));
@@ -221,7 +228,10 @@
     const coat = (cr.coat || []).filter(Boolean);
     if (coat.length > CR.COAT_MAX) out.warnings.push(`Напылений ${coat.length}: обычно доступно ${CR.COAT_MAX} (больше — только с особыми бонусами).`);
     coat.forEach(n => { const m = material(n); if (!m) { out.warnings.push(`Неизвестный материал напыления «${n}».`); return; } const e = effText(m[field === 'ej' ? 'ew' : field], 1); if (e) out.effects.push({ src: `напыление: ${m.name}`, text: e.t }); });
-    // инкрустация и украшения
+    // инкрустация и украшения: «слоты» в таблице оружия и брони — гнёзда для драгоценных камней
+    out.sockets = num(base.slots);
+    const inl = (cr.inlays || []).filter(Boolean);
+    if (inl.length > out.sockets) out.warnings.push(`Камней ${inl.length}, а гнёзд у предмета ${out.sockets}.`);
     (cr.inlays || []).filter(Boolean).forEach(n => { const m = material(n); if (!m) { out.warnings.push(`Неизвестный камень «${n}».`); return; } if (m.ej && m.ej.t) out.effects.push({ src: `инкрустация: ${m.name}`, text: enrich ? (R.multiplyEffect(m.ej.t, 2) || m.ej.t + ' (×2)') : m.ej.t }); });
     // модули и модель
     const crystalItem = parts.length > 0 && parts.every(p => p.mat && isCrystal(p.mat.name));
@@ -257,7 +267,6 @@
       const se = R.armorStatEffects((x.m.ea || {}).t, (x.m.ea || {}).sc === 'за единицу', x.u);
       return { l: a.l + se.l, hpRegen: a.hpRegen + se.hpRegen };
     }, { l: 0, hpRegen: 0 }) : { l: 0, hpRegen: 0 };
-    out.slots = item.slots !== undefined && item.slots !== '' && item.slots !== null ? num(item.slots) : (base.slots || 0);
     out.hands = kind === 'weapon' ? (base.hands || 1) : kind === 'shield' || kind === 'instrument' ? 1 : 0;
     out.skill = base.skill;
     return out;
@@ -273,21 +282,22 @@
   function startInventory(state, res0) {
     const items = [], equip = {};
     const g = res0.gear || {};
+    const size = res0.size ? res0.size.id : 'н';   // стартовое снаряжение сделано под рост персонажа
     if (g.weapon && g.weapon.m) {
       const w = g.weapon;
       const parts = [{ mat: w.m.name, u: w.units, role: 'dmg' }];
       if (w.unitsNon) parts.push({ mat: w.m.name, u: w.unitsNon, role: 'non' });
-      items.push({ id: 'start-weapon', kind: 'weapon', base: w.w.name, name: `${w.w.name} (${w.m.name})`, qty: 1, src: 'старт', craft: { parts } });
+      items.push({ id: 'start-weapon', kind: 'weapon', base: w.w.name, name: `${w.w.name} (${w.m.name})`, qty: 1, size, src: 'старт', craft: { parts } });
       equip.hand1 = 'start-weapon';
       if ((w.w.hands || 1) > 1) for (let i = 2; i <= w.w.hands; i++) equip['hand' + i] = 'start-weapon';
     }
     if (g.ammo && g.ammo.m) {
-      items.push({ id: 'start-ammo', kind: 'ammo', base: g.ammo.a.name, name: `${g.ammo.a.name} (${g.ammo.m.name})`, qty: 1, src: 'старт', craft: { parts: [{ mat: g.ammo.m.name, u: g.ammo.units, role: 'dmg' }] } });
+      items.push({ id: 'start-ammo', kind: 'ammo', base: g.ammo.a.name, name: `${g.ammo.a.name} (${g.ammo.m.name})`, qty: 1, size, src: 'старт', craft: { parts: [{ mat: g.ammo.m.name, u: g.ammo.units, role: 'dmg' }] } });
       equip.ammo = 'start-ammo';
     }
     if (g.armor && g.armor.m) {
       const a = g.armor;
-      const it = { id: 'start-armor', kind: a.isShield ? 'shield' : 'armor', base: a.a.name, name: `${a.a.name} (${a.m.name})`, qty: 1, src: 'старт', craft: { parts: [{ mat: a.m.name, u: a.units, role: 'non' }] } };
+      const it = { id: 'start-armor', kind: a.isShield ? 'shield' : 'armor', base: a.a.name, name: `${a.a.name} (${a.m.name})`, qty: 1, size, src: 'старт', craft: { parts: [{ mat: a.m.name, u: a.units, role: 'non' }] } };
       items.push(it);
       if (a.isShield) { const free = Object.keys(equip).filter(k => k.startsWith('hand')).length + 1; equip['hand' + free] = 'start-armor'; }
       else equip[slotCat(it)] = 'start-armor';
@@ -298,7 +308,7 @@
       else if (x.kind === 'food') { const f = (D().alchemy.food || []).find(y => norm(y.name) === norm(x.name)); if (f) items.push({ id: 'start-item-' + i, kind: 'food', name: f.name, effect: f.e.join(', '), qty: 1, src: 'старт' }); }
       else if (x.kind === 'potion' && x.effect) items.push({ id: 'start-item-' + i, kind: 'potion', name: `Зелье: ${x.effect}${x.note ? ' — ' + x.note : ''}`, effect: `${+x.power || 0}е`, qty: 1, src: 'старт' });
     });
-    if (state.misc) items.push({ id: 'start-misc', kind: 'item', name: 'Прочие мелочи', effect: state.misc, qty: 1, src: 'старт' });
+    if (state.misc) items.push({ id: 'start-misc', kind: 'item', name: 'Прочие мелочи', effect: state.misc, qty: 1, src: 'старт', slots: 0 });
     return { items, equip };
   }
 
@@ -341,11 +351,11 @@
       (calc.req || []).filter(r => !r.ok).forEach(r => out.warnings.push(`«${calc.item.name}»: не хватает ${R.STAT_NAMES[r.stat].toLowerCase()} (${fmt(r.have)} из ${r.need}) — ${R.REQ_PENALTY[r.stat]}.`));
     });
     // слоты рюкзака: снаряжение — по таблице, остальное — сколько указал ГМ; сумки добавляют места
+    const perPiece = !(C.INVENTORY && C.INVENTORY.STACK_ONE_SLOT);
     items.forEach(it => {
       const qty = Math.max(1, Math.floor(num(it.qty) || 1));
-      const calc = worn.get(it.id) || (CRAFTABLE.includes(it.kind) ? compute(it, ctx) : null);
-      out.slotsUsed += (calc ? calc.slots : num(it.slots)) * qty;
-      if (/сумка/i.test(it.name)) out.bagSlots += (parseInt(String(it.effect || '').replace(/\D/g, ''), 10) || 0) * qty;
+      out.slotsUsed += slotsOf(it) * (perPiece ? qty : 1);
+      if (isBag(it)) out.bagSlots += (parseInt(String(it.effect || '').replace(/\D/g, ''), 10) || 0) * qty;
     });
     // занятость рук
     const handIds = slots.filter(s => s.cat === 'hand').map(s => (equip || {})[s.id]).filter(Boolean);

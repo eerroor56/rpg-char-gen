@@ -130,11 +130,11 @@
     // рюкзак
     const q = norm(App.ui.invQ || '');
     const bag = inv.items.filter(x => !worn.has(x.id) && (!q || norm(x.name).includes(q)));
-    html += `<section class="dev-card bag-card"><div class="sec-head"><h2>Рюкзак</h2><span class="muted small">занято слотов ${fmt(v.res.der.slotsUsed)} из ${fmt(v.res.der.slots)} (сила${eq.bagSlots ? ` + сумки ${eq.bagSlots}` : ''})</span></div>
+    html += `<section class="dev-card bag-card"><div class="sec-head"><h2>Рюкзак</h2><span class="muted small">занято слотов ${fmt(v.res.der.slotsUsed)} из ${fmt(v.res.der.slots)} (сила${eq.bagSlots ? ` + сумки ${eq.bagSlots}` : ''}; каждый предмет — 1 слот)</span></div>
       ${inv.items.length > 8 ? `<input type="search" data-ui="invQ" data-ui-target="dev" value="${esc(App.ui.invQ || '')}" placeholder="Поиск в рюкзаке" aria-label="Поиск в рюкзаке">` : ''}
       ${bag.length ? `<ul class="bag">${bag.map(it => {
         const c = K.compute(it, v.ctx);
-        const nums = [c.damage !== null && c.damage !== undefined ? `урон ${fmt(c.damage)}` : '', c.armor !== null && c.armor !== undefined ? `броня ${fmt(c.armor)}` : '', c.slots ? `слотов ${fmt(c.slots)}` : ''].filter(Boolean).join(' · ');
+        const nums = [c.damage !== null && c.damage !== undefined ? `урон ${fmt(c.damage)}` : '', c.armor !== null && c.armor !== undefined ? `броня ${fmt(c.armor)}` : ''].filter(Boolean).join(' · ');
         return `<li class="${sel && sel.id === it.id ? 'is-sel' : ''}"><button type="button" class="linklike bag-name" data-act="invSel" data-v="${esc(it.id)}">${esc(it.name)}</button>${(+it.qty || 1) > 1 ? ` <b>×${+it.qty}</b>` : ''}
           <span class="tag">${esc(K.KIND_NAMES[it.kind] || it.kind)}</span>${it.src ? ` <span class="muted small">${esc(it.src)}</span>` : ''}${nums ? ` <span class="muted small">${nums}</span>` : ''}${c.warnings.length ? ' <span class="bad-text small" title="есть замечания">!</span>' : ''}
           ${canEquip && c.cat ? `<button type="button" class="btn small" data-act="invEquip" data-v="${esc(it.id)}">Надеть</button>` : ''}</li>`;
@@ -162,7 +162,8 @@
         ${kv('Требования', reqs)}
         ${kv('Руки', c.hands || '')}
         ${kv('Штраф ловкости', c.pen || '')}
-        ${kv('Слоты', c.slots || '')}
+        ${kv('Гнёзда для камней', K.CRAFTABLE.includes(it.kind) && c.base ? `${c.sockets}${((it.craft || {}).inlays || []).length ? `, занято ${((it.craft || {}).inlays || []).length}` : ''}` : '')}
+        ${kv('Размер', K.CRAFTABLE.includes(it.kind) ? esc(c.size.name) : '')}
         ${kv('Заточка', c.sharpen ? `${c.sharpen} из ${C.CRAFT.SHARPEN_MAX}` : '')}
         ${kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
@@ -203,12 +204,12 @@
 
   // ------------------------------------------------------------ выдача предметов (ГМ)
   function blankDraft(kind) {
-    return { kind: kind || 'weapon', base: '', name: '', qty: 1, note: '', slots: '',
+    return { kind: kind || 'weapon', base: '', name: '', qty: 1, note: '', size: 'н',
       craft: { parts: [], coat: [], sharpen: 0, modules: [], model: '', glyphs: [], inlays: [], quality: 1, enrich: false, soul: { creature: '', mode: '', abilities: [] }, extra: '' } };
   }
   // при выборе основы — строки материала на все нужные единицы
   function fillParts(d, v) {
-    const it = { kind: d.kind, base: d.base, craft: { parts: [] } };
+    const it = { kind: d.kind, base: d.base, size: d.size, craft: { parts: [] } };
     const c = K.compute(it, v.ctx);
     const mat = ((d.craft.parts || [])[0] || {}).mat || '';
     d.craft.parts = [];
@@ -248,7 +249,9 @@
         <button type="button" class="linklike small" data-act="invPartDel" data-v="${i}">убрать</button></div>`).join('');
     let html = `<div class="form-grid">
       <label>Вид <select data-change="invKind">${kinds.map(k => opt(k, K.KIND_NAMES[k], d.kind)).join('')}</select></label>
-      <label>Основа <select data-change="invField" data-k="base"><option value="">— выберите —</option>${bases.map(b => opt(b.name, `${b.name}${b.u !== undefined ? ` (${fmt(b.u)}${b.un ? '+' + fmt(b.un) : ''} ед.)` : ''}`, d.base)).join('')}</select></label>
+      <label>Основа <select data-change="invField" data-k="base"><option value="">— выберите —</option>${bases.map(b => opt(b.name, `${b.name}${typeof b.u === 'number' ? ` (${b.u.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${typeof b.un === 'number' && b.un ? '+' + b.un.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : ''} ед.)` : ''}`, d.base)).join('')}</select></label>
+      <label>Размер предмета <select data-change="invField" data-k="size">${R.SIZES.map(z => opt(z.id, `${z.name} (сырьё ${z.mat})`, d.size || 'н')).join('')}</select>
+        <span class="muted small">под какой рост сделан; под персонажа сам не подстраивается</span></label>
     </div>`;
     if (!d.base) return html + '<p class="muted small">Выберите основу — из таблицы «оружие и броня». Дальше можно собрать её из любых слитков по единицам.</p>';
     html += matOptions();
@@ -326,10 +329,10 @@
 
   function previewCard(item, c) {
     if (!c) return '';
-    const kv = (t, x) => `<span><b>${t}:</b> ${x}</span>`;
+    const kv = (t, x) => `<span><b>${App.cap(t)}:</b> ${x}</span>`;
     return `<div class="craft-preview">
       ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '')) : '', c.armor !== null && c.armor !== undefined ? kv('броня', fmt(c.armor) + (c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : '')) : '', c.pen ? kv('штраф ловк.', c.pen) : '',
-        c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', c.slots ? kv('слоты', c.slots) : '', c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
+        c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', kv('гнёзда для камней', c.sockets), c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
       ${c.effects.length ? `<ul class="fx-list small">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}</li>`).join('')}</ul>` : ''}
       ${c.warnings.length ? `<ul class="small item-warn">${c.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
       ${c.notes.length ? `<ul class="small item-warn">${c.notes.map(w => `<li class="muted">${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -379,7 +382,6 @@
     return `<div class="form-grid">
       <label>Название <input type="text" data-ui="invCName" data-ui-target="none" value="${esc(App.ui.invCName || '')}" maxlength="120"></label>
       <label>Где надевать <select data-ui="invCCat" data-ui-target="none"><option value="">— не надевается —</option>${cats.map(([k, t]) => opt(k, t, App.ui.invCCat || '')).join('')}</select></label>
-      <label>Слотов в рюкзаке <input type="number" min="0" step="1" data-ui="invCSlots" data-ui-target="none" value="${esc(App.ui.invCSlots || 0)}"></label>
       <label>Количество <input type="number" min="1" step="1" data-ui="invCQty" data-ui-target="none" value="${esc(App.ui.invCQty || 1)}"></label>
       <label class="wide">Описание и эффект <textarea rows="3" data-ui="invCText" data-ui-target="none" placeholder="что делает предмет">${esc(App.ui.invCText || '')}</textarea></label>
     </div>
@@ -490,7 +492,7 @@
     pending = true;
     setTimeout(() => { pending = false; if (ctx()) ctx().render(); }, 0);
   };
-  const STRUCT = /^(base|craft\.soul\.mode|craft\.soul\.creature)$/;
+  const STRUCT = /^(base|size|craft\.soul\.mode|craft\.soul\.creature)$/;
   const setPath = (o, path, val) => {
     const ps = path.split('.');
     let x = o;
@@ -546,6 +548,7 @@
       d.craft = Object.assign(blankDraft(it.kind).craft, clone(it.craft || {}));
       if (!d.craft.soul) d.craft.soul = { creature: '', mode: '', abilities: [] };
       if (d.name === K.autoName(it)) d.name = '';
+      if (!d.size) d.size = 'н';
       App.ui.invDraft = d; App.ui.invAdd = 'craft';
       rerender();
       setTimeout(() => { const c = document.getElementById('invAdd'); if (c) c.scrollIntoView({ behavior: 'smooth' }); }, 30);
@@ -558,7 +561,7 @@
       let val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.type === 'number') val = num(val);
       setPath(d, k, val);
-      if (k === 'base') fillParts(d, view());
+      if (k === 'base' || k === 'size') fillParts(d, view());
       if (STRUCT.test(k)) rerender(); else refreshCraft();
     },
     invModule(t) {
@@ -595,7 +598,7 @@
       cr.glyphs = (cr.glyphs || []).filter(g => g.sym && String(g.sym).trim());
       if (!cr.soul || !cr.soul.mode || !cr.soul.creature) delete cr.soul;
       if (!cr.parts.length) { App.toast('Укажите материал'); return; }
-      const it = { id: d.editId || newId(), kind: d.kind, base: d.base, qty: Math.max(1, Math.floor(num(d.qty) || 1)), note: d.note || '', craft: cr };
+      const it = { id: d.editId || newId(), kind: d.kind, base: d.base, size: d.size || 'н', qty: Math.max(1, Math.floor(num(d.qty) || 1)), note: d.note || '', craft: cr };
       it.name = (d.name || '').trim() || K.autoName(it);
       const calc = K.compute(it, view().ctx);
       const sum = [calc.damage !== null && calc.damage !== undefined ? `урон ${calc.damage}` : '', calc.armor ? `броня ${calc.armor}` : ''].filter(Boolean).join(', ');
@@ -652,9 +655,9 @@
     invCAdd() {
       const name = String(App.ui.invCName || '').trim();
       if (!name) { App.toast('Впишите название'); return; }
-      const it = { id: newId(), kind: 'custom', name, effect: String(App.ui.invCText || ''), cat: App.ui.invCCat || '', slots: Math.max(0, num(App.ui.invCSlots)), qty: Math.max(1, Math.floor(num(App.ui.invCQty) || 1)), src: 'выдал ГМ' };
+      const it = { id: newId(), kind: 'custom', name, effect: String(App.ui.invCText || ''), cat: App.ui.invCCat || '', qty: Math.max(1, Math.floor(num(App.ui.invCQty) || 1)), src: 'выдал ГМ' };
       gmChange(gm => { gm.items.push(it); }, `Получен предмет «${name}»`);
-      ['invCName', 'invCText', 'invCCat', 'invCSlots', 'invCQty'].forEach(k => { App.ui[k] = undefined; });
+      ['invCName', 'invCText', 'invCCat', 'invCQty'].forEach(k => { App.ui[k] = undefined; });
     },
     invWallet() {
       const changes = [];

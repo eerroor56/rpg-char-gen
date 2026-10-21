@@ -2,7 +2,7 @@
  * Правила создания персонажа.
  * Все расчёты — здесь; интерфейс только показывает результат.
  * Источник правил: таблица игрока (лист «настройка персонажа») и книга ГМ
- * (листы «механики», «скилы», «материаллы», «оружие и броня», «Социум», «Расы»).
+ * (листы «механики», «скиллы», «материалы», «оружие и броня», «Социум», «Расы»).
  */
 (function () {
   'use strict';
@@ -67,7 +67,7 @@
 
   const KARMA_TEXT = 'персонажи добра получают +20 кармы / зла −20 / нейтралы стартуют с 0';
 
-  // Черты: эффекты и противоположные пары (лист «скилы», колонки P–R)
+  // Черты: эффекты и противоположные пары (лист «скиллы», колонки P–R)
   const TRAIT_FX = {
     'быстрые рефлексы': { od: 2, opp: 'медленные рефлексы' },
     'второе дыхание': { opp: 'утомлённый' },
@@ -583,7 +583,7 @@
         if (C.START_ITEM_MAX_SKILL && w.skill > C.START_ITEM_MAX_SKILL) errors.push({ step: 'gear', msg: `«${w.name}» требует ${w.skill} ур. навыка — выше стартового предела ${C.START_ITEM_MAX_SKILL}.` });
         res.req.filter(x => !x.ok).forEach(x => warnings.push({ step: 'gear', msg: `«${w.name}»: не хватает ${STAT_NAMES[x.stat].toLowerCase()} (${fmt(x.have)} из ${x.need}) — штраф при использовании: ${REQ_PENALTY[x.stat]}.` }));
         if (w.hands && ctx.hands < w.hands) errors.push({ step: 'gear', msg: `«${w.name}» требует ${w.hands} рук(и), доступно: ${ctx.hands}.` });
-        g.slotsUsed += w.slots || 0;
+        g.slotsUsed += 1;                       // «1 предмет занимает 1 слот»; «слоты» в таблице — гнёзда для камней
         if (norm(w.name) === 'гримуар') g.spellSlots += 20;
         if (norm(w.name) === 'розарий') g.prayers += 8;
         if (norm(w.name) === 'молитвенник') g.prayers += 20;
@@ -598,6 +598,7 @@
         const fits = (AMMO[a.name] || []).map(norm).includes(norm(g.weapon.w.name));
         const au = sizeUnits(a.u, sizeK);
         g.ammo = { a, m, units: au, damage: m ? ri(m.dmg * au) : null, fits };
+        g.slotsUsed += 1;
         if (!fits) warnings.push({ step: 'gear', msg: `«${a.name}» не подходит к «${g.weapon.w.name}».` });
         if (m && !allowedMats.has(norm(m.name))) errors.push({ step: 'gear', msg: `Материал боеприпасов «${m.name}» не входит в стартовый список.` });
       }
@@ -629,7 +630,7 @@
         res.req.filter(x => !x.ok).forEach(x => warnings.push({ step: 'gear', msg: `«${a.name}»: не хватает ${STAT_NAMES[x.stat].toLowerCase()} (${fmt(x.have)} из ${x.need}) — штраф: ${REQ_PENALTY[x.stat]}.` }));
         if (C.START_ITEM_MAX_SKILL && a.skill > C.START_ITEM_MAX_SKILL) errors.push({ step: 'gear', msg: `«${a.name}» требует ${a.skill} ур. навыка — выше стартового предела.` });
         g.dodgeMod -= res.pen;
-        g.slotsUsed += a.slots || 0;
+        g.slotsUsed += 1;
         if (flags.noArmor) errors.push({ step: 'gear', msg: `${race.name}: не могут носить другие доспехи.` });
         if (race && race.id === 'тэтре') warnings.push({ step: 'gear', msg: 'Тэтре: «при отсутствии брони имеют 80% шанс не получить физ урон и 30% маг урон» — с бронёй бонус теряется.' });
         if (isShield && g.weapon && g.weapon.w.hands >= 2 && ctx.hands <= 2) warnings.push({ step: 'gear', msg: 'Щит и двуручное оружие одновременно не удержать двумя руками.' });
@@ -663,6 +664,7 @@
       }
       if (seen.has(key)) errors.push({ step: 'gear', msg: `«${label}» выбран дважды — предметы должны быть разными.` });
       seen.add(key);
+      if (it.kind !== 'bag') g.slotsUsed += 1;   // сумки места не занимают, а добавляют его
       g.items.push({ kind: it.kind, label });
     });
     return g;
@@ -996,7 +998,7 @@
     if (boon && boon.fx.mpRegenMul) { mpReg *= boon.fx.mpRegenMul; mpRegSrc.push(`«${boon.src.name}» ×${boon.fx.mpRegenMul}`); }
     der.mpRegen = ri(mpReg); der.mpRegenSrc = mpRegSrc;
     der.slots = cur.s + gear.bagSlots; der.slotsUsed = gear.slotsUsed;
-    if (der.slotsUsed > der.slots) warnings.push({ step: 'gear', msg: `Снаряжение занимает ${der.slotsUsed} слотов, а доступно ${der.slots} (сила + сумки).` });
+    if (der.slotsUsed > der.slots) warnings.push({ step: 'gear', msg: `Предметов ${der.slotsUsed}, а слотов ${der.slots} (сила + сумки; каждый предмет — 1 слот).` });
     der.dodge = ri(cur.l + gear.dodgeMod);
     // ОД
     const odSrc = [];

@@ -50,8 +50,45 @@
     "подвижнче детали": "подвижные детали",
     "елемнтельная мазь": "элементальная мазь",
     "фермертсво": "фермерство",
-    "свеживание": "свежевание"
+    "свеживание": "свежевание",
+    // 2-й проход орфографии
+    "табакси (катжиты)": "табакси (каджиты)",
+    "спригган мотрона": "спригган матрона",
+    "ледянелый спригган": "ледяной спригган",
+    "богровый светильник": "багровый светильник",
+    "бешенная баракуда": "бешеная баракуда",
+    "гротескная мокрель": "гротескная макрель",
+    "краторный смотритель": "кратерный смотритель",
+    "опухлевый клешневик": "опухолевый клешневик",
+    "жаждящий пепла": "жаждущий пепла",
+    "шабал (красны)": "шабал (красный)",
+    "пирамидаголовый": "пирамидоголовый",
+    "свинной король": "Свиной король",
+    "великий наставник радомес": "Великий наставник Радамес",
+    "лесмес нетленный резничий": "Лесмес нетленный ризничий",
+    "джагернаутские перчи": "джаггернаутские перчатки",
+    "джагернаутские ботинки": "джаггернаутские ботинки",
+    "джагернаутские поножи": "джаггернаутские поножи",
+    "джагернаутская кирса": "джаггернаутская кирса",
+    "джагернаутский шлем": "джаггернаутский шлем",
+    "тааффеит": "таафеит",
+    "мазахизм": "мазохизм",
+    "лунный ожёг": "Лунный ожог",
+    "64 лодони небес": "64 ладони небес",
+    "мёртвй глаз": "мёртвый глаз",
+    "вентажная улыбка(маска)": "винтажная улыбка(маска)",
+    "мантия терни": "мантия терний",
+    "брош гримма": "брошь гримма",
+    "подвеска терпеливости": "подвеска терпения",
+    "непоколебимое тело (брош)": "непоколебимое тело (брошь)",
+    "пронзённая бабочка (брош)": "пронзённая бабочка (брошь)",
+    "свинная корона": "Свиная корона",
+    "бва (биотический вирус абберацит)": "БВА (биотический вирус аберрацит)",
+    "брош": "брошь",
+    "кастоньеды": "кастаньеты",
+    "валынка": "волынка"
   };
+  const RENAMED_LC = Object.fromEntries(Object.entries(RENAMED).map(([k, v]) => [k.toLowerCase(), v]));
 
   const DICE = '<svg class="dice-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="8.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></svg>';
 
@@ -69,8 +106,73 @@
     }).join('')}</${tag}>`;
   }
 
+  // заглавная первая видимая буква в готовом HTML (теги, пробелы, кавычки и скобки пропускаются)
+  const capHtml = html => String(html === undefined || html === null ? '' : html)
+    .replace(/^((?:\s|<[^>]*>|&[a-z]+;|&#\d+;|[«"(])*)([a-zа-яё])/, (m, pre, ch) => pre + ch.toUpperCase());
+
+  // картинки существ, НПС, общин, богов и демонов: ключ — код названия (как в tools/build_images.py)
+  const fnv = str => {
+    let h = 0x811c9dc5;
+    for (const b of new TextEncoder().encode(str)) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+  const picNorm = n => String(n || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-z0-9а-я]+/g, ' ').trim();
+  const picKey = name => { const n = picNorm(name); return fnv(n) + fnv(n + '|'); };
+  const pics = name => (name ? (window.PORTRAITS || {})[picKey(name)] || null : null);
+  function entityPic(name, cls, plain) {
+    const list = pics(name);
+    if (!list) return '';
+    const tag = plain ? 'span' : 'figure';
+    return `<${tag} class="portrait ${cls || ''} ${list.length > 1 ? 'two' : ''}">${list.map(im => {
+      const img = `<img src="${esc(im.src)}" width="${im.w}" height="${im.h}" alt="${plain ? '' : esc(cap(name))}" loading="lazy" decoding="async">`;
+      return plain ? `<span class="pic">${img}</span>` : `<a href="${esc(im.src)}" target="_blank" rel="noopener" title="${esc(cap(name))} — открыть картинку целиком">${img}</a>`;
+    }).join('')}</${tag}>`;
+  }
+  // маленькая картинка для таблиц и списков (открывается целиком по клику)
+  function thumb(name) {
+    const list = pics(name);
+    if (!list) return '';
+    const im = list[0];
+    return `<a class="thumb" href="${esc(im.src)}" target="_blank" rel="noopener" title="${esc(cap(name))} — открыть картинку"><img src="${esc(im.src)}" alt="" width="${im.w}" height="${im.h}" loading="lazy" decoding="async"></a>`;
+  }
+
+  // Названия из таблиц записаны со строчной буквы («орки», «сфера теней»). В начале пункта списка,
+  // ячейки таблицы, варианта выбора, заголовка и карточки нужна заглавная — ставим её при отрисовке,
+  // не трогая сами данные (по ним считаются правила). Текст после двоеточия не меняется.
+  // заглавная буква в начале каждого предложения (точка после сокращения — не конец предложения)
+  const ABBR_DOT = new Set(['доп', 'ед', 'ур', 'восст', 'макс', 'мин', 'физ', 'маг', 'ловк', 'сек', 'см', 'др', 'пр', 'кол', 'шт', 'прим', 'стр', 'напр', 'ок']);
+  function sentCap(s) {
+    return String(s == null ? '' : s).replace(/(^|[.!?…]\s+)((?:<[^>]+>|&quot;|[«"(\s])*)([a-zа-яё])/g, (m, a, q, c, off, str) => {
+      if (a) {
+        const w = ((str.slice(0, off).match(/([A-Za-zА-Яа-яЁё]+)$/) || [])[1] || '').toLowerCase();
+        if (w.length <= 2 || ABBR_DOT.has(w)) return m;
+      }
+      return a + q + c.toUpperCase();
+    });
+  }
+  const CAP_SEL = 'td, th, li, dd, option, h1, h2, h3, .ro-name, .boon-name, .tr-name, .bag-name, .cc-name, .slot-i, .camp-name, .cap';
+  function capEl(el) {
+    if (el.closest('.nocap')) return;
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      const t = n.nodeValue, i = (t.match(/^[\s«"(]*/) || [''])[0].length;
+      if (i >= t.length) continue;
+      if (/[a-zа-яё]/.test(t[i])) n.nodeValue = t.slice(0, i) + t[i].toUpperCase() + t.slice(i + 1);
+      return;
+    }
+  }
+  function capDom(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(CAP_SEL)) capEl(root);
+    root.querySelectorAll(CAP_SEL).forEach(capEl);
+  }
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(capDom))).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   const App = {
-    esc, cap, store, DICE, portrait,
+    esc, cap, capHtml, capDom, sentCap, store, DICE, portrait, picKey, pics, entityPic, thumb,
     state: null,
     res: null,
     step: 'race',
@@ -102,7 +204,10 @@
         armor: Object.assign(base.armor, s.armor || {})
       });
       // старые сохранения: названия, в которых исправлена орфография
-      const fix = v => (typeof v === 'string' && RENAMED[v]) || v;
+      const fix = v => (typeof v === 'string' && (RENAMED[v] || RENAMED_LC[v.toLowerCase()])) || v;
+      ['raceId', 'parentA', 'parentB'].forEach(k => { if (st[k]) st[k] = String(fix(st[k])).toLowerCase(); });
+      if (st.ancestor) st.ancestor = fix(st.ancestor);
+      ['prevSkill', 'prevStance'].forEach(k => { if (st.boonOpt && st.boonOpt[k]) st.boonOpt[k] = fix(st.boonOpt[k]); });
       st.traits = (st.traits || []).map(fix);
       st.boon.name = fix(st.boon.name);
       ['prevSymbol', 'otherRace'].forEach(k => { if (st.boonOpt && st.boonOpt[k]) st.boonOpt[k] = fix(st.boonOpt[k]); });

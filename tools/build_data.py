@@ -675,6 +675,22 @@ def parse_req(s):
     return req, skill
 
 
+REQ_TOKEN = re.compile(r"(\d+(?:[.,]\d+)?)\s*,?\s*([тдсилТДСИЛ])")
+
+
+def tidy_req(s):
+    """'5,л,4с /8' → '5л, 4с / 8': единый вид требования; необычный текст остаётся как есть."""
+    s = str(s or "").strip()
+    parts = s.split("/")
+    left = parts[0]
+    toks = REQ_TOKEN.findall(left)
+    if not toks or re.sub(r"[\s,.;]", "", REQ_TOKEN.sub("", left)):
+        return s
+    out = ", ".join(n.replace(".", ",") + l.lower() for n, l in toks)
+    rest = [x.strip() for x in parts[1:]]
+    return " / ".join([out] + rest) if rest else out
+
+
 def build_gear(wb):
     ws = wb["оружие и броня"]
     weapons = []
@@ -707,7 +723,7 @@ def build_gear(wb):
         weapons.append({
             "name": name, "group": g,
             "u": dmg_units or 0, "un": num(ws.cell(r, 3).value) or 0, "uRaw": v[1],
-            "reqRaw": v[3], "req": req, "skill": skill,
+            "reqRaw": tidy_req(v[3]), "req": req, "skill": skill,
             "fx": v[4], "dt": v[5], "range": v[6],
             "slots": num(ws.cell(r, 8).value), "hands": num(ws.cell(r, 9).value),
         })
@@ -716,7 +732,7 @@ def build_gear(wb):
         v = row_txt(ws, r, "A", "F")
         if v[0]:
             req, skill = parse_req(v[2])
-            shields.append({"name": v[0], "u": num(ws.cell(r, 2).value), "uRaw": v[1], "reqRaw": v[2],
+            shields.append({"name": v[0], "u": num(ws.cell(r, 2).value), "uRaw": v[1], "reqRaw": tidy_req(v[2]),
                             "req": req, "skill": skill, "slots": num(ws.cell(r, 4).value),
                             "pen": num(ws.cell(r, 5).value) or 0, "fx": v[5],
                             "upgrade": v[1] == "улучшение"})
@@ -727,8 +743,8 @@ def build_gear(wb):
             req, skill = parse_req(v[2])
             nm = v[0].lower()
             cls = ("лёгкая" if nm.startswith("лёгк") else "средняя" if nm.startswith("средн") else
-                   "тяжёлая" if nm.startswith("тяж") else "джаггернаут" if nm.startswith("джагер") else "одежда")
-            armor.append({"name": v[0], "u": num(ws.cell(r, 2).value), "reqRaw": v[2], "req": req,
+                   "тяжёлая" if nm.startswith("тяж") else "джаггернаут" if nm.startswith(("джагер", "джаггер")) else "одежда")
+            armor.append({"name": v[0], "u": num(ws.cell(r, 2).value), "reqRaw": tidy_req(v[2]), "req": req,
                           "skill": skill, "slots": num(ws.cell(r, 4).value), "pen": num(ws.cell(r, 5).value) or 0,
                           "cls": cls})
     jewelry = generic_block(ws, 106, 114, "F", "I", header_row=106)

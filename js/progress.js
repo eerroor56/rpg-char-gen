@@ -54,7 +54,7 @@
     if (window.Craft && res.race) {
       const K = window.Craft;
       v.inv = K.inventoryOf(rec, state, res0);
-      v.ctx = { sizeK: res.size ? res.size.k : 1, stats: res.stats, halfReq: res.race.id === 'гомункулы', race: res.race, oniClan: state.oniClan, flags: res.flags, creatures: creatures() };
+      v.ctx = { sizeId: res.size ? res.size.id : 'н', stats: res.stats, halfReq: res.race.id === 'гомункулы', race: res.race, oniClan: state.oniClan, flags: res.flags, creatures: creatures() };
       const eq = K.equipStats(v.inv.items, v.inv.equip, v.ctx, res.hands);
       v.eq = eq;
       const d = res.der;
