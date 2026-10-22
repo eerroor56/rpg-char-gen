@@ -25,7 +25,7 @@
       const s = document.createElement('script');
       s.src = src; s.async = false;
       s.onload = () => ok();
-      s.onerror = () => fail(new Error('не загрузилась библиотека Firebase (' + src.split('/').pop() + '). Проверьте интернет.'));
+      s.onerror = () => fail(new Error('Не удалось подключиться к онлайн-хранилищу. Проверьте интернет.'));
       document.head.appendChild(s);
     });
   }
@@ -494,13 +494,13 @@
         'auth/popup-closed-by-user': 'Окно входа закрыто.',
         'auth/cancelled-popup-request': 'Окно входа закрыто.',
         'auth/popup-blocked': 'Браузер заблокировал окно входа — разрешите всплывающие окна для сайта.',
-        'auth/unauthorized-domain': `Этот адрес сайта (${location.hostname}) не добавлен в Firebase: Authentication → Settings → Authorized domains.`,
-        'auth/operation-not-allowed': 'Этот способ входа не включён в Firebase: Authentication → Sign-in method.',
+        'auth/unauthorized-domain': 'Вход с этого адреса сайта пока не разрешён — сообщите владельцу сайта.',
+        'auth/operation-not-allowed': 'Этот способ входа пока выключен — попробуйте другой или сообщите владельцу сайта.',
         'auth/network-request-failed': 'Нет связи с сервером входа — проверьте интернет.',
         'permission-denied': 'Нет доступа: вы не участник этой кампании или действие доступно только ГМ.',
         'unavailable': 'Сервер недоступен — проверьте интернет; изменения отправятся, когда связь вернётся.',
         'not-found': 'Запись не найдена — возможно, её удалили.',
-        'failed-precondition': 'База ещё не готова (проверьте, что Firestore создан).'
+        'failed-precondition': 'Онлайн-хранилище ещё не готово — сообщите владельцу сайта.'
       };
       return map[code] || (e && e.message ? e.message.replace(/^Firebase:\s*/, '') : String(e));
     }

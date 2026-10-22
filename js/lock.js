@@ -14,7 +14,7 @@
       const s = document.createElement('script');
       s.src = 'data/locked.js?v=' + encodeURIComponent((window.GAME_DATA.meta || {}).built || '1');
       s.onload = () => ok();
-      s.onerror = () => fail(new Error('нет файла data/locked.js'));
+      s.onerror = () => fail(new Error('не удалось загрузить закрытые разделы — проверьте интернет'));
       document.head.appendChild(s);
     });
   }

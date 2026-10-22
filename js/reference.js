@@ -163,7 +163,7 @@
         { title: 'Улучшенная география', cols: ['Место', 'Эффект на монстров', 'Эффект на игрока'], rows: W.places.filter(p => !p.isRegion).map(p => row([esc(p.name), esc(p.monsters), esc(p.players)], '', p.region ? cap(p.region) : 'Вне регионов')) }
       ];
       W.sections.forEach(s => blocks.push({ title: cap(s.title), cols: [cap(s.title)].concat(s.head), rows: s.rows.map(r => row(r.map((x, i) => i === 0 ? `<b>${esc(x)}</b>` : esc(x)))) }));
-      if (D.schemes.length) blocks.push({ title: 'Схемы', note: 'Сетка с листа «схемы» как есть.', cols: null, grid: D.schemes, rows: [] });
+      if (D.schemes.length) blocks.push({ title: 'Схемы', note: 'Схемы из книги ГМ.', cols: null, grid: D.schemes, rows: [] });
       return blocks;
     } }
   ];
