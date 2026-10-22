@@ -243,10 +243,10 @@
       document.body.dataset.tab = this.tab;
       this.render();
       if (moved || first) this.enter(document.getElementById('tab-' + this.tab));
-      // заставки: «вход в мир» при открытии сайта (кроме «Игры»), ворота — при каждом входе в «Игру», за ними справка
+      // заставки: «вход в мир» при открытии сайта (кроме «Игры»), та же сцена с названием «Игра» — при каждом входе в «Игру», за ней справка
       if (window.Intro) {
         if (first && this.tab !== 'game') window.Intro.world();
-        if (this.tab === 'game' && (first || prevTab !== 'game')) window.Intro.gates().then(() => { if (this.tab === 'game') window.Intro.gameHelp(); });
+        if (this.tab === 'game' && (first || prevTab !== 'game')) window.Intro.game().then(() => { if (this.tab === 'game') window.Intro.gameHelp(); });
       }
     },
 

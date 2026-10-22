@@ -1152,7 +1152,7 @@ body.intro-open { overflow: hidden; }
 .intro { position: fixed; inset: 0; z-index: 200; overflow: hidden; cursor: pointer; user-select: none; }
 .intro.is-out { opacity: 0; transition: opacity .45s ease; }
 
-/* вход в мир: ночное небо, искры, рунический круг, d20 и название */
+/* сцена-портал (вход в мир и в «Игру»): ночное небо, искры, рунический круг, d20 и название */
 .intro-world { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 20px;
   background: radial-gradient(ellipse at 50% 42%, #2c2356 0%, #130f27 52%, #06050c 100%); }
 .iw-sky, .iw-embers { position: absolute; inset: 0; pointer-events: none; }
@@ -1188,36 +1188,6 @@ body.intro-open { overflow: hidden; }
 .intro-world.is-leaving .iw-core { animation: iw-portal .85s cubic-bezier(.6, 0, .4, 1) forwards; }
 @keyframes iw-portal { to { transform: scale(7); opacity: 0; } }
 .intro-world.is-leaving .iw-title, .intro-world.is-leaving .iw-sub, .intro-world.is-leaving .iw-skip { opacity: 0; transform: translateY(-12px) scale(1.04); transition: opacity .5s ease, transform .6s ease; }
-
-/* ворота «Игры»: створки распахиваются внутрь, за ними свет */
-.intro-gates { background: #06050c; perspective: 1300px; }
-.ig-light { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse 34% 70% at 50% 50%, rgba(255, 236, 190, .95), rgba(214, 168, 92, .35) 42%, transparent 72%);
-  animation: ig-light 1.3s ease .45s forwards; }
-@keyframes ig-light { 0% { opacity: 0; transform: scaleX(.04); } 55% { opacity: 1; } 100% { opacity: 1; transform: scaleX(1.5); } }
-.ig-frame { position: absolute; inset: 0; display: flex; transform-style: preserve-3d; }
-.ig-door { position: relative; flex: 1 1 50%; height: 100%; backface-visibility: hidden;
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, .38) 0 2px, transparent 2px 62px),
-    linear-gradient(90deg, rgba(255, 255, 255, .03), transparent 40%),
-    linear-gradient(180deg, #3d2c1d 0%, #261a12 48%, #3a291b 100%);
-  box-shadow: inset 0 0 90px rgba(0, 0, 0, .75); }
-.ig-door.left { transform-origin: left center; border-right: 3px solid #b8893f; animation: ig-left 1s cubic-bezier(.55, .05, .3, 1) .5s forwards; }
-.ig-door.right { transform-origin: right center; border-left: 3px solid #b8893f; animation: ig-right 1s cubic-bezier(.55, .05, .3, 1) .5s forwards; }
-@keyframes ig-left { to { transform: rotateY(104deg); } }
-@keyframes ig-right { to { transform: rotateY(-104deg); } }
-.ig-band { position: absolute; left: 0; right: 0; height: 26px; background: linear-gradient(180deg, #8b6a3a, #4b3a22 45%, #2b2114);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 230, 170, .25); }
-.ig-band::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, #d8b06a 0 3px, transparent 3.5px) 20px 50% / 70px 26px repeat-x; }
-.ig-band.b1 { top: 13%; } .ig-band.b2 { top: calc(50% - 13px); } .ig-band.b3 { bottom: 13%; }
-.ig-ring { position: absolute; top: calc(50% + 34px); width: 46px; height: 46px; border-radius: 50%; border: 5px solid #b8893f; box-shadow: 0 4px 10px rgba(0, 0, 0, .6), inset 0 0 6px rgba(0, 0, 0, .6); }
-.ig-door.left .ig-ring { right: 34px; } .ig-door.right .ig-ring { left: 34px; }
-.ig-seal { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; margin: -64px 0 0 -64px; border-radius: 50%; display: grid; place-items: center; gap: 0; align-content: center;
-  background: radial-gradient(circle at 40% 35%, #f1cf86, #b9873b 60%, #6e4b1d); box-shadow: 0 0 0 4px #2b2114, 0 0 30px rgba(243, 213, 143, .55), inset 0 0 18px rgba(80, 50, 10, .7);
-  animation: ig-seal .65s ease-in-out forwards; }
-.ig-seal svg { width: 52px; height: 52px; fill: none; stroke: #2a1f0c; stroke-width: 1.4; stroke-linejoin: round; }
-.ig-seal span { font-family: var(--font-display); font-size: 1.15rem; color: #2a1f0c; letter-spacing: .08em; text-transform: uppercase; }
-@keyframes ig-seal { 0% { transform: scale(.9); } 45% { transform: scale(1.06); box-shadow: 0 0 0 4px #2b2114, 0 0 60px rgba(243, 213, 143, .95), inset 0 0 18px rgba(80, 50, 10, .7); } 75% { opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
-.intro-gates.is-leaving { opacity: 0; transition: opacity .5s ease; }
 
 /* ---------- окно справки (js/intro.js) */
 body.modal-open { overflow: hidden; }

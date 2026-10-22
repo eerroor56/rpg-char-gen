@@ -2,7 +2,7 @@
  * Заставки и всплывающая справка.
  *   world()    — «вход в мир» при открытии сайта (кроме «Игры»): звёздное небо, рунический круг рисуется сам,
  *                кубик d20, название по буквам, затем круг раскрывается порталом. Раз за сеанс браузера.
- *   gates()    — при каждом входе во вкладку «Игра»: массивные ворота с печатью раскрываются внутрь.
+ *   game()     — при каждом входе во вкладку «Игра»: та же сцена, но с названием «Игра».
  *   gameHelp() — краткая справка по «Игре»: сама показывается раз за сеанс, пока её не отключили галочкой.
  * Любую заставку можно пропустить щелчком или клавишей. При «уменьшении движения» в системе заставок нет.
  */
@@ -52,13 +52,11 @@
     });
   }
 
-  // ------------------------------------------------------------ вход в мир
-  function world() {
-    if (calm() || ss.get(WORLD_KEY)) return Promise.resolve();
-    ss.set(WORLD_KEY);
+  // ------------------------------------------------------------ сцена-портал (общая для сайта и «Игры»)
+  function portal(name, sub, skip) {
     const stars = Array.from({ length: 70 }, () => `<i style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;--d:${rnd(0, 3).toFixed(2)}s;--s:${rnd(1, 2.6).toFixed(1)}px"></i>`).join('');
     const embers = Array.from({ length: 26 }, () => `<b style="left:${rnd(5, 95).toFixed(1)}%;--d:${rnd(0, 2.4).toFixed(2)}s;--x:${rnd(-40, 40).toFixed(0)}px;--t:${rnd(2.6, 4.2).toFixed(2)}s"></b>`).join('');
-    const title = 'Мастерская героя'.split('').map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : c}</span>`).join('');
+    const title = name.split('').map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : c}</span>`).join('');
     // руны по кругу: короткие черты разной длины
     const ticks = Array.from({ length: 48 }, (_, i) => { const a = i * 7.5, long = i % 4 === 0; return `<line x1="100" y1="${long ? 6 : 9}" x2="100" y2="${long ? 16 : 13}" transform="rotate(${a} 100 100)"/>`; }).join('');
     return overlay('intro-world', `
@@ -74,18 +72,21 @@
         <svg class="iw-d20" viewBox="0 0 24 24">${D20}</svg>
       </div>
       <h1 class="iw-title">${title}</h1>
-      <p class="iw-sub">Каждая история начинается с героя</p>
-      <span class="iw-skip">нажмите, чтобы войти</span>`, 4400, 3600);
+      <p class="iw-sub">${sub}</p>
+      <span class="iw-skip">${skip}</span>`, 4400, 3600);
   }
 
-  // ------------------------------------------------------------ ворота «Игры»
-  function gates() {
+  // вход в мир — раз за сеанс браузера
+  function world() {
+    if (calm() || ss.get(WORLD_KEY)) return Promise.resolve();
+    ss.set(WORLD_KEY);
+    return portal('Мастерская героя', 'Каждая история начинается с героя', 'нажмите, чтобы войти');
+  }
+
+  // вход в «Игру» — та же сцена, при каждом входе во вкладку
+  function game() {
     if (calm()) return Promise.resolve();
-    const door = side => `<div class="ig-door ${side}"><span class="ig-band b1"></span><span class="ig-band b2"></span><span class="ig-band b3"></span><span class="ig-ring"></span></div>`;
-    return overlay('intro-gates', `
-      <div class="ig-light"></div>
-      <div class="ig-frame">${door('left')}${door('right')}</div>
-      <div class="ig-seal"><svg viewBox="0 0 24 24">${D20}</svg><span>Игра</span></div>`, 2000, 1500);
+    return portal('Игра', 'Бросайте кубик — приключение начинается', 'нажмите, чтобы начать');
   }
 
   // ------------------------------------------------------------ справка по «Игре»
@@ -134,5 +135,5 @@
   }
 
   Object.assign(App.actions, { gameHelp() { gameHelp(true); } });
-  window.Intro = { world, gates, gameHelp };
+  window.Intro = { world, game, gameHelp };
 })();
