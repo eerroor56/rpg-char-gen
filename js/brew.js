@@ -38,6 +38,7 @@
   const TEMPER = [[/агресс/, 'урон +20%'], [/нейтр/, 'ОД +2'], [/мир/, 'пси +20%']];
   const MARKS = { '♦': 'сила +25', '♣': 'тело +25', '♥': 'дух +25', '♠': 'интеллект +25', '◘': 'ловкость +5' };
   const BOSS_STATS = ['t', 'd', 's', 'i'];   // «постоянный бонус к одной из 4 характеристик»
+  const HERBS = [1, 5];        // сбор трав (уточнение ГМ): 1–5 случайных ингредиентов из таблицы растений
   const MODES = [['cook', 'Кухня'], ['alco', 'Винокурня'], ['potion', 'Алхимический стол']];
 
   // ------------------------------------------------------------ данные
@@ -46,12 +47,22 @@
   let ix = null, ixSrc = null;
   function ing(name) {
     const list = ings();
-    // одинаковые названия (в таблице две «ежевики») — берётся первое, как в каталоге выдачи
     if (ixSrc !== list) { ix = new Map(); list.forEach(i => { if (!ix.has(norm(i.n))) ix.set(norm(i.n), i); }); ixSrc = list; }
     return name ? ix.get(norm(name)) || null : null;
   }
   const baseText = i => ((i && i.x) || []).filter(x => x[1] === 'основа' && norm(x[0]) !== 'основа').map(x => x[0]).join('; ');
   const bases = () => ings().filter(i => (i.x || []).some(x => x[1] === 'основа'));
+  // растения — группа «растения / легко в сборе» листа «алхимия» (без строки «семена»: это не трава, а правило)
+  const plants = () => ings().filter(i => /растени/.test(norm(i.g)) && norm(i.n) !== 'семена');
+  function gather() {
+    const list = plants(), n = HERBS[0] + Math.floor(Math.random() * (HERBS[1] - HERBS[0] + 1)), out = [];
+    for (let k = 0; k < n && list.length; k++) {
+      const p = list[Math.floor(Math.random() * list.length)];
+      const x = out.find(y => y.n === p.n);
+      if (x) x.qty++; else out.push({ n: p.n, qty: 1 });
+    }
+    return out;
+  }
   const creatures = () => (unlocked() && D().creatures) || [];
   const symName = code => { const s = R.index.symbolByRow && R.index.symbolByRow.get(String(code)); return s ? s.name.replace(/\s*\(\d+\)$/, '') : ''; };
   function potionTypes() {
@@ -238,7 +249,20 @@
     </div>`;
   }
 
-  // opts: { host: 'ref' | 'dev', issueAct: действие кнопки «Выдать» (только у ГМ в инвентаре) }
+  // сбор трав: результат можно добавить в рецепт, а у ГМ в инвентаре — сразу в рюкзак (opts.herbsAct)
+  function herbsHtml(opts) {
+    const h = App.ui.brewHerbs;
+    return `<div class="brew-herbs">
+      <div class="row-actions"><button type="button" class="btn small" data-act="brewHerbs">Сбор трав</button>
+        <span class="muted small">${HERBS[0]}–${HERBS[1]} случайных растений из таблицы ингредиентов</span></div>
+      ${h && h.length ? `<ul class="brew-fx">${h.map(x => { const i = ing(x.n); return `<li><b>${esc(x.n)}</b>${x.qty > 1 ? ` ×${x.qty}` : ''} <span class="muted small">— ${esc(i ? i.e.map(e => e[0]).join(', ') : '')}</span></li>`; }).join('')}</ul>
+        <div class="row-actions"><button type="button" class="btn small" data-act="brewHerbsUse">Добавить в рецепт</button>
+          ${opts.herbsAct ? `<button type="button" class="btn small primary" data-act="${esc(opts.herbsAct)}">Забрать в рюкзак</button>` : ''}
+          <button type="button" class="linklike small" data-act="brewHerbsClear">убрать</button></div>` : ''}
+    </div>`;
+  }
+
+  // opts: { host: 'ref' | 'dev', issueAct: действие кнопки «Выдать», herbsAct: «Забрать в рюкзак» (только у ГМ в инвентаре) }
   let host = 'ref';
   function form(opts) {
     opts = opts || {};
@@ -252,6 +276,7 @@
     const m = COOK.find(x => x.id === d.method) || COOK[0];
     const effOpts = (i, sel) => [1, 2, 3, 4].map(k => { const e = i && i.e[k - 1]; return e ? opt(k, `${k}: ${e[0]} — ${STATIONS[k - 1]}`, sel) : ''; }).join('');
     let html = `<div class="brew">
+      ${herbsHtml(opts)}
       <div class="seg" role="tablist">${MODES.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === d.mode}" class="${k === d.mode ? 'is-on' : ''}" data-act="brewMode" data-v="${k}">${t}</button>`).join('')}</div>
       <div class="form-grid">`;
     if (isCook) {
@@ -362,8 +387,26 @@
     },
     brewDel(b) { const d = draft(); (d[b.dataset.k] || []).splice(+b.dataset.v, 1); rerender(); },
     brewRoll() { const d = draft(); d.roll = d100(); App.toast(`d100: ${d.roll}${d.roll < SPOIL ? ' — испорчено' : ''}`); rerender(); },
-    brewReset() { App.ui.brew = blank(draft().mode); rerender(); }
+    brewReset() { App.ui.brew = blank(draft().mode); rerender(); },
+    brewHerbs() {
+      App.ui.brewHerbs = gather();
+      const n = App.ui.brewHerbs.reduce((a, x) => a + x.qty, 0);
+      App.toast(n ? `Собрано: ${n} ${App.plural(n, 'растение', 'растения', 'растений')}` : 'Растений в таблице нет');
+      rerender();
+    },
+    brewHerbsUse() {
+      const d = draft();
+      d.rows = d.rows.filter(r => r.ing);
+      (App.ui.brewHerbs || []).forEach(x => {
+        const r = d.rows.find(y => norm(y.ing) === norm(x.n) && (d.mode !== 'potion' || +y.eff === 1));
+        if (r) r.qty = (+r.qty || 1) + x.qty; else d.rows.push({ ing: x.n, qty: x.qty, eff: 1 });
+      });
+      if (!d.rows.length) d.rows.push({ ing: '', qty: 1, eff: 1 });
+      App.ui.brewHerbs = null;
+      rerender();
+    },
+    brewHerbsClear() { App.ui.brewHerbs = null; rerender(); }
   });
 
-  window.Brew = { form, compute, draft, blank, parseEff, potionTypes };
+  window.Brew = { form, compute, draft, blank, parseEff, potionTypes, ing };
 })();

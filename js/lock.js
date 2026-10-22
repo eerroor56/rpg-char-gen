@@ -44,6 +44,12 @@
     D.society = x.society;
     Object.assign(D.skills, x.skills);
     Object.assign(D.alchemy, x.alchemy);
+    // в данных, собранных до правки ГМ, есть вторая «ежевика» (в таблице — «еживика», её попросили убрать):
+    // из одинаковых названий остаётся первое; новые сборки её уже не содержат (ALCH_SKIP в tools/build_data.py)
+    if (Array.isArray(D.alchemy.ingredients)) {
+      const seen = new Set();
+      D.alchemy.ingredients = D.alchemy.ingredients.filter(i => { const k = String(i.n || '').toLowerCase().replace(/ё/g, 'е').trim(); if (seen.has(k)) return false; seen.add(k); return true; });
+    }
     D.artifacts = x.artifacts;
     D.mechanics = x.mechanics;
     window.Rules.init(D);

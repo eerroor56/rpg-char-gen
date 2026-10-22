@@ -175,6 +175,11 @@
       ${c.effects.length ? `<ul class="fx-list">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}</li>`).join('')}</ul>` : ''}
       ${c.glyphs.length ? `<p class="small"><b>Глифы</b> (мощь ${fmt(c.glyphPower)}${c.glyphMul > 1 ? `, ×${c.glyphMul}` : ''}; предел ${c.glyphMax}): ${c.glyphs.map(g => esc(g.sym) + (g.temp ? ' (временный)' : '') + (g.over ? ' ⚠' : '')).join(', ')}</p>` : ''}
       ${it.note ? `<p class="small pre">${esc(it.note)}</p>` : ''}
+      ${K.isTome(it) && perms.gm ? `<div class="dev-row tome-row"><label>Прочитать: какой параметр повысить
+          <select data-ui="invTome" data-ui-target="none">${R.STATS.map(k => opt(k, R.STAT_NAMES[k].toLowerCase(), App.ui.invTome || 's')).join('')}</select></label>
+          <label>на сколько <input type="number" min="1" step="1" class="mini-num" data-ui="invTomeN" data-ui-target="none" value="${esc(App.ui.invTomeN || K.tomeBonus(it))}"></label>
+          <button type="button" class="btn primary small" data-act="invTome" data-v="${esc(it.id)}">Прочитать</button></div>
+        <p class="muted small">Прибавка навсегда, уровень не меняется: попадёт во вкладку «Состояния» и сразу в характеристики; прочитанный ${/^свиток/.test(norm(it.name)) ? 'свиток' : 'трактат'} удаляется из рюкзака.</p>` : ''}
       ${c.warnings.length || c.notes.length ? `<ul class="small item-warn">${c.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}${c.notes.map(w => `<li class="muted">${esc(w)}</li>`).join('')}</ul>` : ''}
       <div class="row-actions">
         ${canEquip && c.cat ? (isWorn ? `<button type="button" class="btn" data-act="invUnequip" data-v="${esc(it.id)}">Снять</button>` : `<button type="button" class="btn primary" data-act="invEquip" data-v="${esc(it.id)}">Надеть</button>`) : ''}
@@ -235,7 +240,7 @@
     const tabs = [['craft', 'Изготовить'], ['brew', 'Кухня и зелья'], ['table', 'Из таблиц'], ['drop', 'Добыча с существа'], ['custom', 'Своё']];
     let body = '';
     if (mode === 'craft') body = craftForm(v);
-    else if (mode === 'brew') body = window.Brew.form({ host: 'dev', issueAct: 'invBrewSave' });
+    else if (mode === 'brew') body = window.Brew.form({ host: 'dev', issueAct: 'invBrewSave', herbsAct: 'invHerbsTake' });
     else if (mode === 'table') body = tableForm(v);
     else if (mode === 'drop') body = dropForm(v);
     else body = customForm(v);
@@ -344,7 +349,7 @@
         <label>Руки <select data-change="invField" data-k="craft.gun.hands">${opt('', `по корпусу: ${C.GUNS.HANDS[norm(body.name || '')] || C.GUNS.DEFAULT_HANDS}`, g.hands)}${opt(1, 'одна', g.hands)}${opt(2, 'две', g.hands)}</select></label>
       </div>
       <datalist id="invFuels">${fuels.map(f => `<option value="${esc(f.name)}">${esc(f.fx)}</option>`).join('')}</datalist>
-      <p class="muted small">Урон = урон металла пушки + урон патрона, затем модель (пневматика — 50%, магнитно-электронное — ×1,5) и топливо («урон 2х» у пороха). Эффект металла — как у любого оружия, ниже в списке эффектов. Стволов за раз — столько выстрелов.</p>`;
+      <p class="muted small">Урон = урон металла пушки, затем модель (пневматика — 50%, магнитно-электронное — ×1,5) и топливо («урон 2х» у пороха). Эффект металла — как у любого оружия, ниже в списке эффектов. Патроны урона не добавляют — дают свой эффект и эффект своего материала. Стволов за раз — столько выстрелов.</p>`;
   }
   function gunHead(c) {
     const g = c && c.gun;
@@ -357,7 +362,7 @@
     return [`выстрелов за раз ${g.shots}${g.auto ? ', автоматический огонь' : ''}`, g.acc ? `точность ${signed(g.acc)}` : '', g.od ? `ОД ${signed(g.od)}` : '',
       g.zor ? `зоркость ${signed(g.zor)}` : '', g.fuelCap ? `вмещает ${fmt(g.fuelCap)}е топлива` : ''].filter(Boolean).join(' · ');
   }
-  const gunDmgParts = c => (c.gun ? ` <span class="muted small">(металл ${fmt(c.gun.metal)}${c.gun.cart && c.gun.cart.mat ? ` + патрон ${fmt(c.gun.cart.dmg)}` : ''})</span>` : '');
+  const gunDmgParts = c => (c.gun && c.mult.length ? ` <span class="muted small">(металл ${fmt(c.gun.metal)})</span>` : '');
 
   function sumText(d, c, role) {
     const have = d.craft.parts.filter(p => role === 'all' || p.role === role).reduce((a, p) => a + num(p.u), 0);
@@ -719,6 +724,48 @@
         });
       }, `Добыча с «${st.creature}»: ${rows.map(r => `${r.name}${r.qty > 1 ? ' ' + r.qty : ''}`).join(', ')}`);
       App.ui.invDrop = null;
+    },
+    // трактат и свиток параметра: прибавка к выбранному параметру навсегда (уровень не меняется), прочитанный удаляется;
+    // прибавки от нескольких трактатов (свитков) к одному параметру собираются в одну запись
+    invTome(b) {
+      const it = view().inv.items.find(x => x.id === b.dataset.v);
+      if (!it) return;
+      const stat = R.STATS.includes(App.ui.invTome) ? App.ui.invTome : 's';
+      const n = Math.floor(num(App.ui.invTomeN) || K.tomeBonus(it)), sn = R.STAT_NAMES[stat].toLowerCase();
+      if (n <= 0) { App.toast('Укажите, на сколько повысить'); return; }
+      const what = /^свиток/.test(norm(it.name)) ? 'Свиток' : 'Трактат';
+      if (!confirm(`Прочитать «${it.name}»: ${sn} +${n} навсегда?`)) return;
+      let gone = false;
+      gmChange((gm, v, equip) => {
+        const x = gm.items.find(y => y.id === it.id);
+        if (!x) return false;
+        if ((+x.qty || 1) > 1) x.qty = (+x.qty) - 1;
+        else { gm.items = gm.items.filter(y => y.id !== it.id); Object.keys(equip).forEach(k => { if (equip[k] === it.id) delete equip[k]; }); gone = true; }
+        gm.effects = gm.effects || [];
+        const name = `${what} параметра: ${sn}`;
+        const e = gm.effects.find(y => y.kind === 'tome' && y.name === name);
+        if (e) {
+          const m = e.mods.find(y => y.stat === stat && y.op === 'add');
+          m.v += n;
+          e.count = (e.count || 1) + 1;
+          e.text = `${sn} +${m.v} навсегда`;
+          e.note = `прочитано: ${e.count}`;
+        } else gm.effects.push({ id: newId(), kind: 'tome', name, text: `${sn} +${n} навсегда`, note: 'прочитано: 1', count: 1, mods: [{ stat, op: 'add', v: n }], at: Date.now() });
+      }, `Прочитан «${it.name}»: ${sn} +${n} навсегда`);
+      if (gone) App.ui.invSel = null;
+      App.ui.invTomeN = undefined;
+    },
+    // сбор трав из калькулятора — ингредиенты сразу в рюкзак
+    invHerbsTake() {
+      const list = (App.ui.brewHerbs || []).filter(x => x.qty > 0);
+      if (!list.length) return;
+      gmChange(gm => {
+        list.forEach(x => {
+          const i = window.Brew.ing(x.n);
+          addStack(gm.items, { id: newId(), kind: 'item', name: x.n, effect: i ? i.e.map(e => e[0]).filter(Boolean).join(', ') : '', qty: x.qty, src: 'сбор трав' });
+        });
+      }, `Сбор трав: ${list.map(x => `${x.n}${x.qty > 1 ? ' ×' + x.qty : ''}`).join(', ')}`);
+      App.ui.brewHerbs = null;
     },
     // блюдо, напиток или зелье из калькулятора (js/brew.js)
     invBrewSave() {

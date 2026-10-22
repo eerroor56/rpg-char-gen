@@ -227,7 +227,8 @@
     if (nsOd.length) out.od += Math.max(...nsOd);
     out.dmgRaw = r2(out.dmgRaw); out.nonRaw = r2(out.nonRaw);
     if (out.clip) out.fx.push({ src: 'обойма', text: `на ${out.clip} ${App().plural(out.clip, 'патрон', 'патрона', 'патронов')}` });
-    // модель (принцип стрельбы), патроны, топливо — «выщеты урона пушек»: металл → патрон → модификатор металла → топливо
+    // модель (принцип стрельбы), патроны, топливо — «выщеты урона пушек»: металл → модификатор металла → топливо.
+    // Патроны урона не добавляют, а влияют на эффект (уточнение ГМ): свойство вида патронов + эффект их материала
     out.model = gunPart(G.models, g.model);
     if (out.model) out.fx.push({ src: `модель: ${out.model.name}`, text: out.model.fx });
     const ammo = g.ammo || {};
@@ -235,9 +236,9 @@
     if (at) {
       const m = material(ammo.mat);
       if (ammo.mat && !m) out.warnings.push(`Неизвестный материал патронов «${ammo.mat}».`);
-      out.cart = { type: at, mat: m, u: R.sizeUnits(at.u, k), dmg: m ? ri(m.dmg * R.sizeUnits(at.u, k)) : 0 };
-      if (at.fx) out.fx.push({ src: `патроны: ${at.name}`, text: at.fx });
-      if (!m) out.notes.push('Укажите материал патронов — от него урон патрона.');
+      out.cart = { type: at, mat: m };
+      if (at.fx && norm(at.fx) !== 'без эффектов') out.fx.push({ src: `патроны: ${at.name}`, text: at.fx });
+      if (m && m.ew && m.ew.t) out.fx.push({ src: `патроны из материала «${m.name}»`, text: m.ew.t });
     }
     out.fuel = fuelOf(g.fuel);
     if (out.fuel) {
@@ -297,6 +298,7 @@
     let damage = dmgParts.length ? dmgParts.reduce((a, p) => a + (p.mat ? p.mat.dmg * p.u : 0), 0) : null;
     let armor = armParts.length ? armParts.reduce((a, p) => a + (p.mat ? p.mat.arm * p.u : 0), 0) : null;
     if (damage !== null) damage = ri(damage);
+    if (base.cartridge) damage = null;   // патроны урона не дают — только эффект (уточнение ГМ)
     if (armor !== null) armor = ri(armor);
     if (kind === 'weapon' && norm(base.name) === 'катар') { const non = parts.filter(p => p.role === 'non'); if (non.length) armor = ri(non.reduce((a, p) => a + (p.mat ? p.mat.dmg * p.u : 0), 0)); }
     const mult = [];
@@ -305,10 +307,9 @@
       if (onArm && armor !== null) armor = ri(armor * m);
       mult.push(`${src} ×${fmt(m)}`);
     };
-    // пушка: урон металла + урон патрона, затем модель (пневматика ½, магнитно-электронное ×1,5) и топливо
+    // пушка: урон металла, затем модель (пневматика ½, магнитно-электронное ×1,5) и топливо
     if (gb) {
       gb.metal = damage || 0;
-      if (gb.cart && gb.cart.dmg) damage = (damage || 0) + gb.cart.dmg;
       if (damage !== null && gb.model && gb.model.mult !== 1) applyMul(gb.model.mult, `модель «${gb.model.name}»`, true, false);
       if (damage !== null && gb.fuel && gb.fuel.known && gb.fuel.mult !== 1) applyMul(gb.fuel.mult, `топливо «${gb.fuel.name}»`, true, false);
     }
@@ -359,7 +360,7 @@
     // эффекты материалов: не меньше половины слитка (для мелких предметов — 0,1)
     const field = kind === 'jewelry' ? 'ej' : isArmor ? 'ea' : 'ew';
     const small = out.need <= 0.5;
-    const minU = small ? CR.EFFECT_MIN_SMALL : CR.EFFECT_MIN_UNITS;
+    const minU = base.cartridge ? 0 : small ? CR.EFFECT_MIN_SMALL : CR.EFFECT_MIN_UNITS;   // у патронов эффект материала действует всегда
     const byMat = new Map();
     parts.forEach(p => { if (p.mat) { const x = byMat.get(p.mat.name) || { m: p.mat, u: 0 }; x.u = r2(x.u + p.u); byMat.set(p.mat.name, x); } });
     const present = name => [...byMat.values()].some(x => norm(x.m.name) === norm(name) && x.u >= minU)
@@ -372,7 +373,7 @@
       if (enrich) { const x = R.multiplyEffect(t, 2); t = x || `${t} (×2, обогатитель)`; }
       return { t, scale };
     };
-    if (out.need > 0 && out.need <= CR.EFFECT_MIN_SMALL + 1e-9) out.notes.push('Для предмета в 0,1 ед. эффект металла даёт только напыление.');
+    if (!base.cartridge && out.need > 0 && out.need <= CR.EFFECT_MIN_SMALL + 1e-9) out.notes.push('Для предмета в 0,1 ед. эффект металла даёт только напыление.');
     else byMat.forEach(x => {
       if (x.u < minU) { out.notes.push(`${x.m.name}: ${fmt(x.u)} ед. — меньше ${fmt(minU)}, эффект материала не действует.`); return; }
       const e = effText(x.m[field], x.u);
@@ -627,11 +628,22 @@
     if (st) st.rows.forEach(r => { if (r[0]) out.push({ kind: 'status', name: r[0], text: r.slice(1).filter(Boolean).join(' / ') }); });
     return out;
   }
-  const EFFECT_KINDS = { gift: 'Тёмный дар', curse: 'Проклятие', disease: 'Болезнь', buff: 'Благословение', mod: 'Модификация', trait: 'Черта', status: 'Статус-эффект', custom: 'Своё' };
+  const EFFECT_KINDS = { gift: 'Тёмный дар', curse: 'Проклятие', disease: 'Болезнь', buff: 'Благословение', mod: 'Модификация', trait: 'Черта', status: 'Статус-эффект', tome: 'Трактат / свиток', custom: 'Своё' };
+
+  // «трактат параметра — повышает выбранный параметр на 25», «свиток параметра — … на 10» (лист «разное», предметы):
+  // прибавляют к стату без изменения уровня и после прочтения удаляются (уточнение ГМ). Сколько — из описания
+  // предмета или из таблицы; ГМ может поправить при прочтении.
+  const isTome = it => !!it && /^(трактат|свиток) параметра/.test(norm(it.name));
+  function tomeBonus(it) {
+    const kind = /^свиток/.test(norm(it && it.name)) ? 'свиток параметра' : 'трактат параметра';
+    const row = (D().items || []).find(x => norm(x.name) === kind);
+    const m = String((it && it.effect) || '').match(/на\s*(\d+)/) || String((row && row.effect) || '').match(/на\s*(\d+)/);
+    return m ? +m[1] : kind === 'свиток параметра' ? 10 : 25;
+  }
 
   window.Craft = {
     KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
-    walletCopper, money, priceCopper, parseDrop, parseStatMods, catalog, effectSources, num
+    walletCopper, money, priceCopper, parseDrop, parseStatMods, catalog, effectSources, isTome, tomeBonus, num
   };
 })();

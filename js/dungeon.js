@@ -1,10 +1,10 @@
 /*
  * Генератор подземелий для ГМ (вкладка «Игра» → страница кампании).
- * Правила — лист «механики», «подземелья»: комнаты разных типов (бросок 2–10 на тип, у некоторых предел),
+ * Правила — лист «механики», «подземелья», и уточнения ГМ: комнаты разных типов (сколько каждого — DUNGEON.ROOMS),
  * коридоры длиной 2–8 (20% — лестница вниз: враги ниже получают +10% к статам), патрули в коридорах,
  * свет и расход пси и живости. Противники — из бестиария (открывается паролем ГМ).
  * Карта — как на листе «схемы»: комнаты с кодами (0 вход, 1 пустая, 2 противники, 3 сокровищница,
- * 4 ловушка, 5.1–5.6 специальные, 6 босс, 7 финал, 8 секретная), между ними — длина коридора.
+ * 4 ловушка, 5.1–5.6 специальные, 6 финал — он же комната босса, 8 секретная), между ними — длина коридора.
  * Последнее подземелье кампании хранится в этом браузере. Неоднозначные места — DUNGEON в js/config.js.
  */
 (function () {
@@ -24,23 +24,21 @@
     entrance: { code: '0', t: 'Вход' },
     empty: { code: '1', t: 'Пустая комната' },
     enemies: { code: '2', t: 'Комната с противниками' },
-    treasury: { code: '3', t: 'Сокровищница', max: 2 },
+    treasury: { code: '3', t: 'Сокровищница' },
     trap: { code: '4', t: 'Ловушка' },
-    special: { code: '5', t: 'Специальная комната', max: 20 },
-    boss: { code: '6', t: 'Комната босса' },
-    final: { code: '7', t: 'Финал подземелья' },
-    secret: { code: '8', t: 'Секретная комната', max: 2 }
+    special: { code: '5', t: 'Специальная комната' },
+    final: { code: '6', t: 'Финал (комната босса)' },   // «финальная комната — она же босс комната» (ГМ)
+    secret: { code: '8', t: 'Секретная комната' }
   };
   // «каждая специальная комната может появиться за одно подземелье до 2 раз … сверх лимита применяется комната ниже списком»;
   // «40% шанс, что в комнате будет тематический противник»
   const SPECIAL = ['алхимическая', 'комната с алтарём', 'оранжерея', 'кухня', 'библиотека', 'мастерская'];
-  const SPECIAL_MAX = 2, THEMATIC = 0.4;
+  const THEMATIC = 0.4;
   const CORRIDOR = [2, 8], STAIRS = 0.2, STAIR_BONUS = 10;         // коридор 2–8; 20% — лестница; +10% к статам врагов за спуск
   const PATROL_STEP = 5, PATROL = [2, 6];                          // +5% за каждую пройденную комнату; отряд 2–6
-  const SECRET_CHANCE = 0.2;                                       // у каждой комнаты, кроме финала и босса
   const ENEMIES = [1, 10];
   const CHESTS = [1, 3], CHEST_TRAP = 0.2, MIMIC = 0.1, COINS = [10, 100], CHEST_GEAR = [1, 3], CHEST_SPECIAL = [1, 3];
-  const TRAP_ROLL = [20, 80], TRAP_DMG = [100, 500], TRAP_PROCS = [1, 3];
+  const TRAP_ROLL = [20, 80], TRAP_DMG = [100, 500], TRAPS = [1, 3];  // в комнате 1–3 разные ловушки (урон и эффект у каждой свои)
   const BOSS_EXTRA = [0, 3];
   const ROOM_COST = 5, CORR_COST = 1;                              // пси и живость: комната — 5, клетка коридора — 1
   const LIGHT = [
@@ -49,7 +47,6 @@
     { id: 'сумрачно', range: '50–1%', psi: 4, fx: 'потеря пси ×4; игроки −10 ко всем броскам; враги +20; дроп с противников удваивается' },
     { id: 'темно', range: '0%', psi: 8, fx: 'потеря пси ×8; игроки −20 ко всем броскам; враги +30 и +30% шанса крита; враги могут уронить золотую монету (50%)' }
   ];
-  const STAT_KEYS = ['t', 'd', 's', 'i', 'l'];
 
   // ------------------------------------------------------------ данные
   const unlocked = () => !!(window.GMLock && window.GMLock.unlocked);
@@ -78,7 +75,7 @@
     if (foes.length < 3) foes = near(here).slice(0, 12);
     const allBoss = all.filter(c => c.cat === 'босс');
     const hereBoss = allBoss.filter(c => habMatch(c.hab, o.hab));
-    return { foes, bosses: near(hereBoss.length ? hereBoss : allBoss).slice(0, 5), max: o.max };
+    return { foes, bosses: near(hereBoss.length ? hereBoss : allBoss).slice(0, 5), max: o.max, boss: o.boss !== false };
   }
   const symbols = () => (D().skills.symbols || []);
   const symName = s => String(s.name || '').replace(/\s*\(\d+\)$/, '');
@@ -91,21 +88,26 @@
   const ingredients = () => (D().alchemy || {}).ingredients || [];
 
   // ------------------------------------------------------------ содержимое комнат
+  // одна ловушка: урон 100–500 случайного типа (из списка символов), иногда статус-эффект
   function trapText() {
     const st = statuses();
     const status = st.length && chance(0.5) ? pick(st) : '';
-    return `пройти — бросок ${rint(...TRAP_ROLL)}+; урон ${rint(...TRAP_DMG)} (${symName(pick(symbols()) || {}) || 'случайный тип'})${status ? `, накладывает «${status}»` : ''}; срабатываний: ${rint(...TRAP_PROCS)}`;
+    return `урон ${rint(...TRAP_DMG)} (${symName(pick(symbols()) || {}) || 'случайный тип'})${status ? `, накладывает «${status}»` : ''}`;
   }
   function chestText() {
     if (chance(MIMIC)) return 'мимик!';
     const parts = [`монеты (${coin(pick(['м', 'се', 'з']))}): ${rint(...COINS)}`];
     const g = rint(...CHEST_GEAR), mats = D().materials || [], bases = gearBases();
     parts.push(Array.from({ length: g }, () => `${(pick(bases) || {}).name} (${(pick(mats) || {}).name})`).join(', '));
-    parts.push(`особый дроп ×${rint(...CHEST_SPECIAL)}`);
+    // «особый дроп 1–3» — предметы группы «дроп из сундука» листа «разное»
+    const drop = (D().items || []).filter(i => /сундук/.test(norm(i.g)));
+    const n = rint(...CHEST_SPECIAL);
+    parts.push(drop.length ? `особый дроп: ${Array.from({ length: n }, () => pick(drop).name).join(', ')}` : `особый дроп ×${n}`);
     if (chance(CHEST_TRAP)) parts.push(`⚠ ловушка: урон ${rint(...TRAP_DMG)} (${symName(pick(symbols()) || {})})`);
     return parts.join('; ');
   }
-  const treatise = () => `трактат параметра «${R.STAT_NAMES[pick(STAT_KEYS)].toLowerCase()}»`;
+  // «трактат параметра — повышает выбранный параметр на 25» (лист «разное»): параметр выбирает тот, кто читает
+  const treatise = () => 'трактат параметра (+25 к параметру на выбор)';
   function specialInfo(sub, info) {
     const ing = ingredients();
     switch (sub) {
@@ -136,7 +138,9 @@
       case 'библиотека': {
         const found = [];
         if (chance(0.2)) found.push(`фолиант символа «${symName(pick(symbols().filter(s => s.cat !== 'запретные знания')) || {})}»`);
-        for (let i = 0; i < 3; i++) if (chance(0.4)) found.push(treatise());
+        let n = 0;
+        for (let i = 0; i < 3; i++) if (chance(0.4)) n++;
+        if (n) found.push(`${treatise()}${n > 1 ? ' ×' + n : ''}`);
         info.push(`Книжные шкафы: ${found.length ? found.join(', ') : 'ничего полезного'}.`);
         break;
       }
@@ -155,25 +159,31 @@
       case 'empty': info.push(`Интерьер: ${shuffle(DC.INTERIOR).slice(0, 2).join(', ')}. Ничего ценного.`); break;
       case 'enemies': { const n = rint(...ENEMIES); some(n); info.push(`Противников: ${n}. Все монстры агрессивны; учтите сложность и особенности выпавших.`); break; }
       case 'treasury': { const n = rint(...CHESTS); for (let i = 1; i <= n; i++) info.push(`Сундук ${i}: ${chestText()}`); break; }
-      case 'trap': info.push(`Ловушка: ${trapText()}.`); break;
+      case 'trap': {
+        const n = rint(...TRAPS);
+        info.push(`Пройти комнату — бросок ${rint(...TRAP_ROLL)}+. ${n > 1 ? `Ловушек: ${n}` : 'Ловушка'}: ${Array.from({ length: n }, (_, i) => `${n > 1 ? `${i + 1}) ` : ''}${trapText()}`).join('; ')}.`);
+        break;
+      }
       case 'special':
         specialInfo(r.sub, info);
         if (chance(THEMATIC)) { some(1); info.push('Тематический противник.'); }
         break;
-      case 'boss': {
-        const b = pick(P.bosses);
-        if (b) foe(b, 1); else info.push('Босс — на выбор ГМ.');
-        if (b && lvlOf(b) > P.max * 1.5) info.push('Ближе по уровню боссов в бестиарии нет — при необходимости замените его.');
-        const n = rint(...BOSS_EXTRA);
-        const ex = Array.from({ length: n }, () => pick(['тотем усиления врагов (20% мощности)', 'тотем ослабления героев (20% мощности)', 'источник лечения', `ловушка: ${trapText()}`]));
-        info.push(n ? `Дополнения: ${ex.join('; ')}.` : 'Без дополнений.');
+      case 'final': {
+        if (P.boss) {
+          const b = pick(P.bosses);
+          if (b) foe(b, 1); else info.push('Босс — на выбор ГМ.');
+          if (b && lvlOf(b) > P.max * 1.5) info.push('Ближе по уровню боссов в бестиарии нет — при необходимости замените его.');
+          const n = rint(...BOSS_EXTRA);
+          const ex = Array.from({ length: n }, () => pick(['тотем усиления врагов (20% мощности)', 'тотем ослабления героев (20% мощности)', 'источник лечения', `ловушка: ${trapText()}`]));
+          info.push(n ? `Дополнения у босса: ${ex.join('; ')}.` : 'Без дополнений у босса.');
+        }
+        info.push(`Награда: сундук; кристальный слиток «${((pick(D().crystals || []) || {}).name || 'случайный')}»; портал на поверхность.`);
         break;
       }
-      case 'final': info.push(`Сундук с наградой; кристальный слиток «${((pick(D().crystals || []) || {}).name || 'случайный')}»; портал на поверхность.`); break;
       case 'secret': info.push(`Открывается броском внимательности. Внутри: ${pick([treatise(), 'камень возрождения', 'право первородства'])}.`); break;
       default: break;
     }
-    if (['enemies', 'boss'].includes(r.type) && !foes.length) info.push(unlocked() ? 'Подходящих существ в бестиарии не нашлось — расширьте уровни или место.' : 'Имена противников — после пароля ГМ (бестиарий).');
+    if ((r.type === 'enemies' || (r.type === 'final' && P.boss)) && !foes.length) info.push(unlocked() ? 'Подходящих существ в бестиарии не нашлось — расширьте уровни или место.' : 'Имена противников — после пароля ГМ (бестиарий).');
     r.info = info;
     r.foes = foes;
   }
@@ -188,7 +198,7 @@
     const linked = (a, b) => links.some(l => (l.a === a.id && l.b === b.id) || (l.a === b.id && l.b === a.id));
     const link = (a, b, secret) => links.push({ a: a.id, b: b.id, len: rint(...CORRIDOR), stairs: !secret && chance(STAIRS), secret: !!secret });
     const free = r => DIRS.map(([dx, dy]) => [r.x + dx, r.y + dy]).filter(([x, y]) => !occ.has(key(x, y)));
-    const inner = r => !['boss', 'final', 'secret'].includes(r.type);
+    const inner = r => !['final', 'secret'].includes(r.type);
     const attach = (type, sub, from, secret) => {
       const cands = from ? [from] : shuffle(rooms.filter(inner));
       for (const r of cands) {
@@ -201,15 +211,15 @@
       }
       return null;
     };
-    // сколько комнат каждого типа: бросок 2–10, с пределами
-    const [lo, hi] = DC.ROOMS_ROLL;
-    const roll = t => Math.min(rint(lo, hi), TYPES[t].max || Infinity);
+    // сколько комнат каждого типа — DUNGEON.ROOMS
+    const roll = t => { const [lo, hi] = DC.ROOMS[t] || [0, 0]; return rint(lo, Math.max(lo, hi)); };
     const list = [];
     ['empty', 'enemies', 'treasury', 'trap'].forEach(t => { for (let i = roll(t); i > 0; i--) list.push({ type: t }); });
+    // специальные: каждая — до SPECIAL_MAX раз, сверх лимита — следующая по списку
     const used = {};
     for (let i = roll('special'); i > 0; i--) {
       let k = rnd(SPECIAL.length), tries = 0;
-      while ((used[SPECIAL[k]] || 0) >= SPECIAL_MAX && tries < SPECIAL.length) { k = (k + 1) % SPECIAL.length; tries++; }
+      while ((used[SPECIAL[k]] || 0) >= DC.SPECIAL_MAX && tries < SPECIAL.length) { k = (k + 1) % SPECIAL.length; tries++; }
       if (tries >= SPECIAL.length) break;
       used[SPECIAL[k]] = (used[SPECIAL[k]] || 0) + 1;
       list.push({ type: 'special', sub: SPECIAL[k] });
@@ -221,19 +231,17 @@
       const n = occ.get(key(r.x + dx, r.y + dy));
       if (n && n.id > r.id && !linked(r, n) && chance(DC.LOOPS)) link(r, n);
     }));
-    // босс и финал — в самой дальней от входа части
+    // финал (он же комната босса) — в самой дальней от входа части
     const hops = bfs(rooms, links, entrance.id, () => 1);
     const far = rooms.filter(r => free(r).length).sort((a, b) => hops[b.id] - hops[a.id]);
-    let last = far[0] || entrance;
-    if (o.boss) last = attach('boss', '', last) || last;
-    attach('final', '', free(last).length ? last : null);
-    // секретные: 20% у каждой комнаты, кроме входа, финала и босса; не больше 2
-    let secrets = 0;
+    attach('final', '', far[0] || null);
+    // секретные: к любым комнатам, кроме входа и финала, через тайный проход
+    let secrets = roll('secret');
     shuffle(rooms.filter(r => inner(r) && r.type !== 'entrance')).forEach(r => {
-      if (secrets < TYPES.secret.max && free(r).length && chance(SECRET_CHANCE)) { attach('secret', '', r, true); secrets++; }
+      if (secrets > 0 && free(r).length) { attach('secret', '', r, true); secrets--; }
     });
     rooms.forEach(r => fill(r, P));
-    const dg = { v: 1, at: Date.now(), opts: o, rooms, links, light: LIGHT[0].id, patrol: { rooms: 0, log: [] }, sel: null, foeCount: P.foes.length };
+    const dg = { v: VERSION, at: Date.now(), opts: o, rooms, links, light: LIGHT[0].id, patrol: { rooms: 0, log: [] }, sel: null, foeCount: P.foes.length };
     depthOf(dg);
     return dg;
   }
@@ -280,7 +288,9 @@
 
   // ------------------------------------------------------------ хранение
   const KEY = cid => 'hero-workshop:dungeon:' + cid;
-  const load = cid => App.store.get(KEY(cid), null);
+  // подземелья старого вида (v1: отдельная комната босса) не открываются — их нужно сгенерировать заново
+  const VERSION = 2;
+  const load = cid => { const dg = App.store.get(KEY(cid), null); return dg && dg.v === VERSION ? dg : null; };
   const save = (cid, dg) => App.store.set(KEY(cid), dg);
   let ctx = { cid: '', rerender: () => {} };
 
@@ -363,7 +373,7 @@
         <label>Уровень противников от <input type="number" min="0" step="1" data-change="dgOpt" data-k="min" value="${esc(opts.min)}"></label>
         <label>до <input type="number" min="0" step="1" data-change="dgOpt" data-k="max" value="${esc(opts.max)}"></label>
         <label>Где подземелье <select data-change="dgOpt" data-k="hab"><option value="">любые существа</option>${layers.map(l => `<option value="${esc(l.code)}" ${opts.hab === l.code ? 'selected' : ''}>${esc(l.code)} — ${esc(l.name)}</option>`).join('')}</select></label>
-        <label class="check"><input type="checkbox" data-change="dgOpt" data-k="boss" ${opts.boss ? 'checked' : ''}> Комната босса</label>
+        <label class="check"><input type="checkbox" data-change="dgOpt" data-k="boss" ${opts.boss ? 'checked' : ''}> Босс в финальной комнате</label>
       </div>
       <div class="row-actions"><button type="button" class="btn primary" data-act="dgGen">${dg ? 'Сгенерировать заново' : 'Сгенерировать'}</button>
         ${dg ? `<button type="button" class="btn small" data-act="dgCopy">Скопировать текстом</button>
@@ -379,7 +389,7 @@
         ${Object.keys(TYPES).filter(k => counts[k]).map(k => `${TYPES[k].code} — ${TYPES[k].t.toLowerCase()} ×${counts[k]}`).join(', ')}.</p>
       ${mapHtml(dg)}
       <p class="small dg-legend"><span class="dg-key t-entrance">0</span> вход <span class="dg-key t-empty">1</span> пустая <span class="dg-key t-enemies">2</span> противники <span class="dg-key t-treasury">3</span> сокровищница <span class="dg-key t-trap">4</span> ловушка
-        <span class="dg-key t-special">5.x</span> ${SPECIAL.map((s, i) => `5.${i + 1} ${s === 'комната с алтарём' ? 'алтарь' : s}`).join(', ')} <span class="dg-key t-boss">6</span> босс <span class="dg-key t-final">7</span> финал <span class="dg-key t-secret">8</span> секретная;
+        <span class="dg-key t-special">5.x</span> ${SPECIAL.map((s, i) => `5.${i + 1} ${s === 'комната с алтарём' ? 'алтарь' : s}`).join(', ')} <span class="dg-key t-final">6</span> финал (босс) <span class="dg-key t-secret">8</span> секретная;
         число между комнатами — длина коридора, ↓ — лестница вниз, пунктир — тайный проход. Нажмите на комнату, чтобы увидеть, что в ней.</p>
       ${sel ? roomCard(dg, sel) : ''}
       ${trackerHtml(dg)}

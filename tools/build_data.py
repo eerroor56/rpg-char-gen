@@ -777,6 +777,9 @@ def build_gear(wb):
 ALCH_NAME = {"th5": "запрещённое", "th7": "ценное", "th9": "наркотичное"}
 ALCH_USE = {"th6": "огнестрел", "th4": "основа", "th7": "гримуар", "th9": "ковка/закалка", "th5": "трип-эффект",
             "FFF2F2F2": "крафт"}
+# Строки, которые ГМ попросил убрать (название как в таблице, до исправления опечаток):
+# «еживика» — вторая ежевика с другими эффектами, написана с ошибкой.
+ALCH_SKIP = {"еживика"}
 
 
 def build_alchemy(wb):
@@ -785,7 +788,7 @@ def build_alchemy(wb):
     group = ""
     for r in range(2, 441):
         a = txt(ws.cell(r, 1).value)
-        if not a:
+        if not a or str(ws.cell(r, 1).value).strip().lower() in ALCH_SKIP:
             continue
         rest = [txt(ws.cell(r, c).value) for c in range(2, 8)]
         if fill_key(ws.cell(r, 1)) == HEADER_FILL or (not any(rest) and r in (2, 349, 382, 424)):

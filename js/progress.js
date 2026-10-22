@@ -16,7 +16,7 @@
  */
 (function () {
   'use strict';
-  const App = window.App, R = window.Rules, D = window.GAME_DATA;
+  const App = window.App, R = window.Rules, D = window.GAME_DATA, C = window.GM_CONFIG;
   const esc = App.esc, cap = App.cap, fmt = R.fmt, signed = R.signed, norm = R.norm;
   const zero = () => ({ t: 0, d: 0, s: 0, i: 0, l: 0 });
 
@@ -49,6 +49,11 @@
     rec.gm.effects.forEach(e => (e.mods || []).forEach(m => mods.push({ stat: m.stat, op: m.op, v: m.v, src: `${(window.Craft && window.Craft.EFFECT_KINDS[e.kind] || 'эффект').toLowerCase()} «${e.name}»` })));
     const prog = { levels: lv.levels, alloc: rec.prog.alloc, talents: rec.prog.talents, groups: rec.gm.groups, mods };
     const res = R.compute(Object.assign({}, state, { prog }));
+    // карма: от характера (лист создания) плюс изменения ГМ в игре (gm.karma), не дальше предела в обе стороны
+    const dk = Math.round(+rec.gm.karma || 0);
+    res.der.karmaBase = res.der.karma;
+    res.der.karmaGm = dk;
+    res.der.karma = Math.max(-C.KARMA_LIMIT, Math.min(C.KARMA_LIMIT, res.der.karma + dk));
     const v = { state, res0, res, lv };
     // инвентарь и экипировка: урон, броня, уворот и слоты считаются по тому, что надето сейчас
     if (window.Craft && res.race) {
@@ -119,6 +124,19 @@
           <button type="button" class="btn small" data-act="devXpCreature">Начислить</button></div>
         <datalist id="devCreatures">${cr.map(c => `<option value="${esc(c.n)}">ур. ${fmt(R.roundLevel(c.lvl))}</option>`).join('')}</datalist>
         <p class="muted small">Опыт за существо = его уровню${res.der.expPct || res.der.expMul !== 1 ? ' с бонусами персонажа к опыту' : ''}. До следующего уровня нужно опыта в 100 раз больше текущего уровня.</p>`;
+    }
+    html += '</section>';
+
+    // карма
+    const dr = res.der;
+    html += `<section class="dev-card"><h2>Карма</h2>
+      <p><strong class="karma-val">${signed(dr.karma)}</strong> <span class="muted small">характер${dr.align ? ` «${esc(dr.align)}»` : ''}: ${signed(dr.karmaBase)}${dr.karmaGm ? `; изменения в игре: ${signed(dr.karmaGm)}` : ''}; предел ±${C.KARMA_LIMIT}</span></p>
+      <p class="muted small">Плюс — очки света, минус — очки тьмы.</p>`;
+    if (perms.gm) {
+      html += `<div class="dev-row">
+          <label>Изменить на <input type="number" step="1" data-ui="devKarma" data-ui-target="none" value="${esc(App.ui.devKarma || '')}" placeholder="+10 или −5"></label>
+          <input type="text" data-ui="devKarmaWhy" data-ui-target="none" value="${esc(App.ui.devKarmaWhy || '')}" maxlength="200" placeholder="за что (необязательно)" aria-label="За что меняется карма">
+          <button type="button" class="btn small" data-act="devKarma">Изменить карму</button></div>`;
     }
     html += '</section>';
 
@@ -286,6 +304,18 @@
       App.ui.devXpAmount = '';
       const after = levelsFromXp(compute(ctx().record).res0.level, gm.xp).level;
       commit({ gm }, `Начислено ${n} опыта${after > before ? `, новый уровень: ${after}` : ''}`);
+    },
+    // карма меняется на ± от текущей; в записи хранится только сдвиг ГМ от кармы по характеру
+    devKarma() {
+      const n = Math.round(parseFloat(String(App.ui.devKarma || '').replace(',', '.').replace('−', '-')) || 0);
+      if (!n) { App.toast('Укажите, на сколько изменить карму'); return; }
+      const d = compute(ctx().record).res.der;
+      const total = Math.max(-C.KARMA_LIMIT, Math.min(C.KARMA_LIMIT, d.karma + n));
+      if (total === d.karma) { App.toast(`Карма уже на пределе: ${signed(total)}`); return; }
+      const gm = gmCopy(); gm.karma = total - d.karmaBase;
+      const why = String(App.ui.devKarmaWhy || '').trim();
+      App.ui.devKarma = ''; App.ui.devKarmaWhy = '';
+      commit({ gm }, `Карма ${signed(total - d.karma)}${why ? ` (${why})` : ''}: теперь ${signed(total)}`);
     },
     devXpCreature() {
       const name = String(App.ui.devXpCreature || '').trim();

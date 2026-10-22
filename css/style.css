@@ -738,6 +738,8 @@ textarea { width: 100%; }
 .fx-cards .fx-curse, .fx-cards .fx-gift { border-left-color: var(--err); }
 .fx-cards .fx-disease { border-left-color: var(--warn); }
 .fx-cards .fx-buff { border-left-color: var(--ok); }
+.fx-cards .fx-tome { border-left-color: var(--brass); }
+.tome-row { margin-top: 8px; }
 .fx-mods { border-collapse: collapse; margin: 4px 0 10px; }
 .fx-mods th { text-align: left; font-weight: 500; padding: 3px 12px 3px 0; color: var(--muted); }
 .fx-mods td { padding: 3px 8px 3px 0; }
@@ -869,8 +871,7 @@ body.wmap-open { overflow: hidden; }
 .dungeon-box .t-treasury { background: #5a4a22; border-color: var(--brass); }
 .dungeon-box .t-trap { background: #4d3a5e; border-color: #9a7cc0; }
 .dungeon-box .t-special { background: #23485a; border-color: #5fa3c0; }
-.dungeon-box .t-boss { background: #7a1f24; border-color: var(--err); color: #ffd9d4; }
-.dungeon-box .t-final { background: var(--brass); border-color: var(--focus); color: var(--brass-ink); }
+.dungeon-box .t-final { background: #7a1f24; border-color: var(--err); color: #ffd9d4; box-shadow: 0 0 0 2px var(--brass); }
 .dungeon-box .t-secret { background: transparent; border-style: dashed; border-color: var(--muted); }
 .dg-cor { display: grid; place-items: center; color: var(--muted); font-size: .72rem; position: relative; isolation: isolate; text-shadow: 0 0 3px var(--ink-2), 0 0 3px var(--ink-2); }
 .dg-cor::before { content: ''; position: absolute; background: var(--line); z-index: -1; }
@@ -897,3 +898,6 @@ body.wmap-open { overflow: hidden; }
   .dungeon-box { --dg-room: 36px; --dg-cor: 20px; }
   .dg-room { font-size: .8rem; }
 }
+.brew-herbs { margin: 4px 0 10px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: var(--radius-s); }
+.brew-herbs .row-actions { align-items: center; margin: 0; }
+.brew-herbs .brew-fx { margin: 8px 0; }
