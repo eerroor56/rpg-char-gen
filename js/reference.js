@@ -105,6 +105,7 @@
     { id: 'alchemy', title: 'Алхимия и кухня', locked: true, build() {
       const A = D.alchemy;
       return [
+        ...(window.Brew ? [{ custom: () => `<section class="card brew-card"><h2>Калькулятор: блюдо, напиток, зелье</h2>${window.Brew.form({ host: 'ref' })}</section>` }] : []),
         { title: 'Ингредиенты', note: `Зелёным — бафф, красным — дебафф (лист «алхимия»). Пометки названия: ${esc(A.nameLegend.join(', '))}. Доп. свойства по применению: ${esc(A.useLegend.join(', '))}.`,
           cols: ['Ингредиент', 'Эффекты', 'Цена', 'Ур. навыка', 'Дополнительно'],
           rows: A.ingredients.map(i => row([`<b>${esc(i.n)}</b> ${tag(i.tag, i.tag === 'запрещённое' ? 'bad' : 'warn')}`, i.e.map(([t, s]) => `<span class="eff ${s === '+' ? 'plus' : s === '-' ? 'minus' : ''}">${App.capHtml(esc(t))}</span>`).join(' '), esc(i.price), esc(i.lvl), i.x.map(([t, u]) => `${App.capHtml(esc(t))} ${tag(u)}`).join('<br>')], '', cap(i.g))) },

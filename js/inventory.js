@@ -103,7 +103,7 @@
     const jewelWorn = eq.slots.some(s => ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(s.cat) && inv.equip[s.id]);
     const prWorn = by('prosth').some(s => inv.equip[s.id]);
     const selJewel = selCalc && ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(selCalc.cat);
-    const weapons = eq.weapons.filter(w => w.kind === 'weapon');
+    const weapons = eq.weapons.filter(w => roleKind(w.kind));
 
     let html = `<section class="dev-card doll-card"><h2>Экипировка</h2>
       ${eq.warnings.length ? `<div class="checks good"><ul>${eq.warnings.map(w => `<li class="warn">${esc(w)}</li>`).join('')}</ul></div>` : ''}
@@ -156,9 +156,10 @@
     const reqs = (c.req || []).map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ');
     return `<section class="dev-card item-card"><div class="sec-head"><h2>${esc(it.name)}${(+it.qty || 1) > 1 ? ` ×${+it.qty}` : ''}</h2><span class="tag">${esc(K.KIND_NAMES[it.kind] || it.kind)}${it.base && it.base !== it.name ? ': ' + esc(it.base) : ''}</span></div>
       <dl class="kv-list compact item-kv">
-        ${kv('Урон', c.damage !== null && c.damage !== undefined ? `<strong>${fmt(c.damage)}</strong>${c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : ''}${c.mult && c.mult.length ? ` <span class="muted small">(${esc(c.mult.join(', '))})</span>` : ''}${(c.bonus || []).filter(b => b.kind === 'урон').map(b => ` <span class="muted small">+${b.v} ${esc(b.src)}</span>`).join('')}` : '')}
+        ${kv('Урон', c.damage !== null && c.damage !== undefined ? `<strong>${fmt(c.damage)}</strong>${c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : ''}${gunDmgParts(c)}${c.mult && c.mult.length ? ` <span class="muted small">(${esc(c.mult.join(', '))})</span>` : ''}${(c.bonus || []).filter(b => b.kind === 'урон').map(b => ` <span class="muted small">+${b.v} ${esc(b.src)}</span>`).join('')}` : '')}
         ${kv('Броня', c.armor !== null && c.armor !== undefined ? `<strong>${fmt(c.armor)}</strong>${c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : ''}` : '')}
-        ${kv('Материал', parts.length ? esc(parts.map(p => `${p.mat} ${fmt(num(p.u))} ед.${p.role === 'non' && it.kind === 'weapon' ? ' (не на урон)' : ''}`).join(', ')) + (c.need ? ` <span class="muted small">— нужно ${fmt(c.need)} ед.</span>` : '') : '')}
+        ${kv('Материал', parts.length ? esc(parts.map(p => `${p.mat} ${fmt(num(p.u))} ед.${p.role === 'non' && roleKind(it.kind) ? ' (не на урон)' : ''}`).join(', ')) + (c.need ? ` <span class="muted small">— нужно ${fmt(c.need)} ед.</span>` : '') : '')}
+        ${kv('Огнестрел', c.gun ? esc(gunStats(c)) : '')}
         ${kv('Тип урона', c.base && c.base.dt ? esc(c.base.dt) : '')}
         ${kv('Дальность', c.base && c.base.range ? esc(c.base.range) : '')}
         ${kv('Требования', reqs)}
@@ -207,12 +208,21 @@
 
   // ------------------------------------------------------------ выдача предметов (ГМ)
   function blankDraft(kind) {
-    return { kind: kind || 'weapon', base: '', name: '', qty: 1, note: '', size: 'н',
+    const d = { kind: kind || 'weapon', base: '', name: '', qty: 1, note: '', size: 'н',
       craft: { parts: [], coat: [], sharpen: 0, modules: [], model: '', glyphs: [], inlays: [], quality: 1, enrich: false, soul: { creature: '', mode: '', abilities: [] }, extra: '' } };
+    if (kind === 'gun') d.craft.gun = blankGun();
+    return d;
   }
+  // огнестрел по умолчанию: один ствол, первый ресивер, модель на топливе («классика»)
+  function blankGun() {
+    const G = K.guns();
+    return { barrels: [{ name: (G.barrels[0] || {}).name || '', n: 1 }], receiver: (G.receivers[0] || {}).name || '', scope: '', clip: 0,
+      model: (G.models.find(m => m.fuel) || G.models[0] || {}).name || '', ammo: { type: (G.ammo[0] || {}).name || '', mat: '' }, fuel: '', hands: '' };
+  }
+  const roleKind = kind => kind === 'weapon' || kind === 'gun';   // материал делится на «урон» и «остальное»
   // при выборе основы — строки материала на все нужные единицы
   function fillParts(d, v) {
-    const it = { kind: d.kind, base: d.base, size: d.size, craft: { parts: [] } };
+    const it = { kind: d.kind, base: d.base, size: d.size, craft: { parts: [], gun: d.craft.gun } };
     const c = K.compute(it, v.ctx);
     const mat = ((d.craft.parts || [])[0] || {}).mat || '';
     d.craft.parts = [];
@@ -222,9 +232,10 @@
 
   function addCard(v) {
     const mode = App.ui.invAdd || 'craft';
-    const tabs = [['craft', 'Изготовить'], ['table', 'Из таблиц'], ['drop', 'Добыча с существа'], ['custom', 'Своё']];
+    const tabs = [['craft', 'Изготовить'], ['brew', 'Кухня и зелья'], ['table', 'Из таблиц'], ['drop', 'Добыча с существа'], ['custom', 'Своё']];
     let body = '';
     if (mode === 'craft') body = craftForm(v);
+    else if (mode === 'brew') body = window.Brew.form({ host: 'dev', issueAct: 'invBrewSave' });
     else if (mode === 'table') body = tableForm(v);
     else if (mode === 'drop') body = dropForm(v);
     else body = customForm(v);
@@ -244,7 +255,7 @@
     const bases = K.BASES[d.kind]();
     const item = Object.assign({}, d, { name: d.name || K.autoName(d) });
     const c = d.base ? K.compute(item, v.ctx) : null;
-    const isW = d.kind === 'weapon', isA = ['armor', 'shield', 'prosthesis'].includes(d.kind);
+    const isW = roleKind(d.kind), isA = ['armor', 'shield', 'prosthesis'].includes(d.kind), isG = d.kind === 'gun';
     const partRows = role => cr.parts.map((p, i) => ({ p, i })).filter(x => (isW ? x.p.role === role : true)).map(({ p, i }) => `<div class="part-row">
         <input type="text" list="invMats" data-change="invField" data-k="craft.parts.${i}.mat" value="${esc(p.mat || '')}" placeholder="материал или камень" aria-label="Материал">
         <input type="number" min="0" step="0.1" class="mini-num" data-change="invField" data-k="craft.parts.${i}.u" value="${esc(p.u)}" aria-label="Единиц">
@@ -252,16 +263,18 @@
         <button type="button" class="linklike small" data-act="invPartDel" data-v="${i}">убрать</button></div>`).join('');
     let html = `<div class="form-grid">
       <label>Вид <select data-change="invKind">${kinds.map(k => opt(k, K.KIND_NAMES[k], d.kind)).join('')}</select></label>
-      <label>Основа <select data-change="invField" data-k="base"><option value="">— выберите —</option>${bases.map(b => opt(b.name, `${b.name}${typeof b.u === 'number' ? ` (${b.u.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${typeof b.un === 'number' && b.un ? '+' + b.un.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : ''} ед.)` : ''}`, d.base)).join('')}</select></label>
+      <label>${isG ? 'Корпус' : 'Основа'} <select data-change="invField" data-k="base"><option value="">— выберите —</option>${bases.map(b => opt(b.name, `${b.name}${typeof b.u === 'number' ? ` (${b.u.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${typeof b.un === 'number' && b.un ? '+' + b.un.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : ''} ед.)` : ''}`, d.base)).join('')}</select></label>
       <label>Размер предмета <select data-change="invField" data-k="size">${R.SIZES.map(z => opt(z.id, `${z.name} (сырьё ${z.mat})`, d.size || 'н')).join('')}</select>
         <span class="muted small">под какой рост сделан; под персонажа сам не подстраивается</span></label>
     </div>`;
-    if (!d.base) return html + '<p class="muted small">Выберите основу — из таблицы «оружие и броня». Дальше можно собрать её из любых слитков по единицам.</p>';
+    if (!d.base) return html + (isG ? '<p class="muted small">Выберите корпус — он задаёт, сколько стволов поместится. Детали огнестрела — из таблицы «оружие и броня» (колонки «деталь»), дальше пушка собирается из любых слитков по единицам.</p>'
+      : '<p class="muted small">Выберите основу — из таблицы «оружие и броня». Дальше можно собрать её из любых слитков по единицам.</p>');
     html += matOptions();
+    if (isG) html += gunForm(d, c);
     if (isW) {
-      html += `<h3>Материал на урон <span class="muted small" id="invSum_dmg">${sumText(d, c, 'dmg')}</span></h3>${partRows('dmg')}
+      html += `<h3>Материал на урон${isG ? ' <span class="muted small">(стволы, ресивер, корпус)</span>' : ''} <span class="muted small" id="invSum_dmg">${sumText(d, c, 'dmg')}</span></h3>${partRows('dmg')}
         <button type="button" class="linklike small" data-act="invPartAdd" data-v="dmg">+ материал</button>
-        <h3>Остальное <span class="muted small" id="invSum_non">${sumText(d, c, 'non')}</span></h3>${partRows('non')}
+        <h3>Остальное${isG ? ' <span class="muted small">(прицел, обойма — урон не добавляют)</span>' : ''} <span class="muted small" id="invSum_non">${sumText(d, c, 'non')}</span></h3>${partRows('non')}
         <button type="button" class="linklike small" data-act="invPartAdd" data-v="non">+ материал</button>`;
     } else {
       html += `<h3>Материал <span class="muted small" id="invSum_all">${sumText(d, c, 'all')}</span></h3>${partRows()}
@@ -280,7 +293,7 @@
       <h3>Напыление <span class="muted small">даёт эффект металла, тратит целый слиток; на 1 оружие — 1</span></h3>
       ${cr.coat.map((m, i) => `<div class="part-row"><input type="text" list="invMats" data-change="invField" data-k="craft.coat.${i}" value="${esc(m)}" aria-label="Напыление"><button type="button" class="linklike small" data-act="invListDel" data-k="coat" data-v="${i}">убрать</button></div>`).join('')}
       <button type="button" class="linklike small" data-act="invListAdd" data-k="coat">+ напыление</button>
-      ${isW ? `<h3>Доп. модули</h3><div class="mod-list">${K.modules().map(m => `<label class="check"><input type="checkbox" data-change="invModule" data-v="${esc(m.name)}" ${cr.modules.includes(m.name) ? 'checked' : ''}> ${esc(m.name)} <span class="muted small">(${fmt(m.u)} ед.) ${esc(m.fx)}</span></label>`).join('')}</div>` : ''}
+      ${isW && !isG ? `<h3>Доп. модули</h3><div class="mod-list">${K.modules().map(m => `<label class="check"><input type="checkbox" data-change="invModule" data-v="${esc(m.name)}" ${cr.modules.includes(m.name) ? 'checked' : ''}> ${esc(m.name)} <span class="muted small">(${fmt(m.u)} ед.) ${esc(m.fx)}</span></label>`).join('')}</div>` : ''}
       <h3>Зачарование глифами <span class="muted small" id="invGlyphHead">${glyphHead(c, isA)}</span></h3>
       <datalist id="invSyms">${syms.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       ${cr.glyphs.map((g, i) => `<div class="part-row"><input type="text" list="invSyms" data-change="invField" data-k="craft.glyphs.${i}.sym" value="${esc(g.sym || '')}" placeholder="символ" aria-label="Символ глифа">
@@ -307,6 +320,45 @@
     return html;
   }
 
+  // детали огнестрела: стволы, ресивер, прицел, обойма, модель, патроны, топливо
+  function gunForm(d, c) {
+    const G = K.guns(), g = d.craft.gun || (d.craft.gun = blankGun());
+    const fuels = K.fuels();
+    const u2 = x => x.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+    const u = p => `${u2(p.u)} ед.${p.reqRaw ? ', ' + p.reqRaw : ''}`;
+    const body = K.baseOf('gun', d.base) || {};
+    return `<h3>Стволы <span class="muted small" id="invGunHead">${gunHead(c)}</span></h3>
+      ${g.barrels.map((b, i) => `<div class="part-row"><select data-change="invField" data-k="craft.gun.barrels.${i}.name" aria-label="Ствол">${G.barrels.map(p => opt(p.name, `${p.name} (${u(p)})${p.fx ? ' — ' + p.fx : ''}`, b.name)).join('')}</select>
+        <input type="number" min="1" step="1" class="mini-num" data-change="invField" data-k="craft.gun.barrels.${i}.n" value="${esc(b.n)}" aria-label="Сколько таких стволов"><span class="muted small">шт.</span>
+        ${g.barrels.length > 1 ? `<button type="button" class="linklike small" data-act="invGunDel" data-v="${i}">убрать</button>` : ''}</div>`).join('')}
+      <button type="button" class="linklike small" data-act="invGunAdd">+ ствол другого вида</button>
+      <div class="form-grid">
+        <label>Ресивер <select data-change="invField" data-k="craft.gun.receiver"><option value="">— нет —</option>${G.receivers.map(p => opt(p.name, `${p.name} (${u(p)})${p.fx ? ' — ' + p.fx : ''}`, g.receiver)).join('')}</select></label>
+        <label>Прицел <select data-change="invField" data-k="craft.gun.scope"><option value="">— нет —</option>${G.scopes.map(p => opt(p.name, `${p.name} (${u2(p.u)} ед.) — ${p.fx}`, g.scope)).join('')}</select></label>
+        ${G.clip ? `<label>Обойма, патронов <input type="number" min="0" max="${G.clip.max}" step="1" data-change="invField" data-k="craft.gun.clip" value="${esc(g.clip || 0)}">
+          <span class="muted small">${u2(G.clip.u)} ед. материала на патрон, до ${G.clip.max}; 0 — без обоймы</span></label>` : ''}
+        <label>Модель огнестрела <select data-change="invField" data-k="craft.gun.model">${G.models.map(p => opt(p.name, `${p.name} — ${p.fx}`, g.model)).join('')}</select></label>
+        <label>Патроны <select data-change="invField" data-k="craft.gun.ammo.type"><option value="">— не заряжено —</option>${G.ammo.map(p => opt(p.name, `${p.name} (${u2(p.u)} ед.)${p.fx ? ' — ' + p.fx : ''}`, (g.ammo || {}).type)).join('')}</select></label>
+        <label>Материал патронов <input type="text" list="invMats" data-change="invField" data-k="craft.gun.ammo.mat" value="${esc((g.ammo || {}).mat || '')}" placeholder="сталь, свинец, серебро…"></label>
+        <label>Топливо <input type="text" list="invFuels" data-change="invField" data-k="craft.gun.fuel" value="${esc(g.fuel || '')}" placeholder="${fuels.length ? 'порох, огненная соль…' : 'название; список — после пароля ГМ'}"></label>
+        <label>Руки <select data-change="invField" data-k="craft.gun.hands">${opt('', `по корпусу: ${C.GUNS.HANDS[norm(body.name || '')] || C.GUNS.DEFAULT_HANDS}`, g.hands)}${opt(1, 'одна', g.hands)}${opt(2, 'две', g.hands)}</select></label>
+      </div>
+      <datalist id="invFuels">${fuels.map(f => `<option value="${esc(f.name)}">${esc(f.fx)}</option>`).join('')}</datalist>
+      <p class="muted small">Урон = урон металла пушки + урон патрона, затем модель (пневматика — 50%, магнитно-электронное — ×1,5) и топливо («урон 2х» у пороха). Эффект металла — как у любого оружия, ниже в списке эффектов. Стволов за раз — столько выстрелов.</p>`;
+  }
+  function gunHead(c) {
+    const g = c && c.gun;
+    if (!g) return '';
+    return `ячеек <b class="${g.cells > g.cap ? 'bad-text' : 'good-text'}">${g.cells}</b> из ${g.cap} · выстрелов за раз: ${g.shots}`;
+  }
+  // строка характеристик пушки для карточки предмета
+  function gunStats(c) {
+    const g = c.gun;
+    return [`выстрелов за раз ${g.shots}${g.auto ? ', автоматический огонь' : ''}`, g.acc ? `точность ${signed(g.acc)}` : '', g.od ? `ОД ${signed(g.od)}` : '',
+      g.zor ? `зоркость ${signed(g.zor)}` : '', g.fuelCap ? `вмещает ${fmt(g.fuelCap)}е топлива` : ''].filter(Boolean).join(' · ');
+  }
+  const gunDmgParts = c => (c.gun ? ` <span class="muted small">(металл ${fmt(c.gun.metal)}${c.gun.cart && c.gun.cart.mat ? ` + патрон ${fmt(c.gun.cart.dmg)}` : ''})</span>` : '');
+
   function sumText(d, c, role) {
     const have = d.craft.parts.filter(p => role === 'all' || p.role === role).reduce((a, p) => a + num(p.u), 0);
     const need = role === 'dmg' ? c.needDmg : role === 'non' ? c.needNon : c.need;
@@ -326,6 +378,7 @@
     set('invPreview', previewCard(item, c));
     ['dmg', 'non', 'all'].forEach(r => set('invSum_' + r, sumText(d, c, r)));
     set('invGlyphHead', glyphHead(c, ['armor', 'shield', 'prosthesis'].includes(d.kind)));
+    set('invGunHead', gunHead(c));
     const nm = document.querySelector('[data-k="name"]');
     if (nm) nm.placeholder = K.autoName(d);
   }
@@ -334,7 +387,8 @@
     if (!c) return '';
     const kv = (t, x) => `<span><b>${App.cap(t)}:</b> ${x}</span>`;
     return `<div class="craft-preview">
-      ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '')) : '', c.armor !== null && c.armor !== undefined ? kv('броня', fmt(c.armor) + (c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : '')) : '', c.pen ? kv('штраф ловк.', c.pen) : '',
+      ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '') + gunDmgParts(c) + (c.mult.length ? ` <span class="muted small">(${esc(c.mult.join(', '))})</span>` : '')) : '',
+        c.gun ? kv('огнестрел', esc(gunStats(c))) : '', c.armor !== null && c.armor !== undefined ? kv('броня', fmt(c.armor) + (c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : '')) : '', c.pen ? kv('штраф ловк.', c.pen) : '',
         c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', kv('гнёзда для камней', c.sockets), c.skill !== null && c.skill !== undefined ? kv('изготовить самому', skillText(c)) : '', c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
       ${c.effects.length ? `<ul class="fx-list small">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}</li>`).join('')}</ul>` : ''}
       ${c.warnings.length ? `<ul class="small item-warn">${c.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -564,9 +618,18 @@
       let val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.type === 'number') val = num(val);
       setPath(d, k, val);
-      if (k === 'base' || k === 'size') fillParts(d, view());
-      if (STRUCT.test(k)) rerender(); else refreshCraft();
+      // детали пушки меняют, сколько нужно материала: строки материала пересобираются
+      const gunUnits = /^craft\.gun\.(barrels|receiver|scope|clip)/.test(k);
+      if (k === 'base' || k === 'size' || gunUnits) fillParts(d, view());
+      if (STRUCT.test(k) || gunUnits) rerender(); else refreshCraft();
     },
+    invGunAdd() {
+      const d = App.ui.invDraft; if (!d || !d.craft.gun) return;
+      const G = K.guns(), used = d.craft.gun.barrels.map(b => b.name);
+      d.craft.gun.barrels.push({ name: (G.barrels.find(p => !used.includes(p.name)) || G.barrels[0] || {}).name || '', n: 1 });
+      fillParts(d, view()); rerender();
+    },
+    invGunDel(b) { const d = App.ui.invDraft; if (!d || !d.craft.gun) return; d.craft.gun.barrels.splice(+b.dataset.v, 1); fillParts(d, view()); rerender(); },
     invModule(t) {
       const d = App.ui.invDraft; if (!d) return;
       const n = t.dataset.v;
@@ -584,8 +647,8 @@
       const v = view();
       const c = K.compute(Object.assign({}, d), v.ctx);
       const role = b.dataset.v;
-      const have = d.craft.parts.filter(p => d.kind !== 'weapon' || p.role === role).reduce((a, p) => a + num(p.u), 0);
-      const need = d.kind === 'weapon' ? (role === 'dmg' ? c.needDmg : c.needNon) : c.need;
+      const have = d.craft.parts.filter(p => !roleKind(d.kind) || p.role === role).reduce((a, p) => a + num(p.u), 0);
+      const need = roleKind(d.kind) ? (role === 'dmg' ? c.needDmg : c.needNon) : c.need;
       d.craft.parts.push({ mat: '', u: Math.max(0, Math.round((need - have) * 100) / 100), role });
       rerender();
     },
@@ -596,7 +659,9 @@
     invSave() {
       const d = App.ui.invDraft; if (!d || !d.base) { App.toast('Выберите основу предмета'); return; }
       const cr = clone(d.craft);
-      cr.parts = (cr.parts || []).filter(p => p.mat && num(p.u) > 0).map(p => ({ mat: p.mat.trim(), u: num(p.u), role: d.kind === 'weapon' ? p.role : (d.kind === 'ammo' ? 'dmg' : 'non') }));
+      cr.parts = (cr.parts || []).filter(p => p.mat && num(p.u) > 0).map(p => ({ mat: p.mat.trim(), u: num(p.u), role: roleKind(d.kind) ? p.role : (d.kind === 'ammo' ? 'dmg' : 'non') }));
+      if (cr.gun) cr.gun.barrels = (cr.gun.barrels || []).filter(b => b.name && num(b.n) > 0);
+      else delete cr.gun;
       ['coat', 'inlays'].forEach(k => { cr[k] = (cr[k] || []).map(x => String(x).trim()).filter(Boolean); });
       cr.glyphs = (cr.glyphs || []).filter(g => g.sym && String(g.sym).trim());
       if (!cr.soul || !cr.soul.mode || !cr.soul.creature) delete cr.soul;
@@ -654,6 +719,17 @@
         });
       }, `Добыча с «${st.creature}»: ${rows.map(r => `${r.name}${r.qty > 1 ? ' ' + r.qty : ''}`).join(', ')}`);
       App.ui.invDrop = null;
+    },
+    // блюдо, напиток или зелье из калькулятора (js/brew.js)
+    invBrewSave() {
+      const d = window.Brew.draft(), r = window.Brew.compute(d);
+      if (!r.n) { App.toast('Добавьте ингредиенты'); return; }
+      if (r.warnings.length && !confirm(`Есть замечания:\n${r.warnings.join('\n')}\n\nВсё равно выдать?`)) return;
+      const name = String(d.name || '').trim() || r.name;
+      const qty = Math.max(1, Math.floor(num(d.qty) || 1));
+      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe, qty, src: 'выдал ГМ' };
+      gmChange(gm => { addStack(gm.items, it); }, `Получено: «${name}»${qty > 1 ? ' ×' + qty : ''} (${r.summary})`);
+      App.ui.brew = window.Brew.blank(d.mode);
     },
     invCAdd() {
       const name = String(App.ui.invCName || '').trim();

@@ -727,6 +727,7 @@ textarea { width: 100%; }
 .add-card h3 { font-size: 1rem; font-family: var(--font-body); font-weight: 700; margin: 14px 0 6px; }
 .part-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
 .part-row input[type="text"] { flex: 1 1 220px; width: auto; min-width: 0; }
+.part-row select { flex: 1 1 240px; width: auto; min-width: 0; }
 .mod-list { display: grid; gap: 4px; }
 .craft-more { margin: 14px 0; border-top: 1px solid var(--line-soft); padding-top: 10px; }
 .craft-more summary { cursor: pointer; font-weight: 700; }
@@ -831,3 +832,68 @@ body.wmap-open { overflow: hidden; }
 .wmap-x { position: absolute; top: 6px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
 .wmap-x:hover { color: var(--text); background: var(--panel-2); }
 .wmap-info h3 { padding-right: 34px; }
+
+/* ---------- кухня, винокурня, алхимический стол (js/brew.js) */
+.brew-card { margin-bottom: 18px; }
+.brew-card h2 { margin: 0 0 4px; }
+.brew h3 { font-size: 1rem; font-family: var(--font-body); font-weight: 700; margin: 14px 0 6px; }
+.brew .part-row label.inline { display: inline-flex; align-items: center; gap: 6px; }
+.brew .part-row label.inline select { flex: none; width: auto; }
+.brew-roll { display: flex; gap: 6px; align-items: center; }
+.brew-roll input { width: 96px; }
+.brew-out .brew-name { margin: 0 0 6px; }
+.brew-out .brew-main { margin: 0 0 4px; font-size: 1.05rem; }
+.brew-out.spoiled { border-left-color: var(--err); }
+.brew-fx { list-style: none; padding: 0 !important; margin: 4px 0; display: grid; gap: 3px; font-size: .93rem; }
+.brew-fx li { margin: 0; }
+.brew-help { margin-top: 12px; }
+.brew-help summary { cursor: pointer; color: var(--muted); }
+.brew-help ul { padding-left: 18px; }
+
+/* ---------- генератор подземелий (js/dungeon.js) */
+.dungeon-box { margin: 18px 0; --dg-room: 44px; --dg-cor: 26px; }
+.dungeon-box .sec-head h2 { margin: 0; }
+.dungeon-box h3 { font-size: 1.05rem; font-family: var(--font-body); font-weight: 700; margin: 0 0 6px; }
+.dg-opts { align-items: end; }
+.dg-scroll { overflow: auto; margin: 10px 0; padding: 10px; background: var(--ink-2); border: 1px solid var(--line-soft); border-radius: var(--radius-m); max-height: 70vh; }
+.dg-map { display: grid; width: max-content; margin: 0 auto; }
+.dg-void { display: block; }
+.dg-room, .dg-key { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); font: 700 .9rem/1 var(--font-body); }
+.dg-room { width: var(--dg-room); height: var(--dg-room); padding: 0; cursor: pointer; }
+.dg-room:hover { border-color: var(--brass); }
+.dg-room.is-sel { outline: 2px solid var(--focus); outline-offset: 1px; }
+.dg-key { display: inline-grid; min-width: 26px; height: 20px; padding: 0 4px; font-size: .75rem; margin: 0 2px 0 6px; vertical-align: middle; }
+.dungeon-box .t-entrance { background: #2f5a4d; border-color: var(--ok); }
+.dungeon-box .t-empty { background: var(--panel-2); color: var(--muted); }
+.dungeon-box .t-enemies { background: #5a2a33; border-color: #b05a62; }
+.dungeon-box .t-treasury { background: #5a4a22; border-color: var(--brass); }
+.dungeon-box .t-trap { background: #4d3a5e; border-color: #9a7cc0; }
+.dungeon-box .t-special { background: #23485a; border-color: #5fa3c0; }
+.dungeon-box .t-boss { background: #7a1f24; border-color: var(--err); color: #ffd9d4; }
+.dungeon-box .t-final { background: var(--brass); border-color: var(--focus); color: var(--brass-ink); }
+.dungeon-box .t-secret { background: transparent; border-style: dashed; border-color: var(--muted); }
+.dg-cor { display: grid; place-items: center; color: var(--muted); font-size: .72rem; position: relative; isolation: isolate; text-shadow: 0 0 3px var(--ink-2), 0 0 3px var(--ink-2); }
+.dg-cor::before { content: ''; position: absolute; background: var(--line); z-index: -1; }
+.dg-cor.h::before { left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; }
+.dg-cor.v::before { top: 0; bottom: 0; left: 50%; width: 4px; margin-left: -2px; }
+.dg-cor.stairs { color: var(--warn); font-weight: 700; }
+.dg-cor.stairs::before { background: rgba(239, 197, 109, .55); }
+.dg-cor.secret::before { background: none; border: 0 dashed var(--muted); }
+.dg-cor.secret.h::before { border-top-width: 2px; height: 0; margin-top: 0; }
+.dg-cor.secret.v::before { border-left-width: 2px; width: 0; margin-left: 0; }
+.dg-legend { line-height: 2; }
+.dg-room-card { margin: 12px 0; padding: 12px 14px; background: var(--ink-2); border-left: 3px solid var(--brass); border-radius: var(--radius-s); }
+.dg-room-card h3 { margin: 0; }
+.dg-room-card p { margin: 6px 0; }
+.dg-near .linklike { padding: 0; }
+.dg-track { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; margin: 12px 0; }
+.dg-track-col { padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.dg-track select { width: auto; max-width: 100%; }
+.dg-log { margin: 8px 0 0; padding-left: 18px; }
+.dg-all { margin-top: 10px; }
+.dg-all summary { cursor: pointer; color: var(--muted); }
+.dg-row { padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: .92rem; }
+@media (max-width: 720px) {
+  .dungeon-box { --dg-room: 36px; --dg-cor: 20px; }
+  .dg-room { font-size: .8rem; }
+}

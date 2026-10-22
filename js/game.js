@@ -317,13 +317,18 @@
       <button type="button" class="btn ghost danger small" data-act="gDeleteCamp">Удалить кампанию</button>
       <p class="muted small">Удаляются все персонажи, журнал и сессии этой кампании.</p></details>` : '';
 
+    // генератор подземелий: уровень противников — от среднего уровня персонажей в игре
+    const inGame = (chars || []).filter(x => x.status === 'active');
+    const partyLevel = inGame.length ? inGame.reduce((a, ch) => a + (charView(ch).res.level || 0), 0) / inGame.length : 1;
+    const dungeonHtml = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender: repaint }) : '';
+
     el.innerHTML = `<div class="page game">
       <p class="crumbs"><a href="#game">Все кампании</a></p>
       <div class="page-head"><h1>${esc(camp.name)}</h1>${userBar()}</div>
       <p class="muted">${gm ? 'Вы ГМ этой кампании.' : `ГМ: ${esc(camp.gmName || '—')}.`} ${s.active ? `<b class="live">Идёт сессия ${s.n}.</b>` : ''}</p>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       <div class="camp-grid">
-        <div class="camp-main">${charsHtml}${diceBox({ cid })}${feedHtml}</div>
+        <div class="camp-main">${charsHtml}${diceBox({ cid })}${dungeonHtml}${feedHtml}</div>
         <aside class="camp-side">${sessionHtml}${inviteHtml}${membersHtml}${sessionsHtml}${privHtml}${settingsHtml}</aside>
       </div></div>`;
   }
@@ -485,6 +490,15 @@
       const pid = b.dataset.v, key = pid === '_campaign' ? 'gPrivCamp' : 'gPriv';
       const text = String(App.ui[key] !== undefined ? App.ui[key] : '');
       run(async () => { await C.savePrivate(cur().cid, pid, text); App.ui[key] = undefined; }, 'Заметки сохранены');
+    },
+    // подземелье из генератора — в конец личных заметок ГМ по кампании
+    gDgNotes() {
+      const { cid } = cur();
+      const text = window.Dungeon ? window.Dungeon.text(cid) : '';
+      if (!text) return;
+      const was = App.ui.gPrivCamp !== undefined ? App.ui.gPrivCamp : ((G.d.priv_campaign || {}).text || '');
+      const next = (was.trim() ? was.trim() + '\n\n' : '') + text;
+      run(async () => { await C.savePrivate(cid, '_campaign', next); App.ui.gPrivCamp = undefined; }, 'Подземелье добавлено в заметки ГМ');
     },
     gNote() {
       const text = String(App.ui.gNote || '').trim();

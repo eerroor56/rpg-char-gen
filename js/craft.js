@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  const R = window.Rules, C = window.GM_CONFIG, D = () => window.GAME_DATA;
+  const R = window.Rules, C = window.GM_CONFIG, D = () => window.GAME_DATA, App = () => window.App;
   const norm = R.norm, fmt = R.fmt, ri = R.ri;
   const CR = C.CRAFT;
   const r2 = x => Math.round(x * 100) / 100;
@@ -34,9 +34,84 @@
   const allMaterials = () => (D().materials || []).concat(D().crystals || []);
 
   const table = id => ((D().gear.tables || {})[id] || { rows: [] }).rows.map(r => r.c);
+
+  // ------------------------------------------------------------ огнестрел
+  // Лист «оружие и броня», колонки K–O: деталь, эффект, кол-во ресурса, требование, ур. навыка.
+  // Строки «патрон» и «модель» без чисел — заголовки разделов. Пушка собирается из корпуса (основа),
+  // стволов, ресивера, прицела, обоймы; стреляет патронами, модель задаёт принцип стрельбы.
+  // «2с,2л» → { с: 2, л: 2 } (в таблице местами латинская «c»)
+  function parseReq(s) {
+    const out = {};
+    String(s || '').toLowerCase().replace(/c/g, 'с').replace(/ё/g, 'е').replace(/(\d+(?:[.,]\d+)?)\s*,?\s*([тдсил])/g, (a, n, k) => { out[k] = parseFloat(n.replace(',', '.')); return a; });
+    return out;
+  }
+  const PART_FX = /([+\-−]\s*\d+)\s*(од|точност|зоркост)/gi;
+  let gunIx = null;
+  function guns() {
+    if (gunIx) return gunIx;
+    const G = C.GUNS;
+    const out = { barrels: [], receivers: [], bodies: [], scopes: [], clip: null, ammo: [], models: [] };
+    let sec = 'parts';
+    table('gunParts').forEach(c => {
+      const [name, fx, u, req, skill] = c.concat(['', '', '', '', '']);
+      if (!name) return;
+      const n = norm(name);
+      if (!fx && !u && !req && !skill) { if (/патрон/.test(n)) sec = 'ammo'; else if (/модель/.test(n)) sec = 'model'; return; }
+      const p = { name, fx: norm(fx) === 'нет' ? '' : fx, u: num(u), req: parseReq(req), reqRaw: req, skill: skill === '' ? null : num(skill),
+        noStack: G.NO_STACK.some(x => norm(x) === n), noDmg: false, od: 0, acc: 0, zor: 0 };
+      const noDmg = cat => G.NO_DAMAGE.map(norm).includes(cat);
+      let m;
+      PART_FX.lastIndex = 0;
+      while ((m = PART_FX.exec(fx))) {
+        const v = parseInt(m[1].replace(/[\s−]/g, s => (s === '−' ? '-' : '')), 10);
+        const k = m[2].toLowerCase();
+        if (k === 'од') p.od += v; else if (k.startsWith('точн')) p.acc += v; else p.zor += v;
+      }
+      if (sec === 'ammo') { out.ammo.push(p); return; }
+      if (sec === 'model') {
+        // «имеет только 50% урона оружия», «имеет 1,5 раза больше урона»
+        const pc = fx.match(/(\d+(?:[.,]\d+)?)\s*%\s*урона/i), x = fx.match(/(\d+(?:[.,]\d+)?)\s*раза?\s+больше\s+урона/i);
+        p.mult = pc ? num(pc[1]) / 100 : x ? num(x[1]) : 1;
+        p.fuel = /топлив/i.test(fx);
+        p.mana = /ман/i.test(fx);
+        out.models.push(p);
+        return;
+      }
+      if (/ресивер/.test(n)) { p.fuelCap = /топлив/i.test(fx) ? num((fx.match(/(\d+)\s*е/) || [])[1]) : 0; p.auto = /автомат/i.test(fx); out.receivers.push(p); }
+      else if (/корпус/.test(n)) { p.cap = parseInt((fx.match(/до\s*(\d+)/) || [])[1], 10) || 1; out.bodies.push(p); }
+      else if (/обойм/.test(n)) { p.max = parseInt((fx.match(/(\d+)\s*патрон/) || [])[1], 10) || G.CLIP_MAX; p.noDmg = noDmg('обойма'); out.clip = p; }
+      else if (/прицел|оптическ|снайперск/.test(n)) { p.noDmg = noDmg('прицел'); out.scopes.push(p); }
+      else {
+        // «занимает 2 ячейки ствола», «может быть использован только 1 в сверх тяжёлом корпусе»
+        p.cells = parseInt((fx.match(/занима\S*\s+(\d+)/i) || [])[1], 10) || 1;
+        p.only = /только\s+1/i.test(fx) ? 1 : 0;
+        p.body = /сверх\s*тяж/i.test(fx) ? 'сверх' : '';
+        p.noClip = /бомб|ядр/i.test(fx);
+        out.barrels.push(p);
+      }
+    });
+    gunIx = out;
+    return out;
+  }
+  const gunPart = (list, name) => (name ? list.find(p => norm(p.name) === norm(name)) || null : null);
+  // топливо — ингредиенты с пометкой «огнестрел» (лист «алхимия», после пароля ГМ): «урон 4х, горение 10е,3х»
+  function fuels() {
+    return ((D().alchemy || {}).ingredients || []).map(i => ({ name: i.n, fx: ((i.x || []).find(x => x[1] === 'огнестрел') || [])[0] || '', price: i.price }))
+      .filter(f => f.fx && norm(f.fx) !== 'огнестрел');
+  }
+  function fuelOf(name) {
+    if (!name) return null;
+    const f = fuels().find(x => norm(x.name) === norm(name));
+    if (!f) return { name, fx: '', mult: 1, known: false };
+    const m = f.fx.match(/урон\s*(\d+(?:[.,]\d+)?)\s*[хx]/i);
+    return { name: f.name, fx: f.fx, mult: m ? num(m[1]) : 1, rest: m ? f.fx.replace(m[0], '').replace(/^[\s,/]+|[\s,/]+$/g, '') : f.fx, known: true };
+  }
+
   const BASES = {
     weapon: () => D().gear.weapons.filter(w => !R.NOT_WEAPON.includes(w.name)),
-    ammo: () => D().gear.weapons.filter(w => R.NOT_WEAPON.includes(w.name)),
+    gun: () => guns().bodies,
+    ammo: () => D().gear.weapons.filter(w => R.NOT_WEAPON.includes(w.name))
+      .concat(guns().ammo.map(a => ({ name: /^патрон/i.test(a.name) ? a.name : 'патроны: ' + a.name, u: a.u, un: 0, fx: a.fx, req: a.req, skill: a.skill, cartridge: true }))),
     armor: () => D().gear.armor,
     shield: () => D().gear.shields,
     jewelry: () => table('jewelry').map(c => ({ name: c[0], u: num(c[1]), slots: num(c[2]), count: c[3] })),
@@ -44,11 +119,11 @@
     prosthesis: () => table('prosthetics').map(c => ({ name: c[0], u: num(c[1]), slots: num(c[3]), pen: num(c[4]), limb: c[5] || '', skill: num(c[6]) }))
   };
   const KIND_NAMES = {
-    weapon: 'Оружие', ammo: 'Боеприпасы', armor: 'Броня', shield: 'Щит', jewelry: 'Украшение', instrument: 'Инструмент',
+    weapon: 'Оружие', gun: 'Огнестрел', ammo: 'Боеприпасы', armor: 'Броня', shield: 'Щит', jewelry: 'Украшение', instrument: 'Инструмент',
     prosthesis: 'Протез', item: 'Предмет', material: 'Слиток / материал', crystal: 'Камень', artifact: 'Артефакт',
     food: 'Еда', potion: 'Зелье', drop: 'Добыча', custom: 'Своё'
   };
-  const CRAFTABLE = ['weapon', 'ammo', 'armor', 'shield', 'jewelry', 'instrument', 'prosthesis'];
+  const CRAFTABLE = ['weapon', 'gun', 'ammo', 'armor', 'shield', 'jewelry', 'instrument', 'prosthesis'];
   const baseOf = (kind, name) => (BASES[kind] ? BASES[kind]().find(b => norm(b.name) === norm(name)) : null) || null;
   const modules = () => table('modules').map(c => ({ name: c[0], u: num(c[1]), fx: c[2] }));
   const models = () => table('modern').map(c => ({ id: (c[0].match(/модель\s+(\S+)/i) || [])[1] || c[0], name: c[0], fx: c[1] }));
@@ -60,8 +135,8 @@
     if (item.cat !== undefined && item.cat !== '') return item.cat || null;
     const n = norm(item.base || item.name);
     switch (item.kind) {
-      case 'weapon': case 'shield': case 'instrument': return 'hand';
-      case 'ammo': return Object.keys(R.AMMO).map(norm).includes(n) ? 'ammo' : null;
+      case 'weapon': case 'gun': case 'shield': case 'instrument': return 'hand';
+      case 'ammo': return Object.keys(R.AMMO).map(norm).includes(n) || n.startsWith('патрон') ? 'ammo' : null;
       case 'prosthesis': return 'prosth';
       case 'armor':
         if (/шлем|капюшон/.test(n)) return 'head';
@@ -104,6 +179,75 @@
   // ctx: { sizeId (рост персонажа), stats, halfReq, race, oniClan, creatures }
   // У предмета свой размер (item.size): ГМ может выдать гигантскому дракону копьё мышиного размера —
   // под рост персонажа предмет сам не подстраивается. По умолчанию — нормальный.
+  // пушка: единицы на урон и на остальное, требования, ремесло, ОД, точность, зоркость, выстрелы за раз
+  function gunBuild(cr, body, k) {
+    const G = guns(), GC = C.GUNS, g = cr.gun || {};
+    const out = { warnings: [], notes: [], fx: [], dmgRaw: 0, nonRaw: 0, req: {}, skill: null, od: 0, acc: 0, zor: 0,
+      shots: 0, cells: 0, cap: body.cap || 1, clip: 0, auto: false, fuelCap: 0, model: null, fuel: null, cart: null };
+    const parts = [];
+    (g.barrels || []).forEach(b => {
+      if (!b || !b.name) return;
+      const p = gunPart(G.barrels, b.name), n = Math.max(0, Math.floor(num(b.n)));
+      if (!p) out.warnings.push(`Неизвестный ствол «${b.name}».`);
+      else if (n) parts.push({ p, n, t: 'ствол' });
+    });
+    const barrels = parts.slice();
+    out.shots = barrels.reduce((a, x) => a + x.n, 0);
+    out.cells = barrels.reduce((a, x) => a + x.n * x.p.cells, 0);
+    if (!out.shots) out.warnings.push('Нет ни одного ствола.');
+    if (out.cells > out.cap) out.warnings.push(`Стволы занимают ${out.cells} ячеек, а «${body.name}» вмещает ${out.cap}.`);
+    barrels.forEach(({ p, n }) => {
+      if (p.only && n > p.only) out.warnings.push(`«${p.name}» — не больше ${p.only} на оружие.`);
+      if (p.body && !norm(body.name).includes(p.body)) out.warnings.push(`«${p.name}» ставится только в сверхтяжёлый корпус.`);
+    });
+    parts.push({ p: body, n: 1, t: 'корпус' });
+    const rec = gunPart(G.receivers, g.receiver);
+    if (rec) { parts.push({ p: rec, n: 1, t: 'ресивер' }); out.auto = rec.auto; out.fuelCap = rec.fuelCap; }
+    else out.warnings.push('Нужен ресивер.');
+    const scope = gunPart(G.scopes, g.scope);
+    if (scope) parts.push({ p: scope, n: 1, t: 'прицел' });
+    out.clip = Math.max(0, Math.floor(num(g.clip)));
+    if (out.clip && G.clip) {
+      parts.push({ p: G.clip, n: out.clip, t: 'обойма' });
+      if (out.clip > G.clip.max) out.warnings.push(`Обойма — не больше ${G.clip.max} патронов.`);
+      if (barrels.some(x => x.p.noClip)) out.notes.push('Обойма не применима к бомбам и ядрам (пусковой и корабельный стволы).');
+    }
+    // единицы, требования, ремесло; «не складывается» — эффект детали учитывается один раз
+    const nsOd = [];
+    parts.forEach(({ p, n, t }) => {
+      const u = p.u * n;
+      if (p.noDmg) out.nonRaw += u; else out.dmgRaw += u;
+      if (t !== 'обойма') Object.entries(p.req).forEach(([s, v]) => { out.req[s] = GC.REQ_SUM ? (out.req[s] || 0) + v * n : Math.max(out.req[s] || 0, v); });
+      if (typeof p.skill === 'number') out.skill = Math.max(out.skill || 0, p.skill);
+      const times = p.noStack ? 1 : n;
+      if (p.noStack && p.od) nsOd.push(p.od); else out.od += p.od * times;
+      out.acc += p.acc * times; out.zor += p.zor * times;
+      if (p.fx && t !== 'корпус' && t !== 'обойма') out.fx.push({ src: `${t}${n > 1 ? ` ×${n}` : ''}: ${p.name}`, text: p.fx + (p.noStack && n > 1 ? ' (не складывается)' : '') });
+    });
+    if (nsOd.length) out.od += Math.max(...nsOd);
+    out.dmgRaw = r2(out.dmgRaw); out.nonRaw = r2(out.nonRaw);
+    if (out.clip) out.fx.push({ src: 'обойма', text: `на ${out.clip} ${App().plural(out.clip, 'патрон', 'патрона', 'патронов')}` });
+    // модель (принцип стрельбы), патроны, топливо — «выщеты урона пушек»: металл → патрон → модификатор металла → топливо
+    out.model = gunPart(G.models, g.model);
+    if (out.model) out.fx.push({ src: `модель: ${out.model.name}`, text: out.model.fx });
+    const ammo = g.ammo || {};
+    const at = gunPart(G.ammo, ammo.type);
+    if (at) {
+      const m = material(ammo.mat);
+      if (ammo.mat && !m) out.warnings.push(`Неизвестный материал патронов «${ammo.mat}».`);
+      out.cart = { type: at, mat: m, u: R.sizeUnits(at.u, k), dmg: m ? ri(m.dmg * R.sizeUnits(at.u, k)) : 0 };
+      if (at.fx) out.fx.push({ src: `патроны: ${at.name}`, text: at.fx });
+      if (!m) out.notes.push('Укажите материал патронов — от него урон патрона.');
+    }
+    out.fuel = fuelOf(g.fuel);
+    if (out.fuel) {
+      if (!out.fuel.known) out.notes.push(`Топливо «${out.fuel.name}» не найдено среди ингредиентов с пометкой «огнестрел»${(D().alchemy || {}).ingredients ? '' : ' (они открываются паролем ГМ)'} — множитель не учтён.`);
+      else if (out.fuel.rest) out.fx.push({ src: `топливо: ${out.fuel.name}`, text: out.fuel.rest });
+    } else if (out.model && out.model.fuel) out.warnings.push(`«${out.model.name}» стреляет на топливе — укажите его (порох и т. п.).`);
+    out.hands = Math.max(1, Math.floor(num(g.hands)) || GC.HANDS[norm(body.name)] || GC.DEFAULT_HANDS);
+    return out;
+  }
+
   const sizeOf = id => R.SIZES.find(x => x.id === id) || R.SIZES.find(x => x.id === 'н');
   const isBag = it => /сумка/i.test(it.name || '');
   // «1 предмет занимает 1 слот» (стопка одинаковых — тоже 1, см. INVENTORY в config.js); сумки места не занимают
@@ -123,15 +267,18 @@
     }
     if (ctx.sizeId && size.id !== ctx.sizeId) out.notes.push(`Сделан под рост «${size.name.toLowerCase()}», а персонаж — «${sizeOf(ctx.sizeId).name.toLowerCase()}».`);
     if (!base) { out.warnings.push('Неизвестная основа предмета.'); return out; }
-    const isWeapon = kind === 'weapon' || kind === 'ammo';
+    const isWeapon = kind === 'weapon' || kind === 'ammo' || kind === 'gun';
     const isArmor = kind === 'armor' || kind === 'shield' || kind === 'prosthesis';
     const parts = (cr.parts || []).filter(p => p && p.mat && num(p.u) > 0).map(p => ({ mat: material(p.mat), name: p.mat, u: r2(num(p.u)), role: p.role === 'non' ? 'non' : 'dmg' }));
     parts.filter(p => !p.mat).forEach(p => out.warnings.push(`Неизвестный материал «${p.name}».`));
     const mods = (cr.modules || []).map(n => modules().find(m => norm(m.name) === norm(n))).filter(Boolean);
     const modU = r2(mods.reduce((a, m) => a + (m.u || 0), 0));
+    const gb = kind === 'gun' ? gunBuild(cr, base, k) : null;
+    if (gb) { out.warnings.push(...gb.warnings); out.notes.push(...gb.notes); out.gun = gb; }
 
     // сколько единиц нужно
     if (kind === 'weapon') { out.needDmg = R.sizeUnits(base.u, k); out.needNon = r2(base.un + modU); }
+    else if (gb) { out.needDmg = R.sizeUnits(gb.dmgRaw, k); out.needNon = r2(gb.nonRaw + modU); }
     else if (kind === 'ammo') { out.needDmg = R.sizeUnits(base.u, k); out.needNon = 0; }
     else if (isArmor) { out.needDmg = 0; out.needNon = r2(R.sizeUnits(base.u || 0, k) + modU); }
     else { out.needDmg = 0; out.needNon = r2((base.u || 0) + modU); }
@@ -140,7 +287,7 @@
     const haveAll = r2(parts.reduce((a, p) => a + p.u, 0));
     out.have = haveAll; out.haveDmg = isWeapon ? haveDmg : 0;
     if (!parts.length) out.warnings.push('Добавьте материал — из чего сделан предмет.');
-    else if (isWeapon && kind === 'weapon' && Math.abs(haveDmg - out.needDmg) > 0.01) out.warnings.push(`На урон нужно ${fmt(out.needDmg)} ед., распределено ${fmt(haveDmg)}.`);
+    else if ((kind === 'weapon' || kind === 'gun') && Math.abs(haveDmg - out.needDmg) > 0.01) out.warnings.push(`На урон нужно ${fmt(out.needDmg)} ед., распределено ${fmt(haveDmg)}.`);
     if (parts.length && Math.abs(haveAll - out.need) > 0.01) out.warnings.push(`Всего нужно ${fmt(out.need)} ед. материала, распределено ${fmt(haveAll)}.`);
 
     // урон и броня
@@ -158,6 +305,13 @@
       if (onArm && armor !== null) armor = ri(armor * m);
       mult.push(`${src} ×${fmt(m)}`);
     };
+    // пушка: урон металла + урон патрона, затем модель (пневматика ½, магнитно-электронное ×1,5) и топливо
+    if (gb) {
+      gb.metal = damage || 0;
+      if (gb.cart && gb.cart.dmg) damage = (damage || 0) + gb.cart.dmg;
+      if (damage !== null && gb.model && gb.model.mult !== 1) applyMul(gb.model.mult, `модель «${gb.model.name}»`, true, false);
+      if (damage !== null && gb.fuel && gb.fuel.known && gb.fuel.mult !== 1) applyMul(gb.fuel.mult, `топливо «${gb.fuel.name}»`, true, false);
+    }
     if (model === 'A' && damage !== null) applyMul(1.5, 'модель A', true, false);
     if (model === 'D' && armor !== null) applyMul(1.5, 'модель D', false, true);
     if (model === 'T') applyMul(2, 'модель T', true, true);
@@ -239,6 +393,7 @@
     if (crystalItem && mods.length) out.warnings.push('Кристальное оружие не имеет гнёзд для модификаторов — модули не встанут.');
     mods.forEach(m => out.effects.push({ src: `модуль: ${m.name}`, text: m.fx }));
     if (model) { const md = models().find(x => x.id.toUpperCase() === model); if (md) out.effects.push({ src: md.name, text: md.fx }); }
+    if (gb) out.effects.unshift(...gb.fx);
     if (base.fx) out.effects.unshift({ src: 'свойство', text: base.fx });
     if (kind === 'instrument') out.effects.push({ src: 'инструмент', text: `+${base.bonus}% к аккорду; к единичному аккорду добавляется только 25% мощности материала` });
     if (cr.extra) out.effects.push({ src: 'особое', text: cr.extra });
@@ -257,10 +412,13 @@
     if (over) out.warnings.push(`Глифов ${gl.length} при пределе ${out.glyphMax}: каждый лишний — ${CR.GLYPH_RISK}% шанс разрушить предмет, шанс складывается (сейчас ${Math.min(100, over * CR.GLYPH_RISK)}%).`);
 
     // требования, штраф, слоты, руки
-    out.req = base.req ? R.reqCheck(base.req, k, ctx.stats || { t: 0, d: 0, s: 0, i: 0, l: 0 }, ctx.halfReq) : [];
+    const req = gb ? gb.req : base.req;
+    out.req = req ? R.reqCheck(req, k, ctx.stats || { t: 0, d: 0, s: 0, i: 0, l: 0 }, ctx.halfReq) : [];
     // число после дроби в требованиях («2л, 25с / 13») — уровень ремесла, чтобы игрок изготовил предмет сам;
     // выданный ГМ предмет от этого не зависит, поэтому только сравниваем с навыком персонажа
-    out.skill = typeof base.skill === 'number' ? base.skill : null;
+    // (у пушки — самая сложная из её деталей)
+    const skill = gb ? gb.skill : base.skill;
+    out.skill = typeof skill === 'number' ? skill : null;
     out.craftHave = typeof ctx.craft === 'number' ? ctx.craft : null;
     out.skillOk = out.skill === null || out.craftHave === null ? null : out.craftHave >= out.skill;
     out.pen = isArmor ? (model === 'L' ? 0 : (base.pen || 0)) : 0;
@@ -272,15 +430,21 @@
       const se = R.armorStatEffects((x.m.ea || {}).t, (x.m.ea || {}).sc === 'за единицу', x.u);
       return { l: a.l + se.l, hpRegen: a.hpRegen + se.hpRegen };
     }, { l: 0, hpRegen: 0 }) : { l: 0, hpRegen: 0 };
-    out.hands = kind === 'weapon' ? (base.hands || 1) : kind === 'shield' || kind === 'instrument' ? 1 : 0;
-    out.skill = base.skill;
+    out.hands = kind === 'weapon' ? (base.hands || 1) : gb ? gb.hands : kind === 'shield' || kind === 'instrument' ? 1 : 0;
+    if (!gb) out.skill = base.skill;
     return out;
   }
 
   // название по составу: «длинный меч (сталь, мифрил)»
+  // у пушки — «огнестрел, 2 ствола (сталь)»
   function autoName(item) {
     const mats = [...new Set(((item.craft || {}).parts || []).map(p => p.mat).filter(Boolean))];
-    return `${item.base || KIND_NAMES[item.kind] || 'предмет'}${mats.length ? ` (${mats.join(', ')})` : ''}`;
+    let base = item.base || KIND_NAMES[item.kind] || 'предмет';
+    if (item.kind === 'gun') {
+      const n = (((item.craft || {}).gun || {}).barrels || []).reduce((a, b) => a + (b && b.name ? Math.max(0, Math.floor(num(b.n))) : 0), 0);
+      base = `огнестрел${n ? `, ${n} ${App().plural(n, 'ствол', 'ствола', 'стволов')}` : ''}`;
+    }
+    return `${base}${mats.length ? ` (${mats.join(', ')})` : ''}`;
   }
 
   // ------------------------------------------------------------ стартовое снаряжение → инвентарь
@@ -348,7 +512,7 @@
     });
     worn.forEach((calc, id) => {
       out.worn.push(calc);
-      if (calc.kind === 'weapon' || calc.kind === 'ammo') out.weapons.push(calc);
+      if (calc.kind === 'weapon' || calc.kind === 'gun' || calc.kind === 'ammo') out.weapons.push(calc);
       if (calc.armor && calc.kind !== 'weapon') out.armor += calc.armor;
       if (calc.magicArmor) out.magicArmor += calc.magicArmor;
       out.pen += calc.pen || 0;
@@ -466,7 +630,7 @@
   const EFFECT_KINDS = { gift: 'Тёмный дар', curse: 'Проклятие', disease: 'Болезнь', buff: 'Благословение', mod: 'Модификация', trait: 'Черта', status: 'Статус-эффект', custom: 'Своё' };
 
   window.Craft = {
-    KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal,
+    KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
     walletCopper, money, priceCopper, parseDrop, parseStatMods, catalog, effectSources, num
   };
