@@ -225,9 +225,11 @@
     route() {
       const h = location.hash.replace(/^#/, '');
       const [tab, sub, sub2] = h.split('/');
-      const tabs = ['create', 'heroes', 'game', 'ref', 'rules'];
+      const tabs = ['home', 'create', 'heroes', 'game', 'ref', 'rules'];
+      const first = !this.routed;
+      this.routed = true;
       const prevTab = this.tab, prevRef = this.ui.refSection, prevPath = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
-      this.tab = tabs.includes(tab) ? tab : 'create';
+      this.tab = tabs.includes(tab) ? tab : 'home';   // главная — «Мастерская героя»
       if (this.tab === 'game') this.ui.gamePath = [sub, sub2].filter(Boolean);
       if (this.tab === 'heroes') this.ui.heroId = sub || null;
       const path = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
@@ -237,10 +239,15 @@
       if (this.tab === 'create' && sub && this.steps.some(s => s.id === sub)) this.step = sub;
       if (this.tab === 'ref') this.ui.refSection = sub || this.ui.refSection;
       document.querySelectorAll('.tab-pane').forEach(p => { p.hidden = p.id !== 'tab-' + this.tab; });
-      document.querySelectorAll('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
+      document.querySelectorAll('.tabs a, a.brand').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
       document.body.dataset.tab = this.tab;
       this.render();
-      if (moved || prevTab === undefined) this.enter(document.getElementById('tab-' + this.tab));
+      if (moved || first) this.enter(document.getElementById('tab-' + this.tab));
+      // заставки: «вход в мир» при открытии сайта (кроме «Игры»), ворота — при каждом входе в «Игру», за ними справка
+      if (window.Intro) {
+        if (first && this.tab !== 'game') window.Intro.world();
+        if (this.tab === 'game' && (first || prevTab !== 'game')) window.Intro.gates().then(() => { if (this.tab === 'game') window.Intro.gameHelp(); });
+      }
     },
 
     go(stepId) {
@@ -331,6 +338,7 @@
 
     // ------------------------------------------------------------ отрисовка
     render() {
+      if (this.tab === 'home' && window.Home) window.Home.render(document.getElementById('tab-home'));
       if (this.tab === 'create') this.renderCreate();
       if (this.tab === 'heroes') window.Heroes.render(document.getElementById('tab-heroes'));
       if (this.tab === 'game') window.Game.render(document.getElementById('tab-game'));

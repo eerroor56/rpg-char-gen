@@ -137,7 +137,7 @@
   }
 
   function notConfigured() {
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1></div>
+    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
       <div class="card"><h2>Онлайн-игра ещё не подключена</h2>
         <p>Чтобы ГМ видел, кто какого персонажа создал, начислял опыт и вёл кампанию, сайту нужно бесплатное облачное хранилище Firebase (от Google).
         Владелец сайта настраивает его один раз, примерно за 15 минут: пошаговая инструкция — в файле <b>README.md</b>, раздел «Игра онлайн».</p>
@@ -146,7 +146,7 @@
   }
 
   function initError() {
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1></div>
+    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
       <div class="card checks bad"><h2>Не удалось подключиться</h2><p>${esc(C.errorText(C.error))}</p>
       <p class="muted small">Проверьте интернет и настройки в js/firebase-config.js. Если сайт открыт в режиме «инкогнито» или с блокировщиком, попробуйте обычное окно.</p>
       <button type="button" class="btn" onclick="location.reload()">Обновить страницу</button></div></div>`;
@@ -155,7 +155,7 @@
   function signIn() {
     const mode = App.ui.gAuthMode === 'signup' ? 'signup' : 'signin';
     const join = (App.ui.gamePath || [])[0] === 'join' ? (App.ui.gamePath || [])[1] : null;
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1></div>
+    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
       <p class="lead">Кампании с друзьями: ГМ создаёт кампанию и даёт игрокам код, игроки собирают персонажей, а ГМ видит, кто кого создал, утверждает листы, начисляет опыт и ведёт журнал сессий. Всё хранится онлайн — игру можно продолжить с любого устройства.</p>
       ${join ? `<div class="card note">После входа вы присоединитесь к кампании по коду <b>${esc(C.normCode(join))}</b>.</div>` : ''}
       <div class="card signin">
@@ -189,6 +189,11 @@
     } finally { setTimeout(() => { G.joining = null; }, 1000); }
   }
 
+  // краткая справка по разделу (js/intro.js) — открывается снова этой кнопкой
+  function helpBtn() {
+    return `<button type="button" class="btn ghost small help-btn" data-act="gameHelp"><span class="help-q" aria-hidden="true">?</span>Справка</button>`;
+  }
+
   // ------------------------------------------------------------ список кампаний
   function userBar() {
     return `<div class="row-actions user-bar"><span class="muted">Вы: <b>${esc(C.name())}</b></span>
@@ -201,7 +206,7 @@
     const camps = G.d.camps;
     const t = target();
     el.innerHTML = `<div class="page game">
-      <div class="page-head"><h1>Игра</h1>${userBar()}</div>
+      <div class="page-head"><h1>Игра</h1><span class="row-actions">${helpBtn()}${userBar()}</span></div>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       ${t ? `<div class="card note">В мастере открыт персонаж для кампании «${esc(t.cname)}». <a href="#create/summary">Вернуться к нему</a></div>` : ''}
       <h2>Мои кампании</h2>
@@ -324,7 +329,7 @@
 
     el.innerHTML = `<div class="page game">
       <p class="crumbs"><a href="#game">Все кампании</a></p>
-      <div class="page-head"><h1>${esc(camp.name)}</h1>${userBar()}</div>
+      <div class="page-head"><h1>${esc(camp.name)}</h1><span class="row-actions">${helpBtn()}${userBar()}</span></div>
       <p class="muted">${gm ? 'Вы ГМ этой кампании.' : `ГМ: ${esc(camp.gmName || '—')}.`} ${s.active ? `<b class="live">Идёт сессия ${s.n}.</b>` : ''}</p>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       <div class="camp-grid">
