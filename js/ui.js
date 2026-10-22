@@ -231,7 +231,8 @@
       if (this.tab === 'game') this.ui.gamePath = [sub, sub2].filter(Boolean);
       if (this.tab === 'heroes') this.ui.heroId = sub || null;
       const path = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
-      if (prevTab !== this.tab || (this.tab === 'ref' && sub && sub !== prevRef) || path !== prevPath) window.scrollTo({ top: 0 });
+      const moved = prevTab !== this.tab || (this.tab === 'ref' && sub && sub !== prevRef) || path !== prevPath;
+      if (moved) window.scrollTo({ top: 0 });
       if (this.tab !== 'game' && window.Game) window.Game.leave();
       if (this.tab === 'create' && sub && this.steps.some(s => s.id === sub)) this.step = sub;
       if (this.tab === 'ref') this.ui.refSection = sub || this.ui.refSection;
@@ -239,15 +240,30 @@
       document.querySelectorAll('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
       document.body.dataset.tab = this.tab;
       this.render();
+      if (moved || prevTab === undefined) this.enter(document.getElementById('tab-' + this.tab));
     },
 
     go(stepId) {
+      const changed = stepId !== this.step;
       this.step = stepId;
       if (location.hash !== '#create/' + stepId) history.replaceState(null, '', '#create/' + stepId);
       this.renderCreate();
       const w = document.getElementById('work');
-      if (w) { w.scrollTop = 0; w.focus({ preventScroll: true }); }
+      if (w) { w.scrollTop = 0; w.focus({ preventScroll: true }); if (changed) this.enter(w); }
       window.scrollTo({ top: 0 });
+    },
+
+    // плавное появление экрана — только при переходе (вкладка, раздел, шаг), а не при каждой перерисовке
+    enter(el) {
+      if (!el) return;
+      el.classList.remove('is-entering');
+      void el.offsetWidth;
+      el.classList.add('is-entering');
+      el.addEventListener('animationend', function done(e) {
+        if (!/^(screen-in|reveal)$/.test(e.animationName)) return;
+        el.classList.remove('is-entering');
+        el.removeEventListener('animationend', done);
+      });
     },
 
     loadFromHash() {
@@ -533,6 +549,25 @@
         document.getElementById('ledgerToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
       });
       document.getElementById('importFile').addEventListener('change', e => window.Heroes.importFile(e.target.files[0]));
+      // шапка с тенью, когда страница прокручена; кнопка «наверх» на длинных страницах
+      const toTop = document.getElementById('toTop');
+      const onScroll = () => {
+        const y = window.scrollY || 0;
+        document.body.classList.toggle('scrolled', y > 4);
+        if (toTop) toTop.hidden = y < 700;
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+      if (toTop) toTop.addEventListener('click', () => {
+        const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+      });
+      // раскрывающиеся блоки плавно показывают содержимое — только по нажатию, не при перерисовке
+      root.addEventListener('click', e => {
+        const s = e.target.closest && e.target.closest('summary');
+        const d = s && s.parentElement;
+        if (d && d.tagName === 'DETAILS') setTimeout(() => { if (d.open) this.enter(d); }, 0);
+      });
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && document.body.classList.contains('ledger-open')) {
           document.body.classList.remove('ledger-open');

@@ -112,7 +112,7 @@
     G.el = el;
     if (!C.configured()) { el.innerHTML = notConfigured(); return; }
     if (!C.ready) {
-      el.innerHTML = C.error ? initError() : `<div class="page game"><div class="card empty">Подключаюсь к серверу игры…</div></div>`;
+      el.innerHTML = C.error ? initError() : `<div class="page game"><div class="card empty loading">Подключаюсь к серверу игры…</div></div>`;
       if (!C.error) C.init().then(() => { hook(); if (App.tab === 'game') render(el); });
       return;
     }
@@ -130,7 +130,7 @@
     const el = G.el;
     if (!C.user) { leave(); el.innerHTML = signIn(); return; }
     const [a, b] = App.ui.gamePath || [];
-    if (a === 'join') { joinByLink(b); el.innerHTML = `<div class="page game"><div class="card empty">Присоединяюсь к кампании…</div></div>`; return; }
+    if (a === 'join') { joinByLink(b); el.innerHTML = `<div class="page game"><div class="card empty loading">Присоединяюсь к кампании…</div></div>`; return; }
     if (!a) { listPage(el); return; }
     if (!b) { campaignPage(el, a); return; }
     characterPage(el, a, b);
@@ -162,7 +162,7 @@
         <button type="button" class="btn primary google-btn" data-act="gGoogle">Войти через Google</button>
         <p class="muted small or">или по почте</p>
         <form data-game-form="${mode}" novalidate>
-          ${mode === 'signup' ? '<label>Имя в игре <input name="name" autocomplete="nickname" maxlength="40" required placeholder="как вас будут видеть ГМ и игроки"></label>' : ''}
+          ${mode === 'signup' ? '<label>Имя в игре <input type="text" name="name" autocomplete="nickname" maxlength="40" required placeholder="как вас будут видеть ГМ и игроки"></label>' : ''}
           <label>Почта <input name="email" type="email" autocomplete="email" required></label>
           <label>Пароль <input name="pw" type="password" autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}" minlength="6" required></label>
           <div class="row-actions"><button type="submit" class="btn primary">${mode === 'signup' ? 'Зарегистрироваться' : 'Войти'}</button>
@@ -205,7 +205,7 @@
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       ${t ? `<div class="card note">В мастере открыт персонаж для кампании «${esc(t.cname)}». <a href="#create/summary">Вернуться к нему</a></div>` : ''}
       <h2>Мои кампании</h2>
-      ${!camps ? '<div class="card empty">Загружаю…</div>' : camps.length ? `<ul class="camp-list">${camps.map(c => {
+      ${!camps ? '<div class="card empty loading">Загружаю…</div>' : camps.length ? `<ul class="camp-list">${camps.map(c => {
         const gm = c.gm === C.uid();
         const s = c.session || {};
         return `<li><a class="camp-card card" href="#game/${esc(c.id)}">
@@ -216,11 +216,11 @@
       <div class="two-col game-start">
         <form class="card" data-game-form="create"><h2>Новая кампания</h2>
           <p class="muted small">Вы станете ГМ: увидите всех персонажей, будете утверждать листы и начислять опыт.</p>
-          <label>Название <input name="name" required maxlength="120" placeholder="например, «Сумеречный тракт»"></label>
+          <label>Название <input type="text" name="name" required maxlength="120" placeholder="например, «Сумеречный тракт»"></label>
           <button type="submit" class="btn primary">Создать кампанию</button><p class="lock-msg" role="alert"></p></form>
         <form class="card" data-game-form="join"><h2>Присоединиться</h2>
           <p class="muted small">Код приглашения выдаёт ГМ — шесть букв и цифр.</p>
-          <label>Код <input name="code" required autocomplete="off" maxlength="12" placeholder="ABC234" class="code-input"></label>
+          <label>Код <input type="text" name="code" required autocomplete="off" maxlength="12" placeholder="ABC234" class="code-input"></label>
           <button type="submit" class="btn primary">Войти в кампанию</button><p class="lock-msg" role="alert"></p></form>
       </div>
       ${diceBox({})}
@@ -245,7 +245,7 @@
     });
     const { camp, chars, events, sessions } = G.d;
     if (G.d.err && !camp) { el.innerHTML = deniedPage(); return; }
-    if (!camp) { el.innerHTML = `<div class="page game"><div class="card empty">Загружаю кампанию…</div></div>`; return; }
+    if (!camp) { el.innerHTML = `<div class="page game"><div class="card empty loading">Загружаю кампанию…</div></div>`; return; }
     const gm = camp.gm === C.uid();
     const me = C.uid();
     const order = { review: 0, active: 1, draft: 2, dead: 3, retired: 4 };
@@ -256,7 +256,7 @@
     const localHeroes = App.store.get('hero-workshop:heroes', []);
 
     const charsHtml = `<section class="camp-chars"><div class="sec-head"><h2>Персонажи</h2>${gm && review ? `<span class="tag freq">на проверке: ${review}</span>` : ''}</div>
-      ${!chars ? '<div class="card empty">Загружаю…</div>' : list.length ? `<ul class="char-grid">${list.map(ch => {
+      ${!chars ? '<div class="card empty loading">Загружаю…</div>' : list.length ? `<ul class="char-grid">${list.map(ch => {
         const v = charView(ch), race = v.res.race;
         const pic = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'mini', true) : '';
         return `<li><a class="char-card card ${ch.owner === me ? 'mine' : ''}" href="#game/${esc(cid)}/${esc(ch.id)}">${pic}
@@ -374,7 +374,7 @@
     });
     const { camp, ch, events } = G.d;
     if (G.d.err && (!camp || !ch)) { el.innerHTML = deniedPage(); return; }
-    if (!camp || ch === undefined) { el.innerHTML = `<div class="page game"><div class="card empty">Загружаю персонажа…</div></div>`; return; }
+    if (!camp || ch === undefined) { el.innerHTML = `<div class="page game"><div class="card empty loading">Загружаю персонажа…</div></div>`; return; }
     if (!ch) { el.innerHTML = `<div class="page game"><p class="crumbs"><a href="#game/${esc(cid)}">${esc(camp.name)}</a></p><div class="card empty">Персонаж удалён.</div></div>`; return; }
     const gm = camp.gm === C.uid(), owner = ch.owner === C.uid();
     Dev.own('c:' + chid);

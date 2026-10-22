@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Forum&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
   <a class="skip" href="#main">Перейти к содержимому</a>
@@ -21,7 +21,7 @@
     <nav class="tabs" aria-label="Разделы">
       <a href="#create" data-tab="create">Создание</a>
       <a href="#heroes" data-tab="heroes">Мои герои</a>
-      <a href="#game" data-tab="game">Игра</a>
+      <a href="#game" data-tab="game" class="tab-game"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7.4v9.2L12 21.5 3.5 16.6V7.4z"/><path d="M12 2.5 7.6 13.8h8.8zM3.5 7.4l4.1 6.4M20.5 7.4l-4.1 6.4M7.6 13.8 12 21.5l4.4-7.7M3.5 16.6l4.1-2.8M20.5 16.6l-4.1-2.8"/></svg><span>Игра</span></a>
       <a href="#ref" data-tab="ref">Справочник</a>
       <a href="#rules" data-tab="rules">Как считается</a>
     </nav>
@@ -42,32 +42,34 @@
   </main>
 
   <button class="ledger-toggle" id="ledgerToggle" type="button" aria-controls="ledger" aria-expanded="false">Сводка</button>
+  <button class="to-top" id="toTop" type="button" aria-label="Наверх" title="Наверх" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6"/></svg></button>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <input type="file" id="importFile" accept="application/json,.json" hidden>
 
   <noscript><p class="noscript">Для работы конструктора нужен включённый JavaScript.</p></noscript>
 
-  <script src="data/data.js?v=20"></script>
-  <script src="data/images.js?v=20"></script>
-  <script src="data/map.js?v=20"></script>
-  <script src="js/config.js?v=20"></script>
-  <script src="js/rules.js?v=20"></script>
-  <script src="js/ui.js?v=20"></script>
-  <script src="js/lock.js?v=20"></script>
-  <script src="js/random.js?v=20"></script>
-  <script src="js/steps.js?v=20"></script>
-  <script src="js/sheet.js?v=20"></script>
-  <script src="js/reference.js?v=20"></script>
-  <script src="js/map.js?v=20"></script>
-  <script src="js/heroes.js?v=20"></script>
-  <script src="js/craft.js?v=20"></script>
-  <script src="js/brew.js?v=20"></script>
-  <script src="js/dungeon.js?v=20"></script>
-  <script src="js/progress.js?v=20"></script>
-  <script src="js/inventory.js?v=20"></script>
-  <script src="js/firebase-config.js?v=20"></script>
-  <script src="js/cloud.js?v=20"></script>
-  <script src="js/game.js?v=20"></script>
+  <script src="data/data.js?v=21"></script>
+  <script src="data/images.js?v=21"></script>
+  <script src="data/map.js?v=21"></script>
+  <script src="js/config.js?v=21"></script>
+  <script src="js/rules.js?v=21"></script>
+  <script src="js/ui.js?v=21"></script>
+  <script src="js/combo.js?v=21"></script>
+  <script src="js/lock.js?v=21"></script>
+  <script src="js/random.js?v=21"></script>
+  <script src="js/steps.js?v=21"></script>
+  <script src="js/sheet.js?v=21"></script>
+  <script src="js/reference.js?v=21"></script>
+  <script src="js/map.js?v=21"></script>
+  <script src="js/heroes.js?v=21"></script>
+  <script src="js/craft.js?v=21"></script>
+  <script src="js/brew.js?v=21"></script>
+  <script src="js/dungeon.js?v=21"></script>
+  <script src="js/progress.js?v=21"></script>
+  <script src="js/inventory.js?v=21"></script>
+  <script src="js/firebase-config.js?v=21"></script>
+  <script src="js/cloud.js?v=21"></script>
+  <script src="js/game.js?v=21"></script>
   <script>App.start();</script>
 </body>
 </html>
