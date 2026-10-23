@@ -20,6 +20,8 @@
 
 Пароль можно не писать в командной строке: задайте переменную окружения GM_PASSWORD
 или скрипт спросит его сам. Ключ --no-lock кладёт всё в открытый data.js.
+Пароль сверяется с нынешним data/locked.js: если он его не открывает (опечатка), сборка
+останавливается. Если ГМ сменил пароль — добавьте ключ --new-password.
 """
 import base64
 import datetime
@@ -881,7 +883,7 @@ def build_world(wb):
             layers.append({"code": code, "name": txt(ws.cell(r, 2).value), "effect": txt(ws.cell(r, 3).value)})
     places = []
     region = FIRST_REGION
-    for r in range(2, 20):
+    for r in range(2, ws.max_row + 1):   # список мест в G растёт — читаем до конца листа
         a = txt(ws.cell(r, col("G")).value)
         if not a:
             continue
@@ -889,7 +891,7 @@ def build_world(wb):
             region = a
         places.append({"name": a, "region": region, "monsters": txt(ws.cell(r, col("H")).value),
                        "players": txt(ws.cell(r, col("I")).value), "isRegion": bool(fill_key(ws.cell(r, col("G"))))})
-    sections = sectioned(ws, 22, 168, "A", "E")
+    sections = sectioned(ws, 22, ws.max_row, "A", "E")
     return {"layers": layers, "places": places, "sections": sections}
 
 
@@ -914,6 +916,21 @@ def build_schemes(wb):
 
 
 # ---------------------------------------------------------------- main
+
+def opens_current(password):
+    """Открывает ли пароль нынешний data/locked.js. Нет файла — проверять нечего."""
+    if not OUT_LOCKED.exists():
+        return True
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    src = OUT_LOCKED.read_text(encoding="utf-8")
+    L = json.loads(src[src.index("{"):src.rindex("}") + 1])
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), base64.b64decode(L["salt"]), L["iter"], 32)
+    try:
+        AESGCM(key).decrypt(base64.b64decode(L["iv"]), base64.b64decode(L["ct"]), None)
+        return True
+    except Exception:
+        return False
+
 
 def encrypt_locked(payload, password):
     """AES-256-GCM, ключ = PBKDF2-SHA256(пароль). Формат совместим с Web Crypto в браузере."""
@@ -940,6 +957,10 @@ def main():
     no_lock = "--no-lock" in flags
     if not no_lock and not password:
         password = os.environ.get("GM_PASSWORD") or getpass.getpass("Пароль ГМ для закрытых разделов: ")
+    # опечатка в пароле закрыла бы разделы от самого ГМ — сверяемся с нынешними закрытыми данными
+    if not no_lock and "--new-password" not in flags and not opens_current(password):
+        sys.exit("Пароль не открывает нынешний data/locked.js — ничего не записано. Проверьте пароль; "
+                 "если ГМ его сменил, запустите с ключом --new-password.")
     src = Path(args[0])
     wb = openpyxl.load_workbook(src, data_only=True)
     races, race_legend = build_races(wb)
@@ -968,7 +989,7 @@ def main():
         if c["sec"] in ("Боссы", "легенды"):
             continue
         a = {k: c[k] for k in ("n", "m", "t", "d", "s", "i", "l", "lvl", "ch", "sym", "sz", "sec", "ab")}
-        if c["sec"] == "🕷":
+        if c["sec"].startswith("🕷"):   # «🕷» или «🕷 арахниды»
             a["ins"] = "spider"
         elif insect_re.search((c.get("drop") or "") + " " + c["n"]):
             a["ins"] = "other"

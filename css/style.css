@@ -910,6 +910,9 @@ body.wmap-open { overflow: hidden; }
 .dg-track { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; margin: 12px 0; }
 .dg-track-col { padding-top: 8px; border-top: 1px solid var(--line-soft); }
 .dg-track select { width: auto; max-width: 100%; }
+.dg-light { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.dg-light label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.dg-light input { width: 84px; }
 .dg-log { margin: 8px 0 0; padding-left: 18px; }
 .dg-all { margin-top: 10px; }
 .dg-all summary { cursor: pointer; color: var(--muted); }
@@ -1010,7 +1013,7 @@ details > summary:hover { color: var(--text); }
 
 /* подсказки в полях (js/combo.js) */
 .combo-pop {
-  position: fixed; z-index: 70; overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; z-index: 70; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch;
   background: var(--panel); border: 1px solid var(--brass); border-radius: var(--radius-m);
   box-shadow: 0 16px 40px rgba(0, 0, 0, .55); padding: 4px;
   transform-origin: top center;
@@ -1079,6 +1082,7 @@ label.check > input { margin: 0; flex: none; }
 .hm-hero > :nth-child(6) { animation-delay: .5s; }
 .hm-hero > :nth-child(7) { animation-delay: .6s; }
 body.intro-open .hm-hero > * { animation-play-state: paused; }
+.hm-hero.calm > :not(.hm-sigil) { animation: none; }   /* экран перерисовался — шапка не появляется заново */
 @keyframes hm-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 .hm-kicker { margin: 0; letter-spacing: .2em; text-transform: uppercase; color: var(--brass); font-size: .78rem; }
 .hm-title { font-size: clamp(2.6rem, 7.5vw, 4.8rem); margin: .12em 0 .18em; line-height: 1.05;
@@ -1097,6 +1101,15 @@ body.intro-open .hm-hero > * { animation-play-state: paused; }
 .hm-stats div:hover { border-color: rgba(214, 168, 92, .6); transform: translateY(-2px); }
 .hm-stats dd { margin: 0; font-family: var(--font-display); font-size: 2.1rem; line-height: 1; color: var(--brass); font-variant-numeric: tabular-nums; }
 .hm-stats dt { color: var(--muted); font-size: .82rem; }
+
+/* начальный экран «Игры» — та же шапка, что на главной (js/game.js) */
+.game-home { max-width: 1180px; overflow-x: hidden; overflow-x: clip; }
+.game-home .hm-hero { padding-top: 44px; }
+.game-home .signin { margin: 26px auto 0; }
+.game-home .signin h2 { margin: 0; text-align: center; }
+.hm-user { color: var(--muted); }
+.hm-user b { color: var(--text); }
+.hm-user .linklike { margin-left: 6px; }
 
 /* с чего начать */
 .hm-paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 30px 0 10px; }

@@ -136,8 +136,30 @@
     characterPage(el, a, b);
   }
 
+  // ------------------------------------------------------------ начальный экран — в стиле главной
+  // шапка не появляется заново, если экран просто перерисовался (пришли данные, сменился режим входа)
+  function hero(o) {
+    const calm = !!(G.el && G.el.querySelector('.gm-hero'));
+    return window.Home.hero(Object.assign({ cls: 'gm-hero', calm, kicker: 'кампании · сессии · бросок d100', title: 'Игра' }, o));
+  }
+  const helpBig = () => `<button type="button" class="btn ghost hm-big help-btn" data-act="gameHelp"><span class="help-q" aria-hidden="true">?</span>Справка</button>`;
+  const PATHS = `<section class="hm-paths" aria-label="Как устроена игра">
+      <article class="hm-path gm"><h2>Я ГМ</h2><ol>
+        <li>Войдите и создайте кампанию — появится код из шести знаков и ссылка.</li>
+        <li>Отправьте код или ссылку игрокам.</li>
+        <li>Утверждайте листы, начисляйте опыт, выдавайте предметы, ведите сессии и генерируйте подземелья.</li></ol></article>
+      <article class="hm-path"><h2>Я игрок</h2><ol>
+        <li>Войдите — через Google или по почте.</li>
+        <li>«Присоединиться» → код от ГМ (или просто откройте его ссылку).</li>
+        <li>Соберите героя в мастере и отправьте ГМ на проверку.</li></ol></article>
+      <article class="hm-path"><h2>Без входа</h2><ol>
+        <li>Бросок d100 ниже работает и без входа.</li>
+        <li>Героев можно собирать и хранить в <a href="#heroes">«Моих героях»</a>.</li>
+        <li>Правила и таблицы — в <a href="#ref">справочнике</a>.</li></ol></article>
+    </section>`;
+
   function notConfigured() {
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
+    return `<div class="page game game-home">${hero({ tag: 'Кампании с друзьями: персонажи, сессии и журнал в одном месте.', cta: helpBig() })}
       <div class="card"><h2>Онлайн-игра ещё не подключена</h2>
         <p>Чтобы ГМ видел, кто какого персонажа создал, начислял опыт и вёл кампанию, сайту нужно онлайн-хранилище. Его один раз подключает владелец сайта.</p>
         <p class="muted">Пока можно собирать героев и вести их развитие во вкладке «Мои герои» — там всё хранится в этом браузере.</p></div>
@@ -145,7 +167,7 @@
   }
 
   function initError() {
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
+    return `<div class="page game game-home">${hero({ tag: 'Кампании с друзьями: персонажи, сессии и журнал в одном месте.', cta: helpBig() })}
       <div class="card checks bad"><h2>Не удалось подключиться</h2><p>${esc(C.errorText(C.error))}</p>
       <p class="muted small">Проверьте интернет и обновите страницу. Если сайт открыт в режиме «инкогнито» или с блокировщиком, попробуйте обычное окно.</p>
       <button type="button" class="btn" onclick="location.reload()">Обновить страницу</button></div></div>`;
@@ -154,12 +176,14 @@
   function signIn() {
     const mode = App.ui.gAuthMode === 'signup' ? 'signup' : 'signin';
     const join = (App.ui.gamePath || [])[0] === 'join' ? (App.ui.gamePath || [])[1] : null;
-    return `<div class="page game"><div class="page-head"><h1>Игра</h1>${helpBtn()}</div>
-      <p class="lead">Кампании с друзьями: ГМ создаёт кампанию и даёт игрокам код, игроки собирают персонажей, а ГМ видит, кто кого создал, утверждает листы, начисляет опыт и ведёт журнал сессий. Всё хранится онлайн — игру можно продолжить с любого устройства.</p>
+    return `<div class="page game game-home">
+      ${hero({
+        tag: 'Кампании с друзьями: ГМ создаёт кампанию и даёт игрокам код, игроки собирают персонажей, а ГМ утверждает листы, начисляет опыт и ведёт журнал сессий. Всё хранится онлайн — игру можно продолжить с любого устройства.',
+        cta: `<button type="button" class="btn primary hm-big" data-act="gGoogle">Войти через Google</button>
+          <button type="button" class="btn hm-big" data-act="gFocus" data-v=".signin input">Войти по почте</button>${helpBig()}`
+      })}
       ${join ? `<div class="card note">После входа вы присоединитесь к кампании по коду <b>${esc(C.normCode(join))}</b>.</div>` : ''}
-      <div class="card signin">
-        <button type="button" class="btn primary google-btn" data-act="gGoogle">Войти через Google</button>
-        <p class="muted small or">или по почте</p>
+      <div class="card signin"><h2>${mode === 'signup' ? 'Регистрация по почте' : 'Вход по почте'}</h2>
         <form data-game-form="${mode}" novalidate>
           ${mode === 'signup' ? '<label>Имя в игре <input type="text" name="name" autocomplete="nickname" maxlength="40" required placeholder="как вас будут видеть ГМ и игроки"></label>' : ''}
           <label>Почта <input name="email" type="email" autocomplete="email" required></label>
@@ -171,6 +195,7 @@
         </form>
       </div>
       ${C.mode === 'local' ? '<p class="muted small">Тестовый режим (?cloud=local): всё хранится в этом браузере, вход — по любому имени.</p>' : ''}
+      ${PATHS}
       ${diceBox({})}
     </div>`;
   }
@@ -204,8 +229,16 @@
     setPage('list', () => sub('camps', (ok, bad) => C.watchMyCampaigns(ok('camps'), bad)));
     const camps = G.d.camps;
     const t = target();
-    el.innerHTML = `<div class="page game">
-      <div class="page-head"><h1>Игра</h1><span class="row-actions">${helpBtn()}${userBar()}</span></div>
+    const asGm = (camps || []).filter(c => c.gm === C.uid()).length;
+    const stat = (n, label) => `<div><dt>${label}</dt><dd>${camps ? n : '…'}</dd></div>`;
+    el.innerHTML = `<div class="page game game-home">
+      ${hero({
+        tag: 'Ваши кампании, персонажи, сессии и журнал — в одном месте. Создайте свою кампанию или войдите в чужую по коду от ГМ.',
+        cta: `<button type="button" class="btn primary hm-big" data-act="gFocus" data-v="[data-game-form=create] input">Новая кампания</button>
+          <button type="button" class="btn hm-big hm-game" data-act="gFocus" data-v="[data-game-form=join] input">${window.Home.ic('game')}<span>Присоединиться по коду</span></button>${helpBig()}`,
+        after: `<p class="hm-note hm-user">Вы: <b>${esc(C.name())}</b><button type="button" class="linklike small" data-act="gRename">сменить имя</button><button type="button" class="linklike small" data-act="gSignOut">выйти</button></p>
+          <dl class="hm-stats">${stat((camps || []).length, 'кампаний')}${stat(asGm, 'вы ГМ')}${stat((camps || []).length - asGm, 'вы игрок')}${stat((camps || []).filter(c => (c.session || {}).active).length, 'идут сессии')}</dl>`
+      })}
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       ${t ? `<div class="card note">В мастере открыт персонаж для кампании «${esc(t.cname)}». <a href="#create/summary">Вернуться к нему</a></div>` : ''}
       <h2>Мои кампании</h2>
@@ -439,6 +472,14 @@
   }
 
   Object.assign(App.actions, {
+    // кнопки в шапке: к нужной форме, курсор — в первое поле
+    gFocus(b) {
+      const f = G.el && G.el.querySelector(b.dataset.v);
+      if (!f) return;
+      const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      f.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+      f.focus({ preventScroll: true });
+    },
     gRoll(b) {
       const box = b.closest('.dice-box');
       let o = {};

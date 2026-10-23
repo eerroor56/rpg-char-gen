@@ -55,8 +55,10 @@
     pop.id = 'combo-pop';
     pop.setAttribute('role', 'listbox');
     pop.hidden = true;
-    // нажатие в списке не должно уводить фокус из поля
-    pop.addEventListener('pointerdown', e => { e.preventDefault(); const li = e.target.closest('[data-i]'); if (li) choose(+li.dataset.i); });
+    // нажатие в списке не должно уводить фокус из поля (mousedown приходит от мыши и от касания-«тапа»,
+    // но не от прокрутки пальцем). Выбор — по click: палец, который прокручивает список, ничего не выбирает
+    pop.addEventListener('mousedown', e => e.preventDefault());
+    pop.addEventListener('click', e => { const li = e.target.closest('[data-i]'); if (li) choose(+li.dataset.i); });
     document.body.appendChild(pop);
     return pop;
   }
@@ -78,20 +80,27 @@
         <span class="combo-v">${mark(o.v, q)}</span>${o.hint ? `<span class="combo-h">${mark(o.hint, q)}</span>` : ''}</div>`).join('')
       + (more > 0 ? `<div class="combo-more">ещё ${more} — уточните поиск</div>` : '');
     if (p.hidden) { p.hidden = false; p.classList.remove('is-open'); void p.offsetWidth; p.classList.add('is-open'); }
+    p.scrollTop = 0;   // новый список — с начала, а не с места прошлой прокрутки
     input.setAttribute('aria-expanded', 'true');
     input.setAttribute('aria-controls', 'combo-pop');
     place();
+  }
+  // видимая часть окна: на телефоне её закрывает клавиатура, а window.innerHeight этого не учитывает
+  function visible() {
+    const v = window.visualViewport;
+    return v ? { top: v.offsetTop, bottom: v.offsetTop + v.height } : { top: 0, bottom: window.innerHeight };
   }
   // под полем, а если внизу тесно — над ним
   function place() {
     if (!pop || pop.hidden || !input) return;
     if (!input.isConnected) { close(); return; }
-    const r = input.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > window.innerHeight) { hide(); return; }
+    const r = input.getBoundingClientRect(), vis = visible();
+    // поле ушло из видимой части или скрыто вместе с вкладкой
+    if (r.bottom < vis.top || r.top > vis.bottom || (!r.width && !r.height)) { hide(); return; }
     const w = Math.max(r.width, 240);
     pop.style.width = Math.min(w, window.innerWidth - 16) + 'px';
     pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
-    const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
+    const below = vis.bottom - r.bottom - 12, above = r.top - vis.top - 12;
     const up = below < 200 && above > below;
     pop.style.maxHeight = Math.max(140, Math.min(320, up ? above : below)) + 'px';
     pop.classList.toggle('up', up);
@@ -145,8 +154,10 @@
       hide();
     } else if (e.key === 'Tab') hide();
   }, true);
-  window.addEventListener('scroll', place, true);
+  // прокрутка самого списка положение не меняет
+  window.addEventListener('scroll', e => { if (e.target !== pop) place(); }, true);
   window.addEventListener('resize', place);
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', place); window.visualViewport.addEventListener('scroll', place); }
 
   window.Combo = { scan, close };
 })();

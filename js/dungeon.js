@@ -40,13 +40,15 @@
   const CHESTS = [1, 3], CHEST_TRAP = 0.2, MIMIC = 0.1, COINS = [10, 100], CHEST_GEAR = [1, 3], CHEST_SPECIAL = [1, 3];
   const TRAP_ROLL = [20, 80], TRAP_DMG = [100, 500], TRAPS = [1, 3];  // в комнате 1–3 разные ловушки (урон и эффект у каждой свои)
   const BOSS_EXTRA = [0, 3];
-  const ROOM_COST = 5, CORR_COST = 1;                              // пси и живость: комната — 5, клетка коридора — 1
+  const ROOM_COST = 5, CORR_COST = 1;                              // пси, живость и % света: комната — 5, клетка коридора — 1
+  // уровень освещения в процентах; ГМ может поменять его вручную. min — нижняя граница ступени
   const LIGHT = [
-    { id: 'светло', range: '100–75%', psi: 1, fx: 'игроки +10 к инициативе и +10 к попаданию' },
-    { id: 'тускло', range: '75–50%', psi: 2, fx: 'бонус игроков пропадает; потеря пси при перемещении ×2; враги +10 ко всем броскам' },
-    { id: 'сумрачно', range: '50–1%', psi: 4, fx: 'потеря пси ×4; игроки −10 ко всем броскам; враги +20; дроп с противников удваивается' },
-    { id: 'темно', range: '0%', psi: 8, fx: 'потеря пси ×8; игроки −20 ко всем броскам; враги +30 и +30% шанса крита; враги могут уронить золотую монету (50%)' }
+    { id: 'светло', range: '100–75%', min: 75, psi: 1, fx: 'игроки +10 к инициативе и +10 к попаданию' },
+    { id: 'тускло', range: '75–50%', min: 50, psi: 2, fx: 'бонус игроков пропадает; потеря пси при перемещении ×2; враги +10 ко всем броскам' },
+    { id: 'сумрачно', range: '50–1%', min: 1, psi: 4, fx: 'потеря пси ×4; игроки −10 ко всем броскам; враги +20; дроп с противников удваивается' },
+    { id: 'темно', range: '0%', min: 0, psi: 8, fx: 'потеря пси ×8; игроки −20 ко всем броскам; враги +30 и +30% шанса крита; враги могут уронить золотую монету (50%)' }
   ];
+  const TOP = { 'светло': 100, 'тускло': 74, 'сумрачно': 49, 'темно': 0 };   // подземелья, где свет хранился ступенью
 
   // ------------------------------------------------------------ данные
   const unlocked = () => !!(window.GMLock && window.GMLock.unlocked);
@@ -241,7 +243,7 @@
       if (secrets > 0 && free(r).length) { attach('secret', '', r, true); secrets--; }
     });
     rooms.forEach(r => fill(r, P));
-    const dg = { v: VERSION, at: Date.now(), opts: o, rooms, links, light: LIGHT[0].id, patrol: { rooms: 0, log: [] }, sel: null, foeCount: P.foes.length };
+    const dg = { v: VERSION, at: Date.now(), opts: o, rooms, links, lightPct: 100, patrol: { rooms: 0, log: [] }, sel: null, foeCount: P.foes.length };
     depthOf(dg);
     return dg;
   }
@@ -298,7 +300,9 @@
   const codeOf = r => (r.type === 'special' ? `5.${SPECIAL.indexOf(r.sub) + 1}` : TYPES[r.type].code);
   const titleOf = r => (r.type === 'special' ? `${TYPES.special.t}: ${r.sub}` : TYPES[r.type].t);
   const roomLabel = r => `№${r.id} · ${codeOf(r)} · ${titleOf(r)}`;
-  const lightOf = dg => LIGHT.find(l => l.id === dg.light) || LIGHT[0];
+  const lightPct = dg => (typeof dg.lightPct === 'number' ? dg.lightPct : TOP[dg.light] !== undefined ? TOP[dg.light] : 100);
+  const lightOf = dg => { const p = lightPct(dg); return LIGHT.find(l => p >= l.min) || LIGHT[LIGHT.length - 1]; };
+  const dim = (dg, n) => { dg.lightPct = Math.max(0, lightPct(dg) - n); };
 
   function mapHtml(dg) {
     const xs = dg.rooms.map(r => r.x), ys = dg.rooms.map(r => r.y);
@@ -346,16 +350,19 @@
       <div class="dg-track-col">
         <h3>Патрули в коридорах</h3>
         <p>Шанс встретить отряд: <b>${chanceNow}%</b> <span class="muted small">(+${PATROL_STEP}% за каждую пройденную комнату; на лестнице патрулей нет; после встречи — сброс)</span></p>
-        <div class="row-actions"><button type="button" class="btn small" data-act="dgPatrol" data-v="room">Комната пройдена</button>
+        <div class="row-actions"><button type="button" class="btn small" data-act="dgPatrol" data-v="room" title="+${PATROL_STEP}% к шансу патруля и −${ROOM_COST}% света">Комната пройдена</button>
           <button type="button" class="btn small primary" data-act="dgPatrol" data-v="roll">Коридор: бросок d100</button>
           <button type="button" class="linklike small" data-act="dgPatrol" data-v="reset">сбросить</button></div>
         ${p.log.length ? `<ul class="small dg-log">${p.log.slice(-4).reverse().map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       </div>
       <div class="dg-track-col">
         <h3>Свет</h3>
-        <select data-change="dgLight" aria-label="Освещение">${LIGHT.map(l => `<option value="${esc(l.id)}" ${l.id === L.id ? 'selected' : ''}>${esc(cap(l.id))} (${l.range})</option>`).join('')}</select>
+        <div class="dg-light"><label>Освещение, % <input type="number" min="0" max="100" step="1" data-change="dgLight" value="${lightPct(dg)}"></label>
+          <span class="tag ${L.min >= 50 ? '' : 'warn'}">${esc(cap(L.id))} (${L.range})</span></div>
         <p class="small">${esc(L.fx)}.</p>
-        <p class="small">Комната: −${ROOM_COST * L.psi} пси, −${ROOM_COST} живости; клетка коридора: −${CORR_COST * L.psi} пси, −${CORR_COST} живости.${path ? ` До финала кратчайшим путём: ${path.rooms} ${App.plural(path.rooms, 'комната', 'комнаты', 'комнат')} и ${path.cells} ${App.plural(path.cells, 'клетка', 'клетки', 'клеток')} коридора — <b>−${(path.rooms * ROOM_COST + path.cells * CORR_COST) * L.psi} пси, −${path.rooms * ROOM_COST + path.cells * CORR_COST} живости</b>.` : ''}</p>
+        <div class="row-actions"><button type="button" class="btn small" data-act="dgDim" data-v="${CORR_COST}">Клетка коридора: −${CORR_COST}%</button>
+          <button type="button" class="linklike small" data-act="dgDim" data-v="full">свет 100%</button></div>
+        <p class="small">Комната: −${ROOM_COST * L.psi} пси, −${ROOM_COST} живости, −${ROOM_COST}% света; клетка коридора: −${CORR_COST * L.psi} пси, −${CORR_COST} живости, −${CORR_COST}% света.${path ? ` До финала кратчайшим путём: ${path.rooms} ${App.plural(path.rooms, 'комната', 'комнаты', 'комнат')} и ${path.cells} ${App.plural(path.cells, 'клетка', 'клетки', 'клеток')} коридора — <b>−${(path.rooms * ROOM_COST + path.cells * CORR_COST) * L.psi} пси, −${path.rooms * ROOM_COST + path.cells * CORR_COST} живости, −${path.rooms * ROOM_COST + path.cells * CORR_COST}% света</b> (пси — при нынешнем свете).` : ''}</p>
       </div></div>`;
   }
 
@@ -437,12 +444,14 @@
         if (r) fill(r, pools(dg.opts));
       });
     },
-    dgLight(t) { update(dg => { dg.light = t.value; }); },
+    // свет вручную (ГМ) и расход: комната — в «Комната пройдена», клетка коридора — кнопкой
+    dgLight(t) { update(dg => { dg.lightPct = Math.min(100, Math.max(0, Math.round(parseFloat(t.value) || 0))); }); },
+    dgDim(b) { update(dg => { if (b.dataset.v === 'full') dg.lightPct = 100; else dim(dg, +b.dataset.v); }); },
     dgPatrol(b) {
       update(dg => {
         const p = dg.patrol || (dg.patrol = { rooms: 0, log: [] });
         const v = b.dataset.v;
-        if (v === 'room') { p.rooms++; return; }
+        if (v === 'room') { p.rooms++; dim(dg, ROOM_COST); return; }
         if (v === 'reset') { p.rooms = 0; p.log = []; return; }
         const ch = Math.min(100, p.rooms * PATROL_STEP);
         const roll = rint(1, 100);

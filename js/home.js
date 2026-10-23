@@ -61,28 +61,38 @@
     ['Как распечатать лист?', 'На листе персонажа — «Печать / PDF» или «Скачать картинку» (JPG).']
   ];
 
+  // шапка в стиле главной: вращающийся знак, надзаголовок, название, подзаголовок, кнопки и что угодно ниже.
+  // Её же берёт начальный экран «Игры». calm — без повторной анимации появления (экран перерисовался)
+  function hero(o) {
+    return `<section class="hm-hero${o.cls ? ' ' + o.cls : ''}${o.calm ? ' calm' : ''}">
+        <div class="hm-sigil" aria-hidden="true" style="animation-delay:-${((Date.now() / 1000) % 120).toFixed(1)}s">
+          <svg viewBox="0 0 200 200"><circle class="hm-ring" cx="100" cy="100" r="92"/><circle class="hm-ring thin" cx="100" cy="100" r="80"/>
+            <polygon class="hm-penta" points="100,22 174,76 146,162 54,162 26,76"/><polygon class="hm-penta inner" points="100,54 144,86 127,138 73,138 56,86"/></svg>
+        </div>
+        <p class="hm-kicker">${o.kicker}</p>
+        <h1 class="hm-title">${o.title}</h1>
+        <p class="hm-tag">${o.tag}</p>
+        ${o.cta ? `<div class="hm-cta">${o.cta}</div>` : ''}
+        ${o.after || ''}
+      </section>`;
+  }
+
   function render(el) {
     const st = App.state || {};
     const draft = st.raceId ? (st.name ? 'Продолжить «' + st.name + '»' : 'Продолжить героя') : '';
     const heroes = (App.store.get('hero-workshop:heroes', []) || []).length;
     const counters = stats();
     el.innerHTML = `<div class="home">
-      <section class="hm-hero">
-        <div class="hm-sigil" aria-hidden="true">
-          <svg viewBox="0 0 200 200"><circle class="hm-ring" cx="100" cy="100" r="92"/><circle class="hm-ring thin" cx="100" cy="100" r="80"/>
-            <polygon class="hm-penta" points="100,22 174,76 146,162 54,162 26,76"/><polygon class="hm-penta inner" points="100,54 144,86 127,138 73,138 56,86"/></svg>
-        </div>
-        <p class="hm-kicker">конструктор героя · справочник · онлайн-игра</p>
-        <h1 class="hm-title">Мастерская героя</h1>
-        <p class="hm-tag">Соберите героя по правилам своего мира, ведите его в кампании с друзьями и держите под рукой все таблицы ГМ.</p>
-        <div class="hm-cta">
-          <a class="btn primary hm-big" href="#create">${draft ? esc(draft) : 'Создать героя'}</a>
+      ${hero({
+        kicker: 'конструктор героя · справочник · онлайн-игра',
+        title: 'Мастерская героя',
+        tag: 'Соберите героя по правилам своего мира, ведите его в кампании с друзьями и держите под рукой все таблицы ГМ.',
+        cta: `<a class="btn primary hm-big" href="#create">${draft ? esc(draft) : 'Создать героя'}</a>
           <a class="btn hm-big hm-game" href="#game">${ic('game')}<span>Войти в игру</span></a>
-          <a class="btn ghost hm-big" href="#ref">Справочник</a>
-        </div>
-        ${heroes ? `<p class="hm-note"><a href="#heroes">Мои герои: ${heroes}</a></p>` : ''}
-        <dl class="hm-stats">${counters.map(([n, t]) => `<div><dt>${esc(t)}</dt><dd data-count="${n}">${n}</dd></div>`).join('')}</dl>
-      </section>
+          <a class="btn ghost hm-big" href="#ref">Справочник</a>`,
+        after: `${heroes ? `<p class="hm-note"><a href="#heroes">Мои герои: ${heroes}</a></p>` : ''}
+          <dl class="hm-stats">${counters.map(([n, t]) => `<div><dt>${esc(t)}</dt><dd data-count="${n}">${n}</dd></div>`).join('')}</dl>`
+      })}
 
       <section class="hm-paths" aria-label="С чего начать">
         <article class="hm-path"><h2>Я игрок</h2><ol>
@@ -138,5 +148,5 @@
     requestAnimationFrame(step);
   }
 
-  window.Home = { render };
+  window.Home = { render, hero, ic };
 })();
