@@ -492,9 +492,11 @@
     const raw = rec.equip && typeof rec.equip === 'object' ? rec.equip : start.equip;
     const equip = {};
     Object.entries(raw).forEach(([k, id]) => { if (ids.has(id)) equip[k] = id; });
-    const wallet = gm.wallet ? JSON.parse(JSON.stringify(gm.wallet)) : { з: num((res0.der || {}).gold) + num(gm.gold) };
-    if (!Array.isArray(wallet.other)) wallet.other = [];
-    return { items, equip, wallet, started: !gm.invInit };
+    // кошелёк: выдаёт и забирает ГМ (gm.wallet), тратит и разменивает игрок (purse) — каждый пишет только своё поле
+    const issued = gm.wallet ? JSON.parse(JSON.stringify(gm.wallet)) : { з: num((res0.der || {}).gold) + num(gm.gold) };
+    if (!Array.isArray(issued.other)) issued.other = [];
+    const wallet = withPurse(issued, rec.purse);
+    return { items, equip, wallet, issued, started: !gm.invInit };
   }
 
   // ------------------------------------------------------------ экипировка персонажа
@@ -536,6 +538,66 @@
   // ------------------------------------------------------------ валюта
   const COINS = C.CURRENCIES;
   function walletCopper(w) { return COINS.reduce((a, c) => a + (num((w || {})[c.id]) * c.rate), 0); }
+  const sameCur = (a, b) => R.norm(a) === R.norm(b);
+
+  // монеты = выданное ГМ + поправки игрока (purse: { м: +76, се: -1, other: { честь: -2 } })
+  function withPurse(issued, purse) {
+    const w = JSON.parse(JSON.stringify(issued));
+    if (!Array.isArray(w.other)) w.other = [];
+    const p = purse || {};
+    COINS.forEach(c => { if (num(p[c.id])) w[c.id] = num(w[c.id]) + num(p[c.id]); });
+    Object.entries(p.other || {}).forEach(([name, d]) => {
+      if (!num(d)) return;
+      const x = w.other.find(y => y && sameCur(y.name, name));
+      if (x) x.qty = num(x.qty) + num(d); else w.other.push({ name, qty: num(d) });
+    });
+    return w;
+  }
+  // поправка, которая превращает кошелёк from в to (её и записывает игрок)
+  function purseDelta(purse, from, to) {
+    const p = JSON.parse(JSON.stringify(purse || {}));
+    COINS.forEach(c => { const d = num(to[c.id]) - num(from[c.id]); if (d) p[c.id] = num(p[c.id]) + d; if (!num(p[c.id])) delete p[c.id]; });
+    return p;
+  }
+  // оплата со сдачей, как в жизни: сначала ровно, крупными монетами; не хватает — разменять наименьшую подходящую монету.
+  // 1 се, платим 24 м → 76 м. Возвращает новые монеты или null, если денег не хватает
+  function pay(w, copper) {
+    const left = {};
+    COINS.forEach(c => { left[c.id] = Math.max(0, num(w[c.id])); });
+    if (copper <= 0 || walletCopper(left) < copper) return null;
+    let need = copper;
+    const desc = COINS.slice().sort((a, b) => b.rate - a.rate);
+    desc.forEach(c => { const n = Math.min(left[c.id], Math.floor(need / c.rate)); left[c.id] -= n; need -= n * c.rate; });
+    if (need > 0) {
+      const big = desc.slice().reverse().find(c => left[c.id] > 0 && c.rate > need);
+      left[big.id] -= 1;
+      let change = big.rate - need;
+      desc.filter(c => c.rate < big.rate).forEach(c => { const n = Math.floor(change / c.rate); left[c.id] += n; change -= n * c.rate; });
+    }
+    return left;
+  }
+  // разменять одну монету на 100 следующих поменьше
+  function breakCoin(w, id) {
+    const asc = COINS.slice().sort((a, b) => a.rate - b.rate);
+    const i = asc.findIndex(c => c.id === id);
+    if (i <= 0 || num(w[id]) < 1) return null;
+    const out = {};
+    COINS.forEach(c => { out[c.id] = num(w[c.id]); });
+    out[id] -= 1;
+    out[asc[i - 1].id] += asc[i].rate / asc[i - 1].rate;
+    return out;
+  }
+  // собрать мелочь: каждые 100 мелких монет → одна крупнее
+  function gatherCoins(w) {
+    const asc = COINS.slice().sort((a, b) => a.rate - b.rate);
+    const out = {};
+    COINS.forEach(c => { out[c.id] = Math.max(0, num(w[c.id])); });
+    for (let i = 0; i < asc.length - 1; i++) {
+      const k = asc[i + 1].rate / asc[i].rate, n = Math.floor(out[asc[i].id] / k);
+      out[asc[i].id] -= n * k; out[asc[i + 1].id] += n;
+    }
+    return out;
+  }
   function money(copper) {
     let x = Math.round(copper);
     if (!x) return '0';
@@ -644,6 +706,6 @@
   window.Craft = {
     KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
-    walletCopper, money, priceCopper, parseDrop, parseStatMods, catalog, effectSources, isTome, tomeBonus, num
+    walletCopper, money, priceCopper, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, catalog, effectSources, isTome, tomeBonus, num
   };
 })();

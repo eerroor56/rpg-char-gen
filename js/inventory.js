@@ -4,7 +4,8 @@
  *               выдача предметов из таблиц, добыча с существ и «отсебятина».
  *   Состояния:  проклятия, болезни, тёмные дары, благословения, модификации, черты, статус-эффекты и свои;
  *               прибавки и множители к статам из них сразу учитываются в характеристиках.
- * Права: предметы, кошелёк и состояния меняет ГМ (поле gm); надеть и снять может и игрок (поле equip).
+ * Права: предметы и состояния меняет ГМ (поле gm); надеть и снять может и игрок (поле equip).
+ * Кошелёк: валюту выдаёт и забирает ГМ (gm.wallet), тратит и разменивает игрок (purse) — сдача считается сама.
  */
 (function () {
   'use strict';
@@ -26,7 +27,7 @@
     const v = view();
     const gm = Dev().gmCopy();
     if (!gm.invInit) { gm.items = clone(v.inv.items); gm.invInit = true; }
-    if (!gm.wallet) gm.wallet = clone(v.inv.wallet);
+    if (!gm.wallet) gm.wallet = clone(v.inv.issued);   // только выданное ГМ, без трат игрока
     delete gm.gold;
     const equip = clone(v.inv.equip);
     const before = JSON.stringify(equip);
@@ -192,23 +193,49 @@
   }
 
   // ------------------------------------------------------------ кошелёк
+  // валюту выдаёт ГМ, а тратит и разменивает игрок: сдача считается сама (1 се, заплатить 24 м → 76 м)
+  const otherOf = w => (w.other || []).filter(x => x && x.name);
   function walletCard(w, perms) {
     const coins = C.CURRENCIES;
     const total = K.walletCopper(w);
-    const other = (w.other || []).filter(x => x && x.name);
+    const other = otherOf(w);
+    const ui = k => esc(App.ui[k] || '');
     let html = `<section class="dev-card wallet-card"><div class="sec-head"><h2>Кошелёк</h2><span class="muted small">всего ≈ ${esc(K.money(total))}</span></div>
-      <div class="coins">${coins.map(c => `<div class="coin ${num(w[c.id]) ? '' : 'zero'}"><b>${fmt(num(w[c.id]))}</b><span>${esc(c.id)}</span><small>${esc(c.name)}</small>
-        ${perms.gm ? `<input type="number" step="1" data-ui="invW_${esc(c.id)}" data-ui-target="none" value="${esc(App.ui['invW_' + c.id] || '')}" placeholder="±" aria-label="Изменить: ${esc(c.name)}">` : ''}</div>`).join('')}</div>
-      ${other.length ? `<ul class="dev-list">${other.map((x, i) => `<li><span>${esc(x.name)}: <b>${fmt(num(x.qty))}</b></span>${perms.gm ? `<input type="number" step="1" class="mini-num" data-ui="invWo_${i}" data-ui-target="none" value="${esc(App.ui['invWo_' + i] || '')}" placeholder="±" aria-label="Изменить: ${esc(x.name)}">` : ''}</li>`).join('')}</ul>` : ''}
-      <p class="muted small">1 мд = 100 пл, 1 пл = 100 з, 1 з = 100 се, 1 се = 100 м. Цены в таблицах без пометки — в медных.</p>`;
-    if (perms.gm) {
-      html += `<div class="dev-row"><button type="button" class="btn small" data-act="invWallet">Применить изменения</button></div>
-        <div class="dev-row"><input type="text" list="invCoins" data-ui="invWnName" data-ui-target="none" value="${esc(App.ui.invWnName || '')}" placeholder="особая валюта (честь, кровавая монета…)">
-          <input type="number" class="mini-num" step="1" data-ui="invWnQty" data-ui-target="none" value="${esc(App.ui.invWnQty || '')}" placeholder="кол-во" aria-label="Количество">
-          <button type="button" class="btn small" data-act="invWalletNew">Добавить</button></div>
-        <datalist id="invCoins">${C.SPECIAL_CURRENCIES.map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
+      <div class="coins">${coins.map(c => `<div class="coin ${num(w[c.id]) ? '' : 'zero'}"><b>${fmt(num(w[c.id]))}</b><span>${esc(c.id)}</span><small>${esc(c.name)}</small></div>`).join('')}</div>
+      ${other.length ? `<ul class="dev-list">${other.map((x, i) => `<li><span>${esc(x.name)}: <b>${fmt(num(x.qty))}</b></span>${perms.owner && num(x.qty) > 0 ? `<input type="number" min="1" step="1" class="mini-num" data-ui="invSo_${i}" data-ui-target="none" value="${ui('invSo_' + i)}" placeholder="потратить" aria-label="Потратить: ${esc(x.name)}">` : ''}</li>`).join('')}</ul>
+        ${perms.owner && other.some(x => num(x.qty) > 0) ? '<div class="dev-row"><button type="button" class="btn small" data-act="invSpendOther">Потратить особую валюту</button></div>' : ''}` : ''}`;
+    // игрок: заплатить со сдачей, разменять, собрать мелочь
+    if (perms.owner) {
+      const coinSel = (k, skipLow) => `<select data-ui="${k}" data-ui-target="none" aria-label="Монета">${coins.filter(c => !skipLow || c.rate > 1).map(c => opt(c.id, `${c.id} — ${c.name}`, App.ui[k] || (skipLow ? 'се' : 'м'))).join('')}</select>`;
+      html += `<div class="wallet-ops">
+        <div class="dev-row"><input type="number" min="1" step="1" class="mini-num" data-ui="invPayN" data-ui-target="none" value="${ui('invPayN')}" placeholder="сколько" aria-label="Сколько заплатить">
+          ${coinSel('invPayCoin')}
+          <input type="text" data-ui="invPayWhy" data-ui-target="none" value="${ui('invPayWhy')}" maxlength="120" placeholder="за что (необязательно)" aria-label="За что">
+          <button type="button" class="btn primary small" data-act="invPay">Заплатить</button></div>
+        <div class="dev-row">${coinSel('invBreakCoin', true)}<button type="button" class="btn small" data-act="invBreak">Разменять 1 монету на 100 мельче</button>
+          <button type="button" class="btn ghost small" data-act="invGather">Собрать мелочь</button></div>
+      </div>
+      <p class="muted small">Сдача считается сама: заплатить 24 м из 1 се — останется 76 м. Получить деньги можно только от ГМ.</p>`;
     }
-    return html + '</section>';
+    // ГМ: выдать или забрать
+    if (perms.gm) {
+      html += `<div class="wallet-gm"><h3>Выдать или забрать ${perms.owner ? '' : '<span class="muted small">(ГМ)</span>'}</h3>
+        <div class="coins edit">${coins.map(c => `<label class="coin-in"><span>${esc(c.id)}</span><input type="number" step="1" data-ui="invW_${esc(c.id)}" data-ui-target="none" value="${ui('invW_' + c.id)}" placeholder="±" aria-label="Выдать или забрать: ${esc(c.name)}"></label>`).join('')}</div>
+        ${other.length ? `<ul class="dev-list">${other.map((x, i) => `<li><span>${esc(x.name)}</span><input type="number" step="1" class="mini-num" data-ui="invWo_${i}" data-ui-target="none" value="${ui('invWo_' + i)}" placeholder="±" aria-label="Выдать или забрать: ${esc(x.name)}"></li>`).join('')}</ul>` : ''}
+        <div class="dev-row"><button type="button" class="btn small" data-act="invWallet">Применить</button></div>
+        <div class="dev-row"><input type="text" list="invCoins" data-ui="invWnName" data-ui-target="none" value="${ui('invWnName')}" placeholder="особая валюта (честь, кровавая монета…)">
+          <input type="number" class="mini-num" step="1" data-ui="invWnQty" data-ui-target="none" value="${ui('invWnQty')}" placeholder="кол-во" aria-label="Количество">
+          <button type="button" class="btn small" data-act="invWalletNew">Выдать</button></div>
+        <datalist id="invCoins">${C.SPECIAL_CURRENCIES.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>`;
+    }
+    return html + '<p class="muted small">1 мд = 100 пл, 1 пл = 100 з, 1 з = 100 се, 1 се = 100 м. Цены в таблицах без пометки — в медных.</p></section>';
+  }
+
+  // поправку пишет игрок в своё поле purse (выданное ГМ не трогает)
+  const coinDiff = (a, b) => C.CURRENCIES.map(c => [c.id, num(b[c.id]) - num(a[c.id])]).filter(([, d]) => d)
+    .map(([id, d]) => `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))} ${id}`).join(', ');
+  function purseCommit(before, after, text) {
+    Dev().commit({ purse: K.purseDelta(ctx().record.purse, before, after) }, text);
   }
 
   // ------------------------------------------------------------ выдача предметов (ГМ)
@@ -785,36 +812,83 @@
       gmChange(gm => { gm.items.push(it); }, `Получен предмет «${name}»`);
       ['invCName', 'invCText', 'invCCat', 'invCQty'].forEach(k => { App.ui[k] = undefined; });
     },
+    // ГМ выдаёт (+) или забирает (−); проверка — по тому, что сейчас в кошельке, с учётом трат игрока
     invWallet() {
       const changes = [];
-      gmChange(gm => {
+      gmChange((gm, v) => {
+        const w = v.inv.wallet;
         C.CURRENCIES.forEach(c => {
           const dv = Math.round(num(App.ui['invW_' + c.id]));
           if (!dv) return;
+          if (num(w[c.id]) + dv < 0) { App.toast(`Не хватает: ${c.name} (есть ${fmt(num(w[c.id]))})`); return; }
           gm.wallet[c.id] = num(gm.wallet[c.id]) + dv;
-          if (gm.wallet[c.id] < 0) { App.toast(`Не хватает: ${c.name}`); gm.wallet[c.id] -= dv; return; }
           changes.push(`${dv > 0 ? '+' : '−'}${Math.abs(dv)} ${c.id}`);
         });
-        (gm.wallet.other || []).forEach((x, i) => {
+        gm.wallet.other = gm.wallet.other || [];
+        otherOf(w).forEach((x, i) => {
           const dv = Math.round(num(App.ui['invWo_' + i]));
           if (!dv) return;
-          x.qty = Math.max(0, num(x.qty) + dv);
+          if (num(x.qty) + dv < 0) { App.toast(`Не хватает: ${x.name} (есть ${fmt(num(x.qty))})`); return; }
+          const g = gm.wallet.other.find(y => y && norm(y.name) === norm(x.name));
+          if (g) g.qty = num(g.qty) + dv; else gm.wallet.other.push({ name: x.name, qty: dv });
           changes.push(`${dv > 0 ? '+' : '−'}${Math.abs(dv)} ${x.name}`);
         });
         if (!changes.length) return false;
-      }, () => `Кошелёк: ${changes.join(', ')}`);
+      }, () => `ГМ: кошелёк ${changes.join(', ')}`);
       C.CURRENCIES.forEach(c => { App.ui['invW_' + c.id] = ''; });
       Object.keys(App.ui).filter(k => k.startsWith('invWo_')).forEach(k => { App.ui[k] = ''; });
     },
     invWalletNew() {
       const name = String(App.ui.invWnName || '').trim(), qty = Math.round(num(App.ui.invWnQty));
       if (!name || !qty) { App.toast('Впишите валюту и количество'); return; }
+      const have = num((otherOf(view().inv.wallet).find(y => norm(y.name) === norm(name)) || {}).qty);
+      if (have + qty < 0) { App.toast(`Не хватает: ${name} (есть ${fmt(have)})`); return; }
       gmChange(gm => {
         gm.wallet.other = gm.wallet.other || [];
         const x = gm.wallet.other.find(y => norm(y.name) === norm(name));
-        if (x) x.qty = Math.max(0, num(x.qty) + qty); else gm.wallet.other.push({ name, qty: Math.max(0, qty) });
-      }, `Кошелёк: ${qty > 0 ? '+' : '−'}${Math.abs(qty)} ${name}`);
+        if (x) x.qty = num(x.qty) + qty; else gm.wallet.other.push({ name, qty });
+      }, `ГМ: кошелёк ${qty > 0 ? '+' : '−'}${Math.abs(qty)} ${name}`);
       App.ui.invWnName = ''; App.ui.invWnQty = '';
+    },
+    // игрок: заплатить со сдачей
+    invPay() {
+      const v = view(), w = v.inv.wallet;
+      const coin = C.CURRENCIES.find(c => c.id === (App.ui.invPayCoin || 'м')) || C.CURRENCIES[C.CURRENCIES.length - 1];
+      const n = Math.round(num(App.ui.invPayN));
+      if (n <= 0) { App.toast('Впишите, сколько заплатить'); return; }
+      const after = K.pay(w, n * coin.rate);
+      if (!after) { App.toast(`Не хватает денег: в кошельке ${K.money(K.walletCopper(w))}`); return; }
+      const why = String(App.ui.invPayWhy || '').trim();
+      purseCommit(w, after, `Платит ${fmt(n)} ${coin.id}${why ? ` — ${why}` : ''} (${coinDiff(w, after)})`);
+      App.ui.invPayN = ''; App.ui.invPayWhy = '';
+    },
+    invBreak() {
+      const w = view().inv.wallet, id = App.ui.invBreakCoin || 'се';
+      const after = K.breakCoin(w, id);
+      if (!after) { App.toast(`Нет монеты «${id}», чтобы разменять`); return; }
+      purseCommit(w, after, `Разменивает монету: ${coinDiff(w, after)}`);
+    },
+    invGather() {
+      const w = view().inv.wallet, after = K.gatherCoins(w);
+      const d = coinDiff(w, after);
+      if (!d) { App.toast('Собирать нечего: мелких монет меньше сотни'); return; }
+      purseCommit(w, after, `Собирает мелочь: ${d}`);
+    },
+    invSpendOther() {
+      const w = view().inv.wallet;
+      const purse = JSON.parse(JSON.stringify(ctx().record.purse || {}));
+      purse.other = purse.other || {};
+      const done = [];
+      for (const [i, x] of otherOf(w).entries()) {
+        const n = Math.round(num(App.ui['invSo_' + i]));
+        if (n <= 0) continue;
+        if (n > num(x.qty)) { App.toast(`Не хватает: ${x.name} (есть ${fmt(num(x.qty))})`); return; }
+        purse.other[x.name] = num(purse.other[x.name]) - n;
+        done.push(`${fmt(n)} ${x.name}`);
+      }
+      if (!done.length) { App.toast('Впишите, сколько потратить'); return; }
+      Dev().commit({ purse }, `Тратит ${done.join(', ')}`);
+      Object.keys(App.ui).filter(k => k.startsWith('invSo_')).forEach(k => { App.ui[k] = ''; });
     },
 
     // состояния

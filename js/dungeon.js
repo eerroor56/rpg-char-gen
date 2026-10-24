@@ -302,7 +302,12 @@
   const roomLabel = r => `№${r.id} · ${codeOf(r)} · ${titleOf(r)}`;
   const lightPct = dg => (typeof dg.lightPct === 'number' ? dg.lightPct : TOP[dg.light] !== undefined ? TOP[dg.light] : 100);
   const lightOf = dg => { const p = lightPct(dg); return LIGHT.find(l => p >= l.min) || LIGHT[LIGHT.length - 1]; };
-  const dim = (dg, n) => { dg.lightPct = Math.max(0, lightPct(dg) - n); };
+  const dim = (dg, n) => { dg.lightPct = Math.min(100, Math.max(0, lightPct(dg) - n)); };
+  // источники света из листа «разное»: «факел — +25 очков свечения», «свеча — +5 очков свечения»; очко свечения = 1% света
+  const lightSources = () => (D().items || []).map(it => {
+    const m = String(it.effect || '').match(/\+\s*(\d+)\s*очк\S*\s+свечени/i);
+    return m ? { n: it.name, v: +m[1] } : null;
+  }).filter(Boolean);
 
   function mapHtml(dg) {
     const xs = dg.rooms.map(r => r.x), ys = dg.rooms.map(r => r.y);
@@ -338,6 +343,7 @@
       ${r.foes.length ? `<ul class="dev-list">${r.foes.map(f => `<li><span><b>${esc(f.n)}</b>${f.q > 1 ? ` ×${f.q}` : ''}${f.boss ? ' <span class="tag bad">босс</span>' : ''}</span><span class="muted small">ур. ${fmt(f.lvl)}</span></li>`).join('')}</ul>` : ''}
       ${near.length ? `<p class="small dg-near">Выходы: ${near.join('; ')}</p>` : ''}
       <div class="row-actions">${r.type !== 'entrance' ? `<button type="button" class="btn small" data-act="dgReroll" data-v="${r.id}">Перебросить содержимое</button>` : ''}
+        ${window.Battle && window.Battle.ready() ? `<button type="button" class="btn small" data-act="dgBattle" data-v="${r.id}" title="Поле боя с местностью этой комнаты${r.foes.length ? ' и её противниками' : ''}">На поле боя</button>` : ''}
         <button type="button" class="linklike small" data-act="dgSel" data-v="">закрыть</button></div>
     </div>`;
   }
@@ -361,6 +367,7 @@
           <span class="tag ${L.min >= 50 ? '' : 'warn'}">${esc(cap(L.id))} (${L.range})</span></div>
         <p class="small">${esc(L.fx)}.</p>
         <div class="row-actions"><button type="button" class="btn small" data-act="dgDim" data-v="${CORR_COST}">Клетка коридора: −${CORR_COST}%</button>
+          ${lightSources().map(s => `<button type="button" class="btn small" data-act="dgDim" data-v="-${s.v}" title="${esc(cap(s.n))}: +${s.v} очков свечения">${esc(cap(s.n))}: +${s.v}%</button>`).join('')}
           <button type="button" class="linklike small" data-act="dgDim" data-v="full">свет 100%</button></div>
         <p class="small">Комната: −${ROOM_COST * L.psi} пси, −${ROOM_COST} живости, −${ROOM_COST}% света; клетка коридора: −${CORR_COST * L.psi} пси, −${CORR_COST} живости, −${CORR_COST}% света.${path ? ` До финала кратчайшим путём: ${path.rooms} ${App.plural(path.rooms, 'комната', 'комнаты', 'комнат')} и ${path.cells} ${App.plural(path.cells, 'клетка', 'клетки', 'клеток')} коридора — <b>−${(path.rooms * ROOM_COST + path.cells * CORR_COST) * L.psi} пси, −${path.rooms * ROOM_COST + path.cells * CORR_COST} живости, −${path.rooms * ROOM_COST + path.cells * CORR_COST}% света</b> (пси — при нынешнем свете).` : ''}</p>
       </div></div>`;
@@ -445,7 +452,12 @@
       });
     },
     // свет вручную (ГМ) и расход: комната — в «Комната пройдена», клетка коридора — кнопкой
+    dgBattle(b) {
+      const dg = load(ctx.cid), r = dg && dg.rooms[+b.dataset.v];
+      if (r && window.Battle) window.Battle.fromRoom(r);
+    },
     dgLight(t) { update(dg => { dg.lightPct = Math.min(100, Math.max(0, Math.round(parseFloat(t.value) || 0))); }); },
+    // + — расход (комната, клетка коридора), − в data-v — источник света (факел, свеча), full — свет 100%
     dgDim(b) { update(dg => { if (b.dataset.v === 'full') dg.lightPct = 100; else dim(dg, +b.dataset.v); }); },
     dgPatrol(b) {
       update(dg => {

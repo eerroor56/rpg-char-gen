@@ -67,6 +67,7 @@
   function schedule() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; repaint(); }); }
   function repaint() {
     if (App.tab !== 'game' || !G.el) return;
+    if (window.Battle && window.Battle.busy()) return;      // фишку тянут — перерисуем после того, как отпустят
     const a = document.activeElement;
     if (a && a.dataset && a.dataset.ui && G.el.contains(a)) App.keepFocus(a, paint); else paint();
   }
@@ -356,7 +357,23 @@
 
     // генератор подземелий: уровень противников — от среднего уровня персонажей в игре
     const inGame = (chars || []).filter(x => x.status === 'active');
+    const treasuryHtml = gm && chars ? treasury(inGame, cid) : '';
     const partyLevel = inGame.length ? inGame.reduce((a, ch) => a + (charView(ch).res.level || 0), 0) / inGame.length : 1;
+    // поле боя: видят все участники; герой двигается записью в своего персонажа (pos), остальное — полем в кампании
+    const battleHtml = window.Battle ? window.Battle.card({
+      cid, camp, gm, me, level: partyLevel, rerender: repaint,
+      heroes: inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, race: charView(ch).res.race })),
+      saveBoard: board => {
+        G.d.camp = Object.assign({}, G.d.camp, { board });        // сразу показать, не дожидаясь сервера
+        repaint();
+        return C.updateCampaign(cid, { board }).catch(e => App.toast(C.errorText(e)));
+      },
+      savePos: (chid, pos) => {
+        G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { pos }) : x));
+        repaint();
+        return C.updateCharacter(cid, chid, { pos }).catch(e => App.toast(C.errorText(e)));
+      }
+    }) : '';
     const dungeonHtml = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender: repaint }) : '';
 
     el.innerHTML = `<div class="page game">
@@ -364,10 +381,34 @@
       <div class="page-head"><h1>${esc(camp.name)}</h1><span class="row-actions">${helpBtn()}${userBar()}</span></div>
       <p class="muted">${gm ? 'Вы ГМ этой кампании.' : `ГМ: ${esc(camp.gmName || '—')}.`} ${s.active ? `<b class="live">Идёт сессия ${s.n}.</b>` : ''}</p>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
+      ${battleHtml}
       <div class="camp-grid">
         <div class="camp-main">${charsHtml}${diceBox({ cid })}${dungeonHtml}${feedHtml}</div>
-        <aside class="camp-side">${sessionHtml}${inviteHtml}${membersHtml}${sessionsHtml}${privHtml}${settingsHtml}</aside>
+        <aside class="camp-side">${sessionHtml}${treasuryHtml}${inviteHtml}${membersHtml}${sessionsHtml}${privHtml}${settingsHtml}</aside>
       </div></div>`;
+  }
+
+  // казна отряда (видит ГМ): сколько денег у всех персонажей в игре вместе и у каждого
+  function treasury(list, cid) {
+    const K = window.Craft, coins = window.GM_CONFIG.CURRENCIES;
+    const sum = {}, other = new Map();
+    const rows = list.map(ch => {
+      const w = (charView(ch).inv || {}).wallet || {};
+      coins.forEach(c => { sum[c.id] = (sum[c.id] || 0) + K.num(w[c.id]); });
+      (w.other || []).filter(x => x && x.name && K.num(x.qty)).forEach(x => {
+        const k = R.norm(x.name);
+        other.set(k, { name: x.name, qty: ((other.get(k) || {}).qty || 0) + K.num(x.qty) });
+      });
+      return { ch, copper: K.walletCopper(w) };
+    }).sort((a, b) => b.copper - a.copper);
+    const total = K.walletCopper(sum);
+    return `<section class="card treasury"><h2>Казна отряда</h2>
+      ${list.length ? `<p>Всего у персонажей в игре: <b>${esc(K.money(total))}</b></p>
+      <div class="coins">${coins.filter(c => sum[c.id]).map(c => `<div class="coin"><b>${fmt(sum[c.id])}</b><span>${esc(c.id)}</span><small>${esc(c.name)}</small></div>`).join('') || '<p class="muted small">Денег пока нет.</p>'}</div>
+      ${other.size ? `<p class="small">Особая валюта: ${[...other.values()].map(x => `${esc(x.name)} ${fmt(x.qty)}`).join(', ')}</p>` : ''}
+      <ul class="dev-list treasury-list">${rows.map(r => `<li><a href="#game/${esc(cid)}/${esc(r.ch.id)}">${esc(r.ch.name || 'Безымянный герой')}</a><span class="muted small">${esc(K.money(r.copper))}</span></li>`).join('')}</ul>`
+        : '<p class="muted small">Персонажей в игре пока нет.</p>'}
+      <p class="muted small">Валюту выдаёте вы на странице персонажа (Снаряжение → Кошелёк), тратят и разменивают игроки.</p></section>`;
   }
 
   function feedSub(cid) {

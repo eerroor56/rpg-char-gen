@@ -844,7 +844,7 @@ def build_misc(wb):
     ws = wb["разное"]
     artifacts = []
     group = "артефакты"
-    for r in range(2, 221):
+    for r in range(2, ws.max_row + 1):
         a = txt(ws.cell(r, 1).value)
         if not a:
             continue
@@ -856,7 +856,7 @@ def build_misc(wb):
         artifacts.append({"name": v[0], "effect": v[1], "how": v[2], "from": v[3], "type": v[4], "g": group})
     items = []
     group = "предметы"
-    for r in range(2, 72):
+    for r in range(2, ws.max_row + 1):   # ГМ дописывает предметы — читаем колонку G до конца листа
         a = txt(ws.cell(r, col("G")).value)
         if not a:
             continue
@@ -904,6 +904,8 @@ def build_mechanics(wb):
 
 
 def build_schemes(wb):
+    if "схемы" not in wb.sheetnames:   # ГМ убрал лист (2026-10-25) — схем на сайте просто нет
+        return []
     ws = wb["схемы"]
     grid = []
     for r in range(1, ws.max_row + 1):
