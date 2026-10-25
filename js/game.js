@@ -293,6 +293,14 @@
     const t = target();
     const localHeroes = App.store.get('hero-workshop:heroes', []);
 
+    // союзники отряда: список в кампании (меняет ГМ), показываются и среди персонажей, и на поле боя
+    const party = (chars || []).filter(x => x.status === 'active').map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой' }));
+    const saveAllies = allies => {
+      G.d.camp = Object.assign({}, G.d.camp, { allies });
+      repaint();
+      return C.updateCampaign(cid, { allies }).catch(e => App.toast(C.errorText(e)));
+    };
+    const alliesHtml = window.Battle && chars ? window.Battle.alliesBlock({ gm, heroes: party, allies: camp.allies || [], save: saveAllies }) : '';
     const charsHtml = `<section class="camp-chars"><div class="sec-head"><h2>Персонажи</h2>${gm && review ? `<span class="tag freq">на проверке: ${review}</span>` : ''}</div>
       ${!chars ? '<div class="card empty loading">Загружаю…</div>' : list.length ? `<ul class="char-grid">${list.map(ch => {
         const v = charView(ch), race = v.res.race;
@@ -303,6 +311,7 @@
           <span class="small muted">игрок: ${esc(ch.ownerName || '—')}${ch.owner === me ? ' (вы)' : ''}</span>
           <span class="tag st-${esc(ch.status)}">${STATUS[ch.status] || esc(ch.status)}</span></span></a></li>`;
       }).join('')}</ul>` : '<div class="card empty">Персонажей пока нет.</div>'}
+      ${alliesHtml}
       <div class="card new-char"><h3>Новый персонаж в кампанию</h3>
         <div class="row-actions">
           <button type="button" class="btn primary" data-act="gNewChar">Собрать в мастере</button>
@@ -362,7 +371,8 @@
     // поле боя: видят все участники; герой двигается записью в своего персонажа (pos), остальное — полем в кампании
     const battleHtml = window.Battle ? window.Battle.card({
       cid, camp, gm, me, level: partyLevel, rerender: repaint,
-      heroes: inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, race: charView(ch).res.race })),
+      heroes: inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, race: charView(ch).res.race })),
+      allies: camp.allies || [],
       saveBoard: board => {
         G.d.camp = Object.assign({}, G.d.camp, { board });        // сразу показать, не дожидаясь сервера
         repaint();
@@ -372,6 +382,14 @@
         G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { pos }) : x));
         repaint();
         return C.updateCharacter(cid, chid, { pos }).catch(e => App.toast(C.errorText(e)));
+      },
+      // союзник героя стоит там, где его поставили, — это записано в персонаже героя (apos), его меняет игрок или ГМ
+      saveAllyPos: (chid, aid, p) => {
+        const ch = (G.d.chars || []).find(x => x.id === chid);
+        const apos = Object.assign({}, (ch && ch.apos) || {}, { [aid]: p });
+        G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { apos }) : x));
+        repaint();
+        return C.updateCharacter(cid, chid, { apos }).catch(e => App.toast(C.errorText(e)));
       }
     }) : '';
     const dungeonHtml = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender: repaint }) : '';

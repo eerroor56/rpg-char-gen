@@ -545,12 +545,17 @@ def build_skills(wb):
         if v[0]:
             actives.append({"name": v[0], "effect": v[1], "req": v[2], "cd": v[3], "type": v[4], "price": v[5],
                             "special": fill_key(ws.cell(r, 1)) == "th5"})
+    # пассивки (с 2026-10-25): навык | эффекты за уровни | требования | эффект на максимальном уровне | максимальный уровень | цена.
+    # chance и q — прежние имена колонок D и E, их читает старый код; max — число (0 — «не прокачивается»)
     passives = []
-    for r in range(270, 305):
+    for r in range(270, ws.max_row + 1):
         v = row_txt(ws, r, "A", "F")
-        if v[0]:
-            passives.append({"name": v[0], "effect": v[1], "req": v[2], "chance": v[3], "q": v[4], "price": v[5],
-                             "base": fill_key(ws.cell(r, 1)) == "th6"})
+        if not v[0]:
+            break
+        m = re.search(r"\d+", v[4] or "")
+        passives.append({"name": v[0], "effect": v[1], "req": v[2], "chance": v[3], "q": v[4], "price": v[5],
+                         "top": v[3], "max": int(m.group()) if m and "не прокач" not in (v[4] or "") else 0,
+                         "base": fill_key(ws.cell(r, 1)) == "th6"})
     gifts = []
     for r in range(3, 50):
         v = row_txt(ws, r, "J", "L")
@@ -1005,7 +1010,8 @@ def main():
     artifact_pool = [{"name": a["name"], "effect": a["effect"]} for a in artifacts if a["g"] == "артефакты"]
     artifact_pool += [{"name": a["name"], "effect": a["effect"], "cursed": True} for a in artifacts if a["g"] == "проклятые"]
     data = {
-        "meta": {"source": src.name, "built": datetime.date.today().isoformat(), "locked": not no_lock},
+        # время сборки — ещё и ключ кеша для data/locked.js (js/lock.js): две сборки за день не путаются
+        "meta": {"source": src.name, "built": datetime.datetime.now().strftime("%Y-%m-%dT%H%M"), "locked": not no_lock},
         "races": races, "raceLegend": race_legend,
         "skills": skills,
         "materials": mats, "crystals": crystals, "materialLegend": mat_legend,

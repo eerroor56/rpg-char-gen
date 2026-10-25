@@ -62,6 +62,14 @@
     { id: 'харизма', name: 'Харизма', max: 100 }
   ];
 
+  // Предел таланта — «максимальный уровень» из таблицы пассивок, если он там есть (зоркость — 300 вместе с базой 50,
+  // вложить можно 250); без данных — значения выше. Для таланта с базой возвращается предел вложенных очков
+  function talentCap(t) {
+    const info = (((window.GAME_DATA || {}).skills || {}).talentInfo || []).find(p => norm(p.name) === norm(t.id));
+    if (!info || !info.max) return t.max;
+    return t.base ? Math.max(0, info.max - t.base) : info.max;
+  }
+
   // Черты можно брать повторно (эффекты складываются), кроме «состояний», которые не удваиваются
   const NON_REPEAT = ['язык зверей', 'язык монстров', 'шаманизм', 'лидер', 'немота', 'калека', 'обычный', 'несобранный'];
   const traitRepeatable = k => !NON_REPEAT.includes(norm(k));
@@ -926,6 +934,7 @@
     (race ? race.fx.concat(race.pfx) : []).forEach(f => { if (f.k === 'talent' && !f.cond) raceTalent[f.id] = (raceTalent[f.id] || 0) + f.v; });
     let talentSpentStart = 0, talentSpentUp = 0;
     TALENTS.forEach(t => {
+      const cap = talentCap(t);
       const invStart = Math.max(0, +((st.talents || {})[t.id]) || 0);
       const invUp = prog ? Math.max(0, +((prog.talents || {})[t.id]) || 0) : 0;
       const inv = invStart + invUp;
@@ -943,11 +952,14 @@
       const total = baseV + inv + bonus;
       const blocked = t.id === 'скрытность' && boon && boon.fx.noStealth;
       // зоркость: базовые 50 и бонусы считаются отдельно от прокачки — предел только у вложенных очков
-      const maxInv = t.base ? t.max : Math.max(0, t.max - Math.max(0, bonus));
-      talents[t.id] = { def: t, inv, invStart, invUp, bonus, bsrc, base: baseV, total, maxInv, sepBase: !!t.base, blocked };
-      if (inv > maxInv) errors.push({ step: 'talents', msg: t.base ? `${t.name}: вложить можно не больше ${t.max} (вложено ${inv}).` : `${t.name}: не выше ${t.max} (вложено ${inv}, с бонусами ${total}).` });
+      const maxInv = t.base ? cap : Math.max(0, cap - Math.max(0, bonus));
+      talents[t.id] = { def: t, inv, invStart, invUp, bonus, bsrc, base: baseV, total, maxInv, cap, sepBase: !!t.base, blocked };
+      if (inv > maxInv) errors.push({ step: 'talents', msg: t.base ? `${t.name}: вложить можно не больше ${cap} (вложено ${inv}).` : `${t.name}: не выше ${cap} (вложено ${inv}, с бонусами ${total}).` });
       if (blocked && inv) errors.push({ step: 'talents', msg: '«Яркое око»: вы не можете применять скрытность — не вкладывайте в неё очки.' });
     });
+    // пассивные навыки, изученные в игре, прокачиваются теми же очками талантов (prog.passives: { название: вложено })
+    const passiveSpent = prog ? Object.values(prog.passives || {}).reduce((a, x) => a + Math.max(0, +x || 0), 0) : 0;
+    talentSpentUp += passiveSpent; talentSpent += passiveSpent;
     out.talents = talents; out.talentSpent = talentSpent;
     if (!prog) {
       if (talentSpent > out.talentPoints) errors.push({ step: 'talents', msg: `Очков талантов потрачено ${talentSpent} из ${out.talentPoints}.` });
@@ -1133,7 +1145,7 @@
   }
 
   window.Rules = {
-    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText,
+    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText, talentCap,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
     sizeUnits, scaledEffect, multiplyEffect, reqCheck, reqText, armorStatEffects, REQ_PENALTY, ri,

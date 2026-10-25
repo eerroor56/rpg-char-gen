@@ -19,6 +19,22 @@
   const App = window.App, R = window.Rules, D = window.GAME_DATA, C = window.GM_CONFIG;
   const esc = App.esc, cap = App.cap, fmt = R.fmt, signed = R.signed, norm = R.norm;
   const zero = () => ({ t: 0, d: 0, s: 0, i: 0, l: 0 });
+  const newDraft = () => ({ alloc: zero(), talents: {}, passives: {} });
+
+  // пассивки, изученные в игре, прокачиваются очками талантов до «максимального уровня» из таблицы (0 — не прокачивается).
+  // ГМ при изучении запоминает предел и эффекты в записи, поэтому игрок видит их и без пароля ГМ
+  const passiveInfo = name => (D.skills.passives || []).find(p => !p.base && norm(p.name) === norm(name)) || null;
+  function learnedPassives(rec) {
+    const seen = new Set(), out = [];
+    ((rec.gm || {}).learned || []).forEach(x => {
+      if (x.kind !== 'passive' || seen.has(norm(x.name))) return;
+      seen.add(norm(x.name));
+      const info = passiveInfo(x.name) || {};
+      const max = x.max !== undefined ? +x.max || 0 : info.max !== undefined ? +info.max || 0 : 100;
+      out.push({ name: x.name, max, eff: x.eff || info.effect || '', top: x.top || info.top || '', lvl: Math.max(0, +(((rec.prog || {}).passives || {})[x.name]) || 0) });
+    });
+    return out;
+  }
 
   // ------------------------------------------------------------ правила
 
@@ -30,7 +46,7 @@
   }
 
   function normalize(rec) {
-    rec.prog = Object.assign({ alloc: zero(), talents: {} }, rec.prog || {});
+    rec.prog = Object.assign(newDraft(), rec.prog || {});
     rec.prog.alloc = Object.assign(zero(), rec.prog.alloc || {});
     rec.gm = Object.assign({ xp: 0, groups: [], learned: [], items: [], effects: [] }, rec.gm || {});
     if (!Array.isArray(rec.gm.effects)) rec.gm.effects = [];
@@ -47,7 +63,7 @@
     // состояния от ГМ (проклятия, болезни, эффекты) с прибавками и множителями к статам
     const mods = [];
     rec.gm.effects.forEach(e => (e.mods || []).forEach(m => mods.push({ stat: m.stat, op: m.op, v: m.v, src: `${(window.Craft && window.Craft.EFFECT_KINDS[e.kind] || 'эффект').toLowerCase()} «${e.name}»` })));
-    const prog = { levels: lv.levels, alloc: rec.prog.alloc, talents: rec.prog.talents, groups: rec.gm.groups, mods };
+    const prog = { levels: lv.levels, alloc: rec.prog.alloc, talents: rec.prog.talents, passives: rec.prog.passives, groups: rec.gm.groups, mods };
     const res = R.compute(Object.assign({}, state, { prog }));
     // карма: от характера (лист создания) плюс изменения ГМ в игре (gm.karma), не дальше предела в обе стороны
     const dk = Math.round(+rec.gm.karma || 0);
@@ -85,7 +101,7 @@
     skill: { t: 'Физический навык', list: () => (D.skills.actives || D.skills.startActives || []).map(x => x.name) },
     stance: { t: 'Стойка', list: () => (D.skills.stances || D.skills.startStances || []).map(x => x.name) },
     symbol: { t: 'Магический символ', list: () => D.skills.symbols.map(x => x.name) },
-    passive: { t: 'Пассивный навык', list: () => (D.skills.passives || D.skills.talentInfo || []).map(x => x.name) },
+    passive: { t: 'Пассивный навык', list: () => (D.skills.passives || []).filter(x => !x.base).map(x => x.name) },
     other: { t: 'Другое', list: () => [] }
   };
   const itemNames = () => [...new Set((D.items || []).map(i => i.name).concat((D.artifactPool || []).map(a => a.name)))];
@@ -102,7 +118,7 @@
     const rec = ctx.record, perms = ctx.perms || {};
     const v = compute(rec);
     const { res, res0, lv } = v;
-    const draft = App.ui.devDraft || (App.ui.devDraft = { alloc: zero(), talents: {} });
+    const draft = App.ui.devDraft || (App.ui.devDraft = newDraft());
     const p = res.prog || { statPoints: 0, statSpent: 0, talentPoints: 0, talentSpent: 0 };
     const canSpend = perms.gm || perms.owner;
     let html = '';
@@ -142,10 +158,11 @@
 
     // очки за новые уровни
     const statLeft = p.statPoints - p.statSpent - sumVals(draft.alloc);
-    const talLeft = (p.talentPoints || 0) - (p.talentSpent || 0) - sumVals(draft.talents);
+    const pas = learnedPassives(rec), dPas = draft.passives || (draft.passives = {});
+    const talLeft = (p.talentPoints || 0) - (p.talentSpent || 0) - sumVals(draft.talents) - sumVals(dPas);
     if (p.statPoints || p.talentPoints) {
       html += `<section class="dev-card"><h2>Очки за новые уровни</h2>
-        <p class="small">Характеристики: <b>${p.statSpent + sumVals(draft.alloc)} / ${p.statPoints}</b> · таланты: <b>${(p.talentSpent || 0) + sumVals(draft.talents)} / ${p.talentPoints || 0}</b></p>`;
+        <p class="small">Характеристики: <b>${p.statSpent + sumVals(draft.alloc)} / ${p.statPoints}</b> · таланты и пассивные навыки: <b>${(p.talentSpent || 0) + sumVals(draft.talents) + sumVals(dPas)} / ${p.talentPoints || 0}</b></p>`;
       html += '<div class="dev-alloc-wrap">';
       if (canSpend && (statLeft > 0 || sumVals(draft.alloc))) {
         html += `<table class="dev-alloc"><caption>Характеристики — осталось ${Math.max(0, statLeft)}</caption><tbody>${R.STATS.map(k => `<tr><th>${R.STAT_NAMES[k]}</th><td>${fmt(res.stats[k])}</td>
@@ -159,8 +176,15 @@
             <td><span class="stepper">${stepBtn('devStep', 'talent:' + t.id, -1, !(dv > 0), 'Меньше')}<input type="number" min="0" step="1" inputmode="numeric" data-change="devSet" data-key="talent:${t.id}" value="${dv}" aria-label="${esc(t.name)}: очков вложить">${stepBtn('devStep', 'talent:' + t.id, 1, talLeft <= 0 || room <= 0, 'Больше')}</span></td></tr>`;
         }).join('')}</tbody></table>`;
       }
+      if (canSpend && pas.length && (talLeft > 0 || sumVals(dPas))) {
+        html += `<table class="dev-alloc"><caption>Пассивные навыки — те же очки талантов</caption><tbody>${pas.map((x, i) => {
+          const dv = dPas[x.name] || 0, room = x.max ? x.max - x.lvl - dv : 0;
+          return `<tr><th>${esc(cap(x.name))}</th><td>${fmt(x.lvl + dv)}${x.max ? ` / ${fmt(x.max)}` : ' <span class="muted small">не прокачивается</span>'}</td>
+            <td>${x.max ? `<span class="stepper">${stepBtn('devStep', 'passive:' + i, -1, !(dv > 0), 'Меньше')}<input type="number" min="0" step="1" inputmode="numeric" data-change="devSet" data-key="passive:${i}" value="${dv}" aria-label="${esc(x.name)}: очков вложить">${stepBtn('devStep', 'passive:' + i, 1, talLeft <= 0 || room <= 0, 'Больше')}</span>` : ''}</td></tr>`;
+        }).join('')}</tbody></table>`;
+      }
       html += '</div>';
-      if (sumVals(draft.alloc) || sumVals(draft.talents)) html += `<div class="dev-row"><button type="button" class="btn primary small" data-act="devSavePoints">Сохранить распределение</button><button type="button" class="btn ghost small" data-act="devResetPoints">Сбросить</button></div>`;
+      if (sumVals(draft.alloc) || sumVals(draft.talents) || sumVals(dPas)) html += `<div class="dev-row"><button type="button" class="btn primary small" data-act="devSavePoints">Сохранить распределение</button><button type="button" class="btn ghost small" data-act="devResetPoints">Сбросить</button></div>`;
       else if (statLeft <= 0 && talLeft <= 0) html += '<p class="muted small">Все очки распределены.</p>';
       html += '</section>';
     }
@@ -191,7 +215,12 @@
     const learned = rec.gm.learned || [];
     const lk = App.ui.devLearnKind || 'skill';
     html += `<section class="dev-card"><h2>Изученные навыки и символы</h2>
-      ${learned.length ? `<ul class="dev-list">${learned.map((x, i) => `<li><span>${esc(x.name)} <span class="muted small">${esc((LEARN_KINDS[x.kind] || LEARN_KINDS.other).t.toLowerCase())}</span></span>${perms.gm ? `<button type="button" class="linklike small" data-act="devUnlearn" data-key="${i}">убрать</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Пока ничего не изучено после создания.</p>'}`;
+      ${learned.length ? `<ul class="dev-list">${learned.map((x, i) => {
+        const ps = x.kind === 'passive' ? learnedPassives(rec).find(y => norm(y.name) === norm(x.name)) : null;
+        return `<li><span>${esc(x.name)} <span class="muted small">${esc((LEARN_KINDS[x.kind] || LEARN_KINDS.other).t.toLowerCase())}</span>${ps ? ` <span class="tag">${ps.max ? `ур. ${fmt(ps.lvl)} / ${fmt(ps.max)}` : 'не прокачивается'}</span>` : ''}
+          ${ps && ps.eff ? `<br><span class="small">${esc(ps.eff)}</span>` : ''}${ps && ps.top ? `<br><span class="small ${ps.max && ps.lvl >= ps.max ? '' : 'muted'}">на максимальном уровне: ${esc(ps.top)}</span>` : ''}</span>${perms.gm ? `<button type="button" class="linklike small" data-act="devUnlearn" data-key="${i}">убрать</button>` : ''}</li>`;
+      }).join('')}</ul>` : '<p class="muted small">Пока ничего не изучено после создания.</p>'}
+      ${learnedPassives(rec).some(x => x.max) ? '<p class="muted small">Пассивные навыки прокачиваются очками талантов (они даются за каждые 5 уровней) — в разделе «Очки за новые уровни».</p>' : ''}`;
     if (perms.gm) {
       html += `<div class="dev-row"><select data-ui="devLearnKind" data-ui-target="dev" aria-label="Что изучено">${Object.entries(LEARN_KINDS).map(([k, x]) => `<option value="${k}" ${k === lk ? 'selected' : ''}>${x.t}</option>`).join('')}</select>
         <input type="text" list="devLearnList" data-ui="devLearnName" data-ui-target="none" value="${esc(App.ui.devLearnName || '')}" placeholder="название">
@@ -265,7 +294,7 @@
   function own(id) {
     if (App.ui.devFor === id) return;
     App.ui.devFor = id;
-    App.ui.devDraft = { alloc: zero(), talents: {} };
+    App.ui.devDraft = newDraft();
     ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ'].forEach(k => { App.ui[k] = undefined; });
   }
 
@@ -291,6 +320,15 @@
       App.toast('Не сохранилось: ' + (e && e.message ? e.message : e));
     }
     rerender();
+  }
+  // куда в черновике кладутся очки: характеристики, таланты или пассивка (по номеру в списке изученных)
+  function draftBox(draft, kind, raw) {
+    if (kind === 'alloc') return { box: draft.alloc, key: raw };
+    if (kind === 'passive') {
+      const x = learnedPassives(normalize(ctx().record))[+raw];
+      return { box: draft.passives || (draft.passives = {}), key: x ? x.name : null };
+    }
+    return { box: draft.talents, key: raw };
   }
   const gmCopy = () => JSON.parse(JSON.stringify(normalize(ctx().record).gm));
 
@@ -329,39 +367,51 @@
       commit({ gm }, `Победа над «${c.n}» (ур. ${R.roundLevel(c.lvl)}): +${n} опыта${after > v.res.level ? `, новый уровень: ${after}` : ''}`);
     },
     devStep(b) {
-      const [kind, key] = b.dataset.key.split(':');
+      const [kind, raw] = b.dataset.key.split(':');
       const d = +b.dataset.d;
-      const draft = App.ui.devDraft || (App.ui.devDraft = { alloc: zero(), talents: {} });
-      const box = kind === 'alloc' ? draft.alloc : draft.talents;
+      const draft = App.ui.devDraft || (App.ui.devDraft = newDraft());
+      const { box, key } = draftBox(draft, kind, raw);
+      if (!key) return;
       box[key] = Math.max(0, (box[key] || 0) + d);
       rerender();
     },
     // число очков можно вписать сразу, не нажимая «+» десятки раз
     devSet(t) {
-      const [kind, key] = t.dataset.key.split(':');
-      const draft = App.ui.devDraft || (App.ui.devDraft = { alloc: zero(), talents: {} });
-      const box = kind === 'alloc' ? draft.alloc : draft.talents;
+      const [kind, raw] = t.dataset.key.split(':');
+      const draft = App.ui.devDraft || (App.ui.devDraft = newDraft());
+      const { box, key } = draftBox(draft, kind, raw);
+      if (!key) return;
       const v = compute(ctx().record), p = v.res.prog || {};
       const want = Math.max(0, Math.floor(+t.value || 0));
+      const talLeft = (p.talentPoints || 0) - (p.talentSpent || 0) - sumVals(draft.talents) - sumVals(draft.passives || {}) + (box[key] || 0);
       let room;
       if (kind === 'alloc') room = p.statPoints - p.statSpent - sumVals(draft.alloc) + (box[key] || 0);
-      else {
+      else if (kind === 'passive') {
+        const x = learnedPassives(normalize(ctx().record)).find(y => y.name === key);
+        room = Math.min(talLeft, x && x.max ? x.max - x.lvl : 0);
+      } else {
         const tv = v.res.talents[key];
-        room = Math.min((p.talentPoints || 0) - (p.talentSpent || 0) - sumVals(draft.talents) + (box[key] || 0), tv && !tv.blocked ? tv.maxInv - tv.inv : 0);
+        room = Math.min(talLeft, tv && !tv.blocked ? tv.maxInv - tv.inv : 0);
       }
       box[key] = Math.min(want, Math.max(0, room));
       if (want > box[key]) App.toast(`Больше ${box[key]} сюда не вложить`);
       rerender();
     },
-    devResetPoints() { App.ui.devDraft = { alloc: zero(), talents: {} }; rerender(); },
+    devResetPoints() { App.ui.devDraft = newDraft(); rerender(); },
     devSavePoints() {
       const rec = normalize(ctx().record);
-      const draft = App.ui.devDraft || { alloc: zero(), talents: {} };
+      const draft = App.ui.devDraft || newDraft();
       const prog = JSON.parse(JSON.stringify(rec.prog));
       const txt = [];
       R.STATS.forEach(k => { const v = draft.alloc[k] || 0; if (v) { prog.alloc[k] = (prog.alloc[k] || 0) + v; txt.push(`${R.STAT_SHORT[k]} +${v}`); } });
       Object.entries(draft.talents).forEach(([k, v]) => { if (v) { prog.talents[k] = (prog.talents[k] || 0) + v; const t = R.TALENTS.find(x => x.id === k); txt.push(`${t ? t.name : k} +${v}`); } });
-      App.ui.devDraft = { alloc: zero(), talents: {} };
+      Object.entries(draft.passives || {}).forEach(([k, v]) => {
+        if (!v) return;
+        prog.passives = prog.passives || {};
+        prog.passives[k] = (prog.passives[k] || 0) + v;
+        txt.push(`${cap(k)} +${v} (ур. ${prog.passives[k]})`);
+      });
+      App.ui.devDraft = newDraft();
       if (!txt.length) return;
       commit({ prog }, `Распределены очки за новые уровни: ${txt.join(', ')}`);
     },
@@ -391,7 +441,10 @@
       const name = String(App.ui.devLearnName || '').trim();
       if (!name) { App.toast('Впишите название'); return; }
       const kind = App.ui.devLearnKind || 'skill';
-      const gm = gmCopy(); gm.learned.push({ kind, name });
+      const gm = gmCopy();
+      const info = kind === 'passive' ? passiveInfo(name) : null;
+      // предел и эффекты пассивки — в запись: игрок увидит их без пароля ГМ
+      gm.learned.push(info ? { kind, name: info.name, max: info.max || 0, eff: info.effect || '', top: info.top || '' } : { kind, name });
       App.ui.devLearnName = '';
       commit({ gm }, `Изучено: ${LEARN_KINDS[kind].t.toLowerCase()} «${name}»`);
     },

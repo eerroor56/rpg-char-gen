@@ -533,8 +533,8 @@
       html += `<tr class="${v.blocked ? 'blocked' : ''}"><th scope="row">${t.name}${t.base ? ` <span class="muted small">(база ${t.base})</span>` : ''}</th>
         <td>${v.blocked ? '<span class="muted">запрещено «Ярким оком»</span>' : stepper(`talents.${t.id}`, v.inv, { min: 0, max, label: t.name })}</td>
         <td>${v.bsrc.length ? esc(v.bsrc.join(', ')) : '<span class="muted">—</span>'}</td>
-        <td class="fin">${fmt(v.total)} ${v.sepBase ? `<span class="muted small">(${v.base} база + ${fmt(v.inv)} вложено${v.bonus ? ` ${signed(v.bonus)} бонусы` : ''}; вложить до ${t.max})</span>` : `<span class="muted">/ ${t.max}</span>`}</td>
-        <td class="small">${esc(p ? p.effect : '')}${p && p.chance && /сотом/i.test(p.chance) ? `<br><span class="muted">${esc(p.chance)}</span>` : ''}</td></tr>`;
+        <td class="fin">${fmt(v.total)} ${v.sepBase ? `<span class="muted small">(${v.base} база + ${fmt(v.inv)} вложено${v.bonus ? ` ${signed(v.bonus)} бонусы` : ''}; вложить до ${v.cap})</span>` : `<span class="muted">/ ${v.cap}</span>`}</td>
+        <td class="small">${esc(p ? p.effect : '')}${p && (p.top || p.chance) && (p.top || /сотом/i.test(p.chance)) ? `<br><span class="muted">${/сотом/i.test(p.top || p.chance) ? '' : 'на максимальном уровне: '}${esc(p.top || p.chance)}</span>` : ''}</td></tr>`;
     });
     html += '</tbody></table>';
     const passives = (res.race.fx || []).filter(f => f.k === 'passive');

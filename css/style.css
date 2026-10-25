@@ -799,6 +799,16 @@ textarea { width: 100%; }
 .bt-tok img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; -webkit-user-drag: none; user-select: none; pointer-events: none; }
 .bt-grid svg { pointer-events: none; }
 .bt-tok.foe { border-color: #d34a4a; background: #4a1c1f; }
+.bt-tok.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
+.bt-fx { margin: 2px 0 6px; padding: 6px 10px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
+/* союзники отряда на странице кампании */
+.party-allies { margin: 14px 0 6px; }
+.party-allies h3 { margin: 0; font-size: 1.1rem; }
+.ally-card { border-color: rgba(92, 196, 138, .45); }
+.ally-ini { width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; background: #1d4a33; border: 3px double #5cc48a; color: #fff; font-weight: 700; }
+.ally-new { margin-top: 8px; }
+.ally-new summary { cursor: pointer; font-weight: 600; color: var(--brass); }
+.ally-rules { margin: 8px 0 0; padding-left: 18px; }
 .bt-tok.mine { box-shadow: 0 0 0 2px #fff3d6, 0 3px 8px rgba(0, 0, 0, .5); }
 .bt-tok.is-sel, .bt-tok:focus-visible { outline: 2px solid #f3d58f; outline-offset: 2px; }
 .can-move { cursor: grab; touch-action: none; }
