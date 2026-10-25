@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   const App = window.App, R = window.Rules;
-  const esc = App.esc, cap = App.cap;
+  const esc = App.esc, cap = App.cap, fmt = R.fmt, signed = R.signed;
   const D = () => window.GAME_DATA;
 
   const rnd = n => Math.floor(Math.random() * n);
@@ -476,11 +476,20 @@
       ${tool && tool !== 'foe' ? `<p class="muted small">${tool === 'erase' ? 'Нажмите на предмет или противника, чтобы убрать.' : `Нажмите на свободную клетку, чтобы поставить «${esc(T[tool] ? info(tool).n : tool)}».`}</p>` : ''}`;
   }
   // подсказки для противника и союзника: существа из бестиария (после пароля ГМ) и расы
+  // список собирается один раз на данные (после пароля ГМ существ становится больше)
+  let crList = { sig: '', html: '' };
   function creatureList(id) {
-    const cr = (D().creatures || []).map(c => [c.n, 'существо']);
-    const rc = (D().races || []).map(r => [cap(r.name), 'раса']);
-    const all = cr.concat(rc).filter(([n], i, a) => a.findIndex(x => R.norm(x[0]) === R.norm(n)) === i);
-    return all.length ? `<datalist id="${id || 'btCreatures'}">${all.slice(0, 2500).map(([n, k]) => `<option value="${esc(n)}">${k}</option>`).join('')}</datalist>` : '';
+    const d = D(), cs = d.creatures || [], rs = d.races || [];
+    const sig = cs.length + ':' + rs.length + ':' + ((d.meta || {}).built || '');
+    if (crList.sig !== sig) {
+      const seen = new Set(), out = [];
+      cs.map(c => [c.n, 'существо']).concat(rs.map(r => [cap(r.name), 'раса'])).forEach(([n, k]) => {
+        const nk = R.norm(n);
+        if (!seen.has(nk)) { seen.add(nk); out.push(`<option value="${esc(n)}">${k}</option>`); }
+      });
+      crList = { sig, html: out.slice(0, 2500).join('') };
+    }
+    return crList.html ? `<datalist id="${id || 'btCreatures'}">${crList.html}</datalist>` : '';
   }
   // уровень и картинка по имени: сначала существо, потом раса
   const creatureOf = n => (D().creatures || []).find(c => R.norm(c.n) === R.norm(n)) || null;
@@ -521,13 +530,18 @@
     const { at, decor } = layout(board, o.heroes);
     const vis = fogOn(board) ? sight(board, at) : null;
     autoNext(board, at);
-    html += `${o.gm ? toolsHtml(board) : '<p class="muted small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками. Видно то, что в обзоре отряда: 1 клетка за каждые 10 зоркости.</p>'}
+    const fz = +board.zor || 0;
+    html += `${o.gm ? toolsHtml(board) : '<p class="muted small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками. Видно то, что в обзоре отряда: 1 клетка за каждые 10 зоркости; стены, деревья и другие полные укрытия закрывают обзор.</p>'}
       ${board.fx ? `<p class="small bt-fx"><b>Эффект поля:</b> противникам — ${esc(board.fx.foe || 'нет')}; игрокам — ${esc(board.fx.hero || 'нет')}${board.fx.layer ? ` <span class="muted">(уровни мира: ${esc(board.fx.layer)})</span>` : ''}</p>` : ''}
+      ${fz && !o.gm ? `<p class="small bt-fx"><b>Зоркость на поле:</b> ${signed(fz)} всем героям и союзникам</p>` : ''}
       ${turnHtml(board, at, fogFor(board) ? vis : null)}
-      ${o.gm ? `<div class="row-actions bt-fog"><button type="button" class="linklike small" data-act="btFog">туман войны: ${fogOn(board) ? 'вкл' : 'выкл'}</button>${fogOn(board) ? `<label class="check small"><input type="checkbox" data-change="btAsPlayer" ${App.ui.btAsPlayer ? 'checked' : ''}> показать как видят игроки</label>` : ''}</div>` : ''}
+      ${o.gm ? `<div class="row-actions bt-fog"><button type="button" class="linklike small" data-act="btFog">туман войны: ${fogOn(board) ? 'вкл' : 'выкл'}</button>${fogOn(board) ? `<label class="check small"><input type="checkbox" data-change="btAsPlayer" ${App.ui.btAsPlayer ? 'checked' : ''}> показать как видят игроки</label>` : ''}
+        <span class="bt-zor-ctl small" title="Темнота, туман, дым или свет: поправка зоркости всем героям и союзникам на этом поле">зоркость на поле <b>${fz ? signed(fz) : '0'}</b>
+          <button type="button" class="btn ghost small" data-act="btFieldZor" data-v="-${ZOR_PER_CELL}">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btFieldZor" data-v="${ZOR_PER_CELL}">+${ZOR_PER_CELL}</button>${fz ? '<button type="button" class="linklike small" data-act="btFieldZor" data-v="0">сбросить</button>' : ''}</span></div>` : ''}
       ${boardHtml(board, at, decor, vis)}
       ${selInfo(board)}
-      <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1 · 1 ОД — ${MOVE_PER_OD} клеток движения · обзор — 1 клетка за ${ZOR_PER_CELL} зоркости</p>`;
+      ${rosterHtml(board, at)}
+      <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1 · 1 ОД — ${MOVE_PER_OD} клеток движения · обзор — 1 клетка за ${ZOR_PER_CELL} зоркости, полные укрытия (стены, деревья, колонны, валуны…) его закрывают</p>`;
     if (o.gm) html += `${genForm(false)}<div class="row-actions"><button type="button" class="linklike small danger" data-act="btClear">убрать поле боя</button></div>`;
     return html + '</section>';
   }
@@ -676,17 +690,28 @@
     if (cr && cr.getRandomValues) { const a = new Uint32Array(1); cr.getRandomValues(a); return a[0] % 100 + 1; }
     return rint(1, 100);
   }
-  // ХП и МП: у героя — из расчёта персонажа, у противника и союзника — по бестиарию или расе (тело ×2, дух ×2); ГМ может задать сам
+  // ХП и МП: у героя — из расчёта персонажа, у противника и союзника — по бестиарию или расе (тело ×2, дух ×2); ГМ может задать сам.
+  // Реген в ход: у героя — из расчёта, у остальных — тело / 5 и дух / 5 (+ реген расы). Зоркость: своя + поправка фишки (zor) + поправка поля
+  const BASE_ZOR = () => ((window.GM_CONFIG || {}).BASE_ZOR || 50);
+  const fieldZor = () => +((board0() || {}).zor) || 0;
   function vitals(t) {
     if (t.kind === 'h') {
       const d = t.o.der || {}, v = t.o.vit || {};
       const mhp = has(d.hp) ? d.hp : null, mmp = has(d.mp) ? d.mp : null;
-      return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, od: baseOd() + (+d.od || 0), zor: has(d.zor) ? d.zor : 50 };
+      const zb = has(d.zor) ? d.zor : BASE_ZOR(), zm = +v.zor || 0;
+      return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, od: baseOd() + (+d.od || 0),
+        rhp: has(d.hpRegen) ? d.hpRegen : null, rmp: has(d.mpRegen) ? d.mpRegen : null, zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
     }
     const st = creatureOf(t.o.src || t.o.n) || raceOf(t.o.src || t.o.n);
     const mhp = has(t.o.mhp) ? +t.o.mhp : st ? 2 * st.t : null, mmp = has(t.o.mmp) ? +t.o.mmp : st ? 2 * st.d : null;
-    return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, od: baseOd(), zor: 50 };
+    const rfx = k => ((st && st.fx) || []).filter(f => f.k === k && !f.cond).reduce((a, f) => a + (+f.v || 0), 0);
+    const zb = BASE_ZOR(), zm = +t.o.zor || 0;
+    return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, od: baseOd(),
+      rhp: has(t.o.rhp) ? +t.o.rhp : st ? Math.floor(st.t / 5) + rfx('hpRegen') : null,
+      rmp: has(t.o.rmp) ? +t.o.rmp : st ? Math.floor(st.d / 5) + rfx('mpRegen') : null,
+      zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
   }
+  const radius = v => Math.max(1, Math.floor(v.zor / ZOR_PER_CELL));
   const isDown = t => { const v = vitals(t); return has(v.hp) && v.mhp !== null && v.hp <= 0; };
 
   const turnOn = b => !!(b && b.turn && b.turn.on && (b.turn.order || []).length);
@@ -753,17 +778,44 @@
     }
     return null;
   }
-  // обзор отряда: от каждого героя и союзника круг радиусом «зоркость / 10» клеток
+  // обзор отряда: от каждого героя и союзника круг радиусом «зоркость / 10» клеток. Стены, деревья и прочие полные укрытия
+  // обзор закрывают: саму преграду видно, что за ней — нет. Половинные укрытия и объекты на полу не мешают
+  const blocksSight = o => { const d = info(o.t); return d.c === 2 && !d.walk; };
+  // клетку видно, если от глаз (центр своей клетки) до её центра или одного из углов идёт прямая, не задевающая преград;
+  // на стыке двух клеток прямая проходит, если свободна хотя бы одна сторона
+  const AIM = [[0, 0], [-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]];
+  function clearLine(blk, x0, y0, tx, ty, x1, y1) {
+    const dx = tx - x0, dy = ty - y0, n = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 3);
+    const len = Math.hypot(dx, dy), ox = -dy / len * 0.01, oy = dx / len * 0.01;
+    return [1, -1].some(s => {
+      for (let i = 1; i < n; i++) {
+        const cx = Math.round(x0 + dx * i / n + s * ox), cy = Math.round(y0 + dy * i / n + s * oy);
+        if ((cx !== x1 || cy !== y1) && blk.has(key(cx, cy))) return false;
+      }
+      return true;
+    });
+  }
+  function clearView(blk, x0, y0, x1, y1) {
+    if (Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) <= 1) return true;     // соседнюю клетку видно всегда
+    return AIM.some(([ax, ay]) => clearLine(blk, x0, y0, x1 + ax, y1 + ay, x1, y1));
+  }
+  let sightMemo = { sig: '', vis: null };
   function sight(b, at) {
+    const blk = new Set(), eyes = [];
+    at.forEach((t, k) => {
+      if (t.kind === 'o') { if (blocksSight(t.o)) blk.add(k); } else if (t.kind === 'h' || t.kind === 'a') eyes.push([t.x, t.y, radius(vitals(t))]);
+    });
+    const sig = b.w + 'x' + b.h + '|' + [...blk].join(';') + '|' + eyes.join(';');
+    if (sig === sightMemo.sig) return sightMemo.vis;
     const vis = new Set();
-    at.forEach(t => {
-      if (t.kind !== 'h' && t.kind !== 'a') return;
-      const r = Math.max(1, Math.floor(vitals(t).zor / ZOR_PER_CELL));
+    eyes.forEach(([ex, ey, r]) => {
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-        const x = t.x + dx, y = t.y + dy;
-        if (dx * dx + dy * dy <= r * r + r && x >= 0 && y >= 0 && x < b.w && y < b.h) vis.add(key(x, y));
+        const x = ex + dx, y = ey + dy, k = key(x, y);
+        if (x < 0 || y < 0 || x >= b.w || y >= b.h || dx * dx + dy * dy > r * r + r || vis.has(k)) continue;
+        if (clearView(blk, ex, ey, x, y)) vis.add(k);
       }
     });
+    sightMemo = { sig, vis };
     return vis;
   }
   // туман войны: у игроков всегда, когда он включён; ГМ видит всё, но может посмотреть «как игроки»
@@ -788,7 +840,7 @@
     const curHidden = cur && hidden(cur);
     const myTurn = !!cur && !ctx.gm && canMove(cur);
     return `<div class="bt-turns">
-      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od}, пройдено ${sp.mv} кл.` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
+      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od}, пройдено ${sp.mv} кл.` : ''}${cur && !curHidden && (ctx.gm || cur.kind !== 'f') && (has(v.rhp) || has(v.rmp)) ? ` <span class="muted small">· реген в ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '?'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '?'}</span>` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
       <ol class="bt-order">${items}</ol>
       <div class="row-actions">
         ${ctx.gm ? '<button type="button" class="btn small primary" data-act="btNext">Следующий ход</button>' : ''}
@@ -803,18 +855,43 @@
     const canVit = ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me);
     const bar = (val, max, cls) => (max ? `<span class="bt-vbar ${cls}"><i style="width:${pct(val, max)}%"></i></span>` : '');
     const ini = turnOn(board) ? (board.turn.order.find(e => e.id === tid(t)) || {}).ini : null;
+    const reg = r => `<span class="bt-reg" title="реген в ход">${has(r) ? `+${fmt(r)}` : '+?'} в ход</span>`;
+    const seer = t.kind === 'h' || t.kind === 'a';
+    const canZor = seer && (ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me));
+    const zParts = `${v.zb}${v.zm ? ` ${signed(v.zm)} у фишки` : ''}${fieldZor() ? ` ${signed(fieldZor())} на поле` : ''}`;
     let html = `<div class="bt-vit">
-      <span>ХП ${num ? `<b>${has(v.hp) ? v.hp : '?'} / ${has(v.mhp) ? v.mhp : '?'}</b>` : ''} ${bar(v.hp, v.mhp, 'hp')}</span>
-      <span>МП ${num ? `<b>${has(v.mp) ? v.mp : '?'} / ${has(v.mmp) ? v.mmp : '?'}</b>` : ''} ${bar(v.mp, v.mmp, 'mp')}</span>
-      ${t.kind !== 'f' || ctx.gm ? `<span class="muted small">ОД в ход ${v.od}${t.kind !== 'f' ? ` · обзор ${Math.max(1, Math.floor(v.zor / ZOR_PER_CELL))} кл. (зоркость ${v.zor})` : ''}</span>` : ''}
-      ${has(ini) && ctx.gm ? `<label class="small">инициатива <input type="number" class="mini-num" min="1" max="100" step="1" data-change="btIni" data-k="${esc(tid(t))}" value="${esc(ini)}"></label>` : has(ini) ? `<span class="small">инициатива ${ini}</span>` : ''}</div>`;
+      <span>ХП ${num ? `<b>${has(v.hp) ? v.hp : '?'} / ${has(v.mhp) ? v.mhp : '?'}</b>` : ''} ${bar(v.hp, v.mhp, 'hp')}${num ? reg(v.rhp) : ''}</span>
+      <span>МП ${num ? `<b>${has(v.mp) ? v.mp : '?'} / ${has(v.mmp) ? v.mmp : '?'}</b>` : ''} ${bar(v.mp, v.mmp, 'mp')}${num ? reg(v.rmp) : ''}</span>
+      ${t.kind !== 'f' || ctx.gm ? `<span class="muted small">ОД в ход ${v.od}</span>` : ''}
+      ${has(ini) && ctx.gm ? `<label class="small">инициатива <input type="number" class="mini-num" min="1" max="100" step="1" data-change="btIni" data-k="${esc(tid(t))}" value="${esc(ini)}"></label>` : has(ini) ? `<span class="small">инициатива ${ini}</span>` : ''}</div>
+      ${seer ? `<div class="bt-zor small"><span>Обзор <b>${radius(v)} кл.</b> — зоркость ${v.zor}${v.zm || fieldZor() ? ` <span class="muted">(${zParts})</span>` : ''}</span>
+        ${canZor ? `<span class="bt-zor-ctl"><button type="button" class="btn ghost small" data-act="btZor" data-v="-${ZOR_PER_CELL}" title="−${ZOR_PER_CELL} зоркости: на 1 клетку меньше">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btZor" data-v="${ZOR_PER_CELL}" title="+${ZOR_PER_CELL} зоркости: на 1 клетку больше">+${ZOR_PER_CELL}</button>${v.zm ? '<button type="button" class="linklike small" data-act="btZor" data-v="0">сбросить</button>' : ''}</span>` : ''}</div>` : ''}`;
     if (canVit) {
       html += `<div class="dev-row bt-vit-ctl"><input type="number" min="1" step="1" class="mini-num" data-ui="btAmt" data-ui-target="none" value="${esc(App.ui.btAmt || '')}" placeholder="сколько" aria-label="Сколько">
         <button type="button" class="btn small" data-act="btVit" data-v="hp:-1">Урон</button><button type="button" class="btn small" data-act="btVit" data-v="hp:1">Лечение</button>
         <button type="button" class="btn ghost small" data-act="btVit" data-v="mp:-1">−МП</button><button type="button" class="btn ghost small" data-act="btVit" data-v="mp:1">+МП</button>
-        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button>' : ''}</div>`;
+        ${has(v.rhp) || has(v.rmp) ? `<button type="button" class="btn ghost small" data-act="btRegen" title="Добавить реген за ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '—'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '—'} (не выше максимума)">+реген</button>` : ''}
+        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button><button type="button" class="linklike small" data-act="btMax" data-v="rhp">реген ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="rmp">реген МП</button>' : ''}</div>`;
     }
     return html;
+  }
+  // все на поле: ХП, МП, реген в ход, ОД и обзор. Игроки видят героев и союзников, ГМ — ещё и противников
+  function rosterHtml(board, at) {
+    const toks = [...at.values()].filter(t => t.kind === 'h' || t.kind === 'a' || (t.kind === 'f' && ctx.gm));
+    if (!toks.length) return '';
+    const rank = { h: 0, a: 1, f: 2 };
+    toks.sort((p, q) => rank[p.kind] - rank[q.kind] || tname(p).localeCompare(tname(q), 'ru'));
+    const open = !!App.ui.btRoster;
+    const n = (val, max) => `${has(val) ? val : '?'} / ${has(max) ? max : '?'}`;
+    const r = x => (has(x) ? '+' + fmt(x) : '?');
+    const rows = toks.map(t => {
+      const v = vitals(t);
+      return `<tr class="k-${t.kind}${isDown(t) ? ' down' : ''}"><th scope="row"><button type="button" class="linklike" data-act="btSel" data-v="${esc(tid(t))}">${esc(tname(t))}</button></th>
+        <td>${n(v.hp, v.mhp)}</td><td>${r(v.rhp)}</td><td>${n(v.mp, v.mmp)}</td><td>${r(v.rmp)}</td><td>${v.od}</td><td>${t.kind === 'f' ? '—' : `${radius(v)} кл.`}</td></tr>`;
+    }).join('');
+    return `<div class="bt-roster"><button type="button" class="linklike small" data-act="btRoster" aria-expanded="${open}">${open ? '▾' : '▸'} ХП, МП и реген у всех на поле</button>
+      ${open ? `<div class="table-wrap"><table class="bt-roster-t"><thead><tr><th>Кто</th><th>ХП</th><th>реген ХП</th><th>МП</th><th>реген МП</th><th>ОД</th><th>обзор</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted small">Реген — сколько восстанавливается за ход: у героя — из его расчёта, у противника и союзника — тело / 5 и дух / 5 (+ реген расы), ГМ может задать сам.</p>` : ''}</div>`;
   }
   // очередь: новые фишки встают по броску, текущий ход не сбивается
   function orderAdd(b, id) {
@@ -995,8 +1072,39 @@
       const amt = Math.round(+App.ui.btAmt || 0);
       if (amt <= 0) { App.toast('Впишите число в поле «сколько»'); return; }
       const w = btn.dataset.v;
-      setVit(hit.t, w === 'hp' ? { mhp: amt, hp: amt } : { mmp: amt, mp: amt });
+      setVit(hit.t, w === 'hp' ? { mhp: amt, hp: amt } : w === 'mp' ? { mmp: amt, mp: amt } : { [w]: amt });
     },
+    // реген за ход: +ХП и +МП, не выше максимума
+    btRegen() {
+      const hit = selTok();
+      if (!hit || hit.t.kind === 'o') return;
+      const t = hit.t;
+      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      const v = vitals(t), patch = {};
+      const up = (now, r, max) => { const x = (+now || 0) + r; return has(max) ? Math.min(max, x) : x; };
+      if (has(v.rhp) && v.rhp) patch.hp = up(v.hp, v.rhp, v.mhp);
+      if (has(v.rmp) && v.rmp) patch.mp = up(v.mp, v.rmp, v.mmp);
+      if (!Object.keys(patch).length) { App.toast('Регена нет'); return; }
+      setVit(t, patch);
+    },
+    // зоркость фишки: ±10 (на клетку обзора), 0 — сбросить. Герою меняет игрок или ГМ, союзнику — ГМ
+    btZor(btn) {
+      const hit = selTok();
+      if (!hit || (hit.t.kind !== 'h' && hit.t.kind !== 'a')) return;
+      const t = hit.t;
+      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      const d = +btn.dataset.v, now = t.kind === 'h' ? +((t.o.vit || {}).zor) || 0 : +t.o.zor || 0;
+      setVit(t, { zor: d ? now + d : 0 });
+    },
+    // зоркость всем героям и союзникам на поле: темнота, дым, туман или яркий свет
+    btFieldZor(btn) {
+      const b = board0();
+      if (!b || !ctx.gm) return;
+      const nb = JSON.parse(JSON.stringify(b)), d = +btn.dataset.v;
+      nb.zor = d ? (+b.zor || 0) + d : 0;
+      ctx.saveBoard(nb);
+    },
+    btRoster() { App.ui.btRoster = !App.ui.btRoster; ctx && ctx.rerender(); },
     btIni(inp) {
       const b = board0();
       if (!b || !ctx.gm || !turnOn(b)) return;

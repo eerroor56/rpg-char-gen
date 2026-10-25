@@ -96,8 +96,9 @@
     const status = st.length && chance(0.5) ? pick(st) : '';
     return `урон ${rint(...TRAP_DMG)} (${symName(pick(symbols()) || {}) || 'случайный тип'})${status ? `, накладывает «${status}»` : ''}`;
   }
-  function chestText() {
-    if (chance(MIMIC)) return 'мимик!';
+  // reward — сундук с наградой в финале: он не бывает мимиком (иначе награды нет), ловушка возможна
+  function chestText(reward) {
+    if (!reward && chance(MIMIC)) return 'мимик!';
     const parts = [`монеты (${coin(pick(['м', 'се', 'з']))}): ${rint(...COINS)}`];
     const g = rint(...CHEST_GEAR), mats = D().materials || [], bases = gearBases();
     parts.push(Array.from({ length: g }, () => `${(pick(bases) || {}).name} (${(pick(mats) || {}).name})`).join(', '));
@@ -179,7 +180,9 @@
           const ex = Array.from({ length: n }, () => pick(['тотем усиления врагов (20% мощности)', 'тотем ослабления героев (20% мощности)', 'источник лечения', `ловушка: ${trapText()}`]));
           info.push(n ? `Дополнения у босса: ${ex.join('; ')}.` : 'Без дополнений у босса.');
         }
-        info.push(`Награда: сундук; кристальный слиток «${((pick(D().crystals || []) || {}).name || 'случайный')}»; портал на поверхность.`);
+        // «содержит 1 сундук с наградой и 1 кристальный слиток случайного типа» — сундук по тем же правилам, что в сокровищнице
+        info.push(`Сундук с наградой: ${chestText(true)}`);
+        info.push(`Ещё в награду: кристальный слиток «${((pick(D().crystals || []) || {}).name || 'случайный')}»; портал на поверхность.`);
         break;
       }
       case 'secret': info.push(`Открывается броском внимательности. Внутри: ${pick([treatise(), 'камень возрождения', 'право первородства'])}.`); break;
@@ -292,7 +295,23 @@
   const KEY = cid => 'hero-workshop:dungeon:' + cid;
   // подземелья старого вида (v1: отдельная комната босса) не открываются — их нужно сгенерировать заново
   const VERSION = 2;
-  const load = cid => { const dg = App.store.get(KEY(cid), null); return dg && dg.v === VERSION ? dg : null; };
+  const load = cid => {
+    const dg = App.store.get(KEY(cid), null);
+    if (!dg || dg.v !== VERSION) return null;
+    // в финале прежних подземелий был «сундук» без содержимого — бросаем его один раз и запоминаем
+    let fixed = false;
+    dg.rooms.forEach(r => {
+      if (r.type !== 'final') return;
+      r.info = r.info.flatMap(t => {
+        const m = /^Награда: сундук; (.*)$/.exec(t);
+        if (!m) return [t];
+        fixed = true;
+        return [`Сундук с наградой: ${chestText(true)}`, `Ещё в награду: ${m[1]}`];
+      });
+    });
+    if (fixed) save(cid, dg);
+    return dg;
+  };
   const save = (cid, dg) => App.store.set(KEY(cid), dg);
   let ctx = { cid: '', rerender: () => {} };
 

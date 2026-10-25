@@ -11,6 +11,7 @@
   const App = window.App, R = window.Rules, C = window.Cloud, Dev = window.Dev;
   const esc = App.esc, cap = App.cap, fmt = R.fmt;
   const TARGET_KEY = 'hero-workshop:cloud-target';
+  const FEED_SHUT = 'hero-workshop:feed-shut';
   const STATUS = { draft: 'черновик', review: 'на проверке у ГМ', active: 'в игре', dead: 'погиб', retired: 'на покое' };
   const when = ms => (ms ? new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -344,11 +345,13 @@
 
     const feed = App.ui.gFeed || 'all';
     const sessOpts = (sessions || []).map(x => `<option value="${x.n}" ${String(feed) === String(x.n) ? 'selected' : ''}>сессия ${x.n}</option>`).join('');
-    const feedHtml = `<section class="camp-feed"><div class="sec-head"><h2>Журнал</h2>
-        ${sessOpts ? `<select data-change="gFeed" aria-label="Что показать"><option value="all">последние события</option>${sessOpts}</select>` : ''}</div>
-      <div class="dev-row"><input type="text" data-ui="gNote" data-ui-target="none" value="${esc(App.ui.gNote || '')}" maxlength="2000" placeholder="${gm ? 'что произошло в игре — увидят все' : 'запись в журнал — увидят все'}" aria-label="Запись в журнал">
+    // журнал можно свернуть — это запоминается в этом браузере
+    const feedShut = !!App.store.get(FEED_SHUT, false);
+    const feedHtml = `<section class="camp-feed${feedShut ? ' is-shut' : ''}"><div class="sec-head"><h2><button type="button" class="feed-toggle" data-act="gFeedToggle" aria-expanded="${!feedShut}" title="${feedShut ? 'Развернуть журнал' : 'Свернуть журнал'}"><span class="feed-chev" aria-hidden="true">${feedShut ? '▸' : '▾'}</span>Журнал${feedShut && events && events.length ? ` <span class="tag">${events.length}</span>` : ''}</button></h2>
+        ${sessOpts && !feedShut ? `<select data-change="gFeed" aria-label="Что показать"><option value="all">последние события</option>${sessOpts}</select>` : ''}</div>
+      ${feedShut ? '' : `<div class="dev-row"><input type="text" data-ui="gNote" data-ui-target="none" value="${esc(App.ui.gNote || '')}" maxlength="2000" placeholder="${gm ? 'что произошло в игре — увидят все' : 'запись в журнал — увидят все'}" aria-label="Запись в журнал">
         <button type="button" class="btn small" data-act="gNote">Записать</button></div>
-      ${feedList(events, cid, chars)}</section>`;
+      ${feedList(events, cid, chars)}`}</section>`;
 
     const sessionsHtml = (sessions || []).length ? `<section class="card sessions"><h2>Итоги сессий</h2>${sessions.map(x => `<details ${x.n === s.n ? 'open' : ''}><summary>Сессия ${x.n} <span class="muted small">${when(x.startedMs)}${x.endedMs ? ' – ' + when(x.endedMs) : ' · идёт'}</span></summary>
         ${gm ? `<textarea rows="3" data-ui="gSess${x.n}" data-ui-target="none" placeholder="итоги: куда пришли, что нашли, кого победили">${esc(App.ui['gSess' + x.n] !== undefined ? App.ui['gSess' + x.n] : (x.notes || ''))}</textarea>
@@ -617,6 +620,7 @@
       run(async () => { await C.note(cur().cid, text); App.ui.gNote = ''; repaint(); });
     },
     gFeed(t) { App.ui.gFeed = t.value; feedSub(cur().cid); repaint(); },
+    gFeedToggle() { App.store.set(FEED_SHUT, !App.store.get(FEED_SHUT, false)); repaint(); },
     gRenameCamp() {
       const name = String(App.ui.gCampName || '').trim();
       if (!name) return;

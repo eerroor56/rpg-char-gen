@@ -666,6 +666,12 @@ textarea { width: 100%; }
 .sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .sec-head h2 { margin: 10px 0 0; }
 .sec-head select { width: auto; }
+.feed-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-s); }
+.feed-toggle:hover { color: var(--brass); }
+.feed-toggle:focus-visible { outline: 2px solid #f3d58f; outline-offset: 3px; }
+.feed-toggle .tag { font-size: .8rem; font-family: var(--font-body); }
+.feed-chev { font-size: .8em; color: var(--brass); width: 1em; }
+.camp-feed.is-shut { padding-bottom: 4px; }
 .char-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 .char-card { display: flex; gap: 12px; margin: 0; color: var(--text); text-decoration: none; height: 100%; box-sizing: border-box; padding: 12px 14px; }
 .char-card.mine { box-shadow: inset 3px 0 0 var(--brass); }
@@ -829,6 +835,21 @@ textarea { width: 100%; }
 .bt-vbar i { display: block; height: 100%; background: #3cc46a; }
 .bt-vbar.mp i { background: #4a8fe0; }
 .bt-vit-ctl { margin-top: 6px; }
+.bt-reg { margin-left: 6px; font-size: .82rem; color: #8fd6a4; font-variant-numeric: tabular-nums; }
+.bt-vbar.mp + .bt-reg { color: #8fb8ee; }
+.bt-zor { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.bt-zor-ctl { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.bt-zor-ctl .btn.small { padding: 2px 9px; min-height: 0; }
+.bt-roster { margin: 6px 0; }
+.bt-roster .table-wrap { overflow-x: auto; margin-top: 6px; }
+.bt-roster-t { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.bt-roster-t th, .bt-roster-t td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; }
+.bt-roster-t thead th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+.bt-roster-t tr.k-h th { box-shadow: inset 3px 0 0 rgba(214, 168, 92, .7); }
+.bt-roster-t tr.k-a th { box-shadow: inset 3px 0 0 rgba(92, 196, 138, .7); }
+.bt-roster-t tr.k-f th { box-shadow: inset 3px 0 0 rgba(211, 74, 74, .7); }
+.bt-roster-t tr.down { opacity: .5; }
+.bt-roster-t .linklike { color: var(--text); }
 .bt-fx { margin: 2px 0 6px; padding: 6px 10px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
 /* союзники отряда на странице кампании */
 .party-allies { margin: 14px 0 6px; }
