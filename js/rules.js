@@ -143,7 +143,16 @@
       'альфа бестиа': { roll: 'beasts' },
       'священное очищение': { noHpRegen: true },
       'лазурный фимиам': { mpRegenMul: 2 },
-      'дар повелителя кошмаров': { madness: 1 }
+      'дар повелителя кошмаров': { madness: 1 },
+      // уточнение ГМ (2026-10-25); в таблице только «благословение всех 8 столпов / на вас объявлена охота»
+      'ужасающая метка': {
+        stat: { t: 70, d: 70, s: 80, i: 85, l: 40 }, statCap: { l: 100 }, attr: -50,
+        symbols: ['тьма', 'огонь', 'лёд', 'земля', 'воздух', 'кость', 'хаос', 'плоть'],
+        text: {
+          bonus: 'благословение всех 8 столпов: тело +70, дух +70, сила +80, интеллект +85, ловкость +40 (не выше 100) / символы: тьма, огонь, лёд, земля, воздух, кость, хаос, плоть',
+          debuff: 'на вас объявлена охота: −50 привлекательности / НПС с 60% шансом попытаются убить вас и весь ваш отряд / существа с чувством магии сразу распознают вас и стремятся уничтожить'
+        }
+      }
     },
     buff: {
       'предыдущий опыт': { option: 'prevExp', freePos: 1 },
@@ -214,6 +223,8 @@
     D = data;
     IX.race = new Map(D.races.map(r => [r.id, r]));
     IX.society = new Map(((D.society || {}).groups || []).map(g => [g.row, g]));
+    // уточнённые ГМ тексты даров (BOON_FX…text) заменяют табличные — их видно и в мастере, и на листе
+    D.skills.gifts.forEach(g => { const fx = BOON_FX.gift[norm(g.name)]; if (fx && fx.text) Object.assign(g, fx.text); });
     IX.gift = new Map(D.skills.gifts.map(g => [norm(g.name), g]));
     IX.buff = new Map(D.skills.buffs.map(g => [norm(g.name), g]));
     IX.disease = new Map(D.skills.diseases.map(g => [norm(g.name), g]));
@@ -863,7 +874,12 @@
     const addFlat = (k, v, src) => { if (!v) return; cur[k] += v; br[k].push({ src, v, op: '+' }); };
     if (race && race.ancestor && race.ancestor.add) STATS.forEach(k => addFlat(k, race.ancestor.add[k], `предок ${race.ancestor.name} (+${race.ancestorRule.pct}%)`));
     traitFx.forEach(([k, fx]) => { if (fx && fx.stat) for (const [s, v] of Object.entries(fx.stat)) addFlat(s, v, `черта «${k}»`); });
-    if (boon && boon.fx.stat) for (const [s, v] of Object.entries(boon.fx.stat)) addFlat(s, v, `${boon.kind === 'disease' ? 'болезнь' : 'дар'} «${boon.src.name}»`);
+    if (boon && boon.fx.stat) for (const [s, v] of Object.entries(boon.fx.stat)) {
+      // «ловкость +40 (не выше 100)»: прибавка не поднимает стат выше предела
+      const capV = (boon.fx.statCap || {})[s];
+      const add = capV !== undefined ? Math.max(0, Math.min(v, capV - cur[s])) : v;
+      addFlat(s, add, `${boon.kind === 'disease' ? 'болезнь' : 'дар'} «${boon.src.name}»${capV !== undefined ? ` (+${v}, не выше ${capV})` : ''}`);
+    }
     // развитие: очки за новые уровни (3 за уровень) и бонусы общин к статам
     const progAlloc = Object.assign({ t: 0, d: 0, s: 0, i: 0, l: 0 }, (prog && prog.alloc) || {});
     const progSpent = STATS.reduce((a, k) => a + Math.max(0, +progAlloc[k] || 0), 0);
@@ -1033,6 +1049,7 @@
     let attr = 0; const attrSrc = [];
     (race ? race.fx.concat(race.pfx) : []).forEach(f => { if (f.k === 'attr' && !f.cond) { attr += f.v; attrSrc.push(`раса ${signed(f.v)}`); } });
     traitFx.forEach(([k, fx]) => { if (fx && fx.attr) { attr += fx.attr; attrSrc.push(`«${k}» ${signed(fx.attr)}`); } });
+    if (boon && boon.fx.attr) { attr += boon.fx.attr; attrSrc.push(`«${boon.src.name}» ${signed(boon.fx.attr)}`); }
     der.attr = Math.max(-C.ATTR_LIMIT, Math.min(C.ATTR_LIMIT, attr)); der.attrSrc = attrSrc;
     der.charisma = talents['харизма'] ? talents['харизма'].total : 0;
     der.zor = talents['зоркость (базовая 50)'] ? talents['зоркость (базовая 50)'].total : C.BASE_ZOR;
@@ -1083,6 +1100,7 @@
     for (let i = 0; i < cnt('тайное знание'); i++) { const sym = to[optKey('secretSymbol', i)]; if (sym) addSym(sym, 'черта «тайное знание»'); }
     if (boon && boon.fx.option === 'prevExp' && bo.prevSymbol) addSym(bo.prevSymbol, 'благословение «предыдущий опыт»');
     if (boon && boon.fx.roll === 'element' && st.rolls && st.rolls.element) addSym(`${st.rolls.element.v} (усилен ×3)`, '«проводник стихии»');
+    if (boon && boon.fx.symbols) boon.fx.symbols.forEach(sym => addSym(sym, `дар «${boon.src.name}»`));
     out.symbols = symbols;
 
     // --- итоговая проверка

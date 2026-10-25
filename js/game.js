@@ -371,7 +371,8 @@
     // поле боя: видят все участники; герой двигается записью в своего персонажа (pos), остальное — полем в кампании
     const battleHtml = window.Battle ? window.Battle.card({
       cid, camp, gm, me, level: partyLevel, rerender: repaint,
-      heroes: inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, race: charView(ch).res.race })),
+      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race }; }),
+      saveAllies,
       allies: camp.allies || [],
       saveBoard: board => {
         G.d.camp = Object.assign({}, G.d.camp, { board });        // сразу показать, не дожидаясь сервера
@@ -382,6 +383,12 @@
         G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { pos }) : x));
         repaint();
         return C.updateCharacter(cid, chid, { pos }).catch(e => App.toast(C.errorText(e)));
+      },
+      // ХП и МП героя в бою — в его персонаже (vit): меняет игрок или ГМ
+      saveVit: (chid, vit) => {
+        G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { vit }) : x));
+        repaint();
+        return C.updateCharacter(cid, chid, { vit }).catch(e => App.toast(C.errorText(e)));
       },
       // союзник героя стоит там, где его поставили, — это записано в персонаже героя (apos), его меняет игрок или ГМ
       saveAllyPos: (chid, aid, p) => {

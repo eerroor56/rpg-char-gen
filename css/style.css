@@ -800,6 +800,35 @@ textarea { width: 100%; }
 .bt-grid svg { pointer-events: none; }
 .bt-tok.foe { border-color: #d34a4a; background: #4a1c1f; }
 .bt-tok.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
+/* бой: полоски ХП и МП, чей ход, выбывшие, туман войны, очередь ходов */
+.bt-bars { position: absolute; left: 6%; right: 6%; bottom: -5px; display: grid; gap: 1px; pointer-events: none; }
+.bt-bars i { display: block; height: 4px; border-radius: 2px; background: #3cc46a; box-shadow: 0 0 0 1px rgba(0, 0, 0, .7); min-width: 1px; }
+.bt-bars i.mp { background: #4a8fe0; height: 3px; }
+.bt-tok.is-turn { box-shadow: 0 0 0 3px #f3d58f, 0 0 16px 4px rgba(243, 213, 143, .65); animation: bt-turn 1.4s ease-in-out infinite alternate; z-index: 2; }
+@keyframes bt-turn { to { box-shadow: 0 0 0 3px #f3d58f, 0 0 6px 1px rgba(243, 213, 143, .35); } }
+.bt-tok.down { filter: grayscale(1) brightness(.6); }
+.bt-tok.down::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; color: #ff8a8a; font-size: calc(var(--cell) * .55); font-weight: 700; text-shadow: 0 0 4px #000; }
+.bt-tok.unseen { outline: 2px dashed rgba(255, 255, 255, .55); outline-offset: 1px; }
+.bt-cell.fog::after { content: ""; position: absolute; inset: 0; background: rgba(6, 5, 12, .72); pointer-events: none; }
+.bt-cell.fog .bt-obj, .bt-cell.fog .bt-decor { opacity: .55; }
+.bt-turns { margin: 4px 0 8px; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-m); background: var(--ink-2); }
+.bt-turn-head { margin: 0 0 6px; }
+.bt-order { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0 !important; margin: 0 0 6px; max-width: none !important; }
+.bt-order li { margin: 0; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line-soft); font-size: .86rem; }
+.bt-order li b { color: var(--brass); margin-right: 3px; font-variant-numeric: tabular-nums; }
+.bt-order li.k-h { border-color: rgba(214, 168, 92, .5); }
+.bt-order li.k-a { border-color: rgba(92, 196, 138, .55); }
+.bt-order li.k-f { border-color: rgba(211, 74, 74, .55); }
+.bt-order li.is-cur { background: rgba(243, 213, 143, .2); border-color: #f3d58f; }
+.bt-order li.down { opacity: .45; text-decoration: line-through; }
+.bt-order .linklike { color: var(--text); text-decoration: none; }
+.bt-fog { margin: 0 0 4px; gap: 12px; }
+.bt-info-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.bt-vit { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin-top: 6px; }
+.bt-vbar { display: inline-block; vertical-align: middle; width: 80px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.bt-vbar i { display: block; height: 100%; background: #3cc46a; }
+.bt-vbar.mp i { background: #4a8fe0; }
+.bt-vit-ctl { margin-top: 6px; }
 .bt-fx { margin: 2px 0 6px; padding: 6px 10px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
 /* союзники отряда на странице кампании */
 .party-allies { margin: 14px 0 6px; }
@@ -820,7 +849,7 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .bt-dist { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); padding: 1px 7px; border-radius: 9px; background: #1b1712; color: #f3d58f;
   font: 700 12px/1.4 var(--font-body); white-space: nowrap; }
 .bt-dist:empty { display: none; }
-.bt-info { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 6px 0; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-s); background: var(--ink-2); }
+.bt-info { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-s); background: var(--ink-2); }
 .bt-new { margin-top: 12px; }
 .bt-new summary { cursor: pointer; font-weight: 600; color: var(--brass); }
 

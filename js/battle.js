@@ -398,7 +398,8 @@
   };
   const allyKind = a => (ALLY_KINDS[a.kind] || ALLY_KINDS.npc)[0];
 
-  function tokenHtml(t, x, y) {
+  function tokenHtml(t, x, y, o) {
+    o = o || {};
     const sel = App.ui.btSel === t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
     const id = t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
     const mov = canMove(t) ? ' can-move' : '';
@@ -413,18 +414,25 @@
     const title = t.kind === 'h' ? `${name}${t.o.ownerName ? ' — игрок ' + t.o.ownerName : ''}`
       : t.kind === 'a' ? `${name} — ${allyKind(t.o)}${t.owner ? ' ' + t.owner.name : ''}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`
         : `${name}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`;
-    return `<button type="button" class="bt-tok ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}${mine}${mov}${sel ? ' is-sel' : ''}" data-tok="${esc(id)}"${ring} title="${esc(title)}" aria-label="${esc(title)}, клетка ${x + 1}:${y + 1}">
-      ${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<b>${esc(initials(name))}</b>`}</button>`;
+    const v = vitals(t), down = isDown(t);
+    const bars = v.mhp ? `<span class="bt-bars" aria-hidden="true"><i class="hp" style="width:${pct(v.hp, v.mhp)}%"></i>${v.mmp ? `<i class="mp" style="width:${pct(v.mp, v.mmp)}%"></i>` : ''}</span>` : '';
+    return `<button type="button" class="bt-tok ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}${mine}${mov}${sel ? ' is-sel' : ''}${o.turn ? ' is-turn' : ''}${down ? ' down' : ''}${o.unseen ? ' unseen' : ''}" data-tok="${esc(id)}"${ring} title="${esc(title + (down ? ' — выбыл' : '') + (o.unseen ? ' — игроки не видят' : ''))}" aria-label="${esc(title)}, клетка ${x + 1}:${y + 1}">
+      ${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<b>${esc(initials(name))}</b>`}${bars}</button>`;
   }
 
-  function boardHtml(board) {
-    const { at, decor } = layout(board, ctx.heroes);
+  function boardHtml(board, at, decor, vis) {
+    const fog = fogFor(board) ? vis : null;
+    const cur = curTok(board, at);
     let cells = '';
     for (let y = 0; y < board.h; y++) {
       for (let x = 0; x < board.w; x++) {
-        const k = key(x, y), t = at.get(k), dc = decor.get(k);
+        const k = key(x, y), dc = decor.get(k);
+        let t = at.get(k);
+        const dark = fog && !fog.has(k);
+        if (t && t.kind === 'f' && dark) t = null;          // противника вне обзора игроки не видят
         const fill = (t && t.kind === 'o' && info(t.o.t).fill) || (dc && info(dc.t).fill);
-        cells += `<div class="bt-cell${(x + y) % 2 ? ' alt' : ''}${fill ? ' cell-' + fill : ''}" data-act="btCell" data-x="${x}" data-y="${y}">${dc ? `<span class="bt-decor${ctx.gm && !t ? ' can-move' : ''}" data-tok="o:${esc(dc.i)}" title="${esc(cap(info(dc.t).n))} — объект на полу, можно встать">${glyph(dc.t)}</span>` : ''}${t ? tokenHtml(t, x, y) : ''}</div>`;
+        const tok = t ? tokenHtml(t, x, y, { turn: cur && t.kind !== 'o' && tid(t) === tid(cur), unseen: ctx.gm && !fog && vis && t.kind === 'f' && !vis.has(k) }) : '';
+        cells += `<div class="bt-cell${(x + y) % 2 ? ' alt' : ''}${fill ? ' cell-' + fill : ''}${dark ? ' fog' : ''}" data-act="btCell" data-x="${x}" data-y="${y}">${dc ? `<span class="bt-decor${ctx.gm && !t ? ' can-move' : ''}" data-tok="o:${esc(dc.i)}" title="${esc(cap(info(dc.t).n))} — объект на полу, можно встать">${glyph(dc.t)}</span>` : ''}${tok}</div>`;
       }
     }
     return `<div class="bt-wrap"><div class="bt-grid bt-p-${esc(board.floor || board.preset)}" style="--w:${board.w};--h:${board.h}" data-board="${esc(board.id)}">${cells}</div></div>`;
@@ -438,15 +446,17 @@
     const t = [...at.values()].find(v => v.kind === kind && (kind === 'h' ? v.o.id === id : v.o.i === id))
       || (kind === 'o' ? (() => { const o = board.objs.find(x => x.i === id); return o ? { kind: 'o', o } : null; })() : null);
     if (!t) return '';
+    if (t.kind === 'f' && fogFor(board) && !sight(board, layout(board, ctx.heroes).at).has(key(t.o.x, t.o.y))) return '';
     const pos = t.kind === 'h' || t.kind === 'a' ? [t.x, t.y] : [t.o.x, t.o.y];
     let text = '';
     if (t.kind === 'h') text = `<b>${esc(t.o.name)}</b> — герой${t.o.ownerName ? `, игрок ${esc(t.o.ownerName)}` : ''}`;
     else if (t.kind === 'a') text = `<b>${esc(t.o.n)}</b> — союзник: ${esc(allyKind(t.o))}${t.owner ? ` героя ${esc(t.owner.name)}` : ' отряда'}${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''} <span class="muted small">— ${esc((ALLY_KINDS[t.o.kind] || ALLY_KINDS.npc)[1])}</span>`;
     else if (t.kind === 'f') text = `<b>${esc(t.o.n)}</b> — противник${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''}`;
     else { const d = info(t.o.t); text = `<b>${esc(cap(d.n))}</b>${d.c ? ` — ${COVER[d.c]}` : d.walk ? ' — объект на полу, можно встать' : ' — без укрытия'}${d.drop ? ` · при разрушении: ${esc(d.drop)}` : ''}`; }
-    return `<div class="bt-info">${text} <span class="muted small">клетка ${pos[0] + 1}:${pos[1] + 1}</span>
+    return `<div class="bt-info"><div class="bt-info-head">${text} <span class="muted small">клетка ${pos[0] + 1}:${pos[1] + 1}</span>
       ${ctx.gm && (t.kind === 'f' || t.kind === 'o') ? `<button type="button" class="linklike small danger" data-act="btRemove" data-v="${esc(s)}">убрать с поля</button>` : ''}
-      <button type="button" class="linklike small" data-act="btSel" data-v="">закрыть</button></div>`;
+      <button type="button" class="linklike small" data-act="btSel" data-v="">закрыть</button></div>
+      ${t.kind !== 'o' ? vitHtml(board, t) : ''}</div>`;
   }
 
   function toolsHtml(board) {
@@ -508,11 +518,16 @@
     if (!board && !o.gm) return '';
     let html = `<section class="card battle-box" id="battle"><div class="sec-head"><h2>Поле боя</h2>${board ? `<span class="muted small">${esc(preset(board.preset).n)}, ${board.w}×${board.h}</span>` : ''}</div>`;
     if (!board) return html + '<p class="muted small">Клетчатое поле для боя: местность с укрытиями, герои и противники. Игроки двигают своих героев, вы — всё остальное.</p>' + genForm(true) + '</section>';
-    html += `${o.gm ? toolsHtml(board) : '<p class="muted small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками.</p>'}
+    const { at, decor } = layout(board, o.heroes);
+    const vis = fogOn(board) ? sight(board, at) : null;
+    autoNext(board, at);
+    html += `${o.gm ? toolsHtml(board) : '<p class="muted small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками. Видно то, что в обзоре отряда: 1 клетка за каждые 10 зоркости.</p>'}
       ${board.fx ? `<p class="small bt-fx"><b>Эффект поля:</b> противникам — ${esc(board.fx.foe || 'нет')}; игрокам — ${esc(board.fx.hero || 'нет')}${board.fx.layer ? ` <span class="muted">(уровни мира: ${esc(board.fx.layer)})</span>` : ''}</p>` : ''}
-      ${boardHtml(board)}
+      ${turnHtml(board, at, fogFor(board) ? vis : null)}
+      ${o.gm ? `<div class="row-actions bt-fog"><button type="button" class="linklike small" data-act="btFog">туман войны: ${fogOn(board) ? 'вкл' : 'выкл'}</button>${fogOn(board) ? `<label class="check small"><input type="checkbox" data-change="btAsPlayer" ${App.ui.btAsPlayer ? 'checked' : ''}> показать как видят игроки</label>` : ''}</div>` : ''}
+      ${boardHtml(board, at, decor, vis)}
       ${selInfo(board)}
-      <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1</p>`;
+      <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1 · 1 ОД — ${MOVE_PER_OD} клеток движения · обзор — 1 клетка за ${ZOR_PER_CELL} зоркости</p>`;
     if (o.gm) html += `${genForm(false)}<div class="row-actions"><button type="button" class="linklike small danger" data-act="btClear">убрать поле боя</button></div>`;
     return html + '</section>';
   }
@@ -539,21 +554,23 @@
     const walk = hit.t.kind === 'o' && info(hit.t.o.t).walk;
     if (!walk && occupied(board, x, y, hit.t)) { App.toast('Клетка занята'); return false; }
     if (walk && board.objs.some(o => o.x === x && o.y === y && o !== hit.t.o && info(o.t).walk)) { App.toast('Здесь уже лежит декор'); return false; }
-    if (hit.t.kind === 'h') { ctx.savePos(hit.t.o.id, { b: board.id, x, y }); return true; }
-    // союзник героя — место в персонаже героя (его может менять игрок), союзник отряда — в поле
-    if (hit.t.kind === 'a') {
-      if (hit.t.o.of && hit.t.owner) { ctx.saveAllyPos(hit.t.o.of, hit.t.o.i, { b: board.id, x, y }); return true; }
-      const nb = JSON.parse(JSON.stringify(board));
-      nb.apos = Object.assign({}, nb.apos || {}, { [hit.t.o.i]: [x, y] });
-      ctx.saveBoard(nb);
-      return true;
+    const patch = { x, y };
+    // в бою: игрок ходит только в свой ход и не дальше, чем позволяют ОД (1 ОД — 5 клеток); ГМ может всё, но видит перерасход
+    if (hit.t.kind !== 'o' && turnOn(board)) {
+      const cur = curTok(board, layout(board, ctx.heroes).at);
+      const mine = !!cur && tid(cur) === tid(hit.t);
+      if (!mine && !ctx.gm) { App.toast(`Сейчас ход: ${cur ? tname(cur) : '—'}`); return false; }
+      if (mine) {
+        const steps = pathLen(board, [hit.x, hit.y], [x, y], hit.t);
+        if (steps === null) { App.toast('Туда не пройти'); return false; }
+        const sp = spent(board, hit.t), od = vitals(hit.t).od;
+        const need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
+        if (need > od && !ctx.gm) { App.toast(`Не хватает ОД: нужно ${need}, в ход ${od} (1 ОД — ${MOVE_PER_OD} клеток)`); return false; }
+        if (need > od) App.toast(`ОД: ${need} из ${od} — больше, чем в ход`);
+        patch.mv = sp.mv + steps;
+      }
     }
-    const b = JSON.parse(JSON.stringify(board));
-    const list = hit.t.kind === 'f' ? b.foes : b.objs;
-    const it = list.find(z => z.i === hit.t.o.i);
-    if (!it) return false;
-    it.x = x; it.y = y;
-    ctx.saveBoard(b);
+    saveTok(board, hit, patch);
     return true;
   }
 
@@ -592,12 +609,21 @@
     drag.over = c;
     const lab = drag.ghost.querySelector('.bt-dist');
     if (c) {
-      const to = [+c.dataset.x, +c.dataset.y];
-      const hit = findTok(ctx.camp.board, drag.id);
+      const to = [+c.dataset.x, +c.dataset.y], board = ctx.camp.board;
+      const hit = findTok(board, drag.id);
       const walk = hit && hit.t.kind === 'o' && info(hit.t.o.t).walk;
-      const ok = (to[0] === drag.from[0] && to[1] === drag.from[1]) || walk || !occupied(ctx.camp.board, to[0], to[1], hit && hit.t);
+      const same = to[0] === drag.from[0] && to[1] === drag.from[1];
+      const steps = hit && hit.t.kind !== 'o' ? pathLen(board, drag.from, to, hit.t) : dist(drag.from, to);
+      let ok = same || walk || (!occupied(board, to[0], to[1], hit && hit.t) && steps !== null);
+      let text = steps === null ? 'нет пути' : steps + ' кл.';
+      const cur = hit && hit.t.kind !== 'o' && turnOn(board) ? curTok(board, layout(board, ctx.heroes).at) : null;
+      if (cur && tid(cur) === tid(hit.t) && steps !== null) {
+        const sp = spent(board, hit.t), od = vitals(hit.t).od, need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
+        text += ` · ОД ${need}/${od}`;
+        if (need > od && !ctx.gm) ok = false;
+      }
       c.classList.toggle('drop-ok', ok); c.classList.toggle('drop-bad', !ok);
-      lab.textContent = dist(drag.from, to) + ' кл.';
+      lab.textContent = text;
     } else lab.textContent = '';
   }, { passive: false });
   function endDrag(e, cancel) {
@@ -633,6 +659,187 @@
       requestAnimationFrame(() => { const t = document.querySelector(`.bt-grid [data-tok="${id}"]`); if (t) t.focus({ preventScroll: true }); });
     }
   });
+
+  // ------------------------------------------------------------ бой: очередь ходов, ОД, ХП и МП, обзор
+  // Уточнения ГМ (2026-10-25): «за каждые 5 клеток движения тратится 1 ОД», «каждые 10 зоркости дают +1 клетку обзора».
+  // Очередь и расход хода противников и союзников отряда — в поле (board.turn); героя и союзника героя — в персонаже героя
+  // (pos / apos: k — какой это ход, mv — пройдено клеток, od — ОД на действия, done — ход закончен), их пишет игрок.
+  const MOVE_PER_OD = 5, ZOR_PER_CELL = 10;
+  const baseOd = () => ((window.GM_CONFIG || {}).BASE_OD_TURN || 3);
+  const tid = t => t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
+  const tname = t => (t.kind === 'h' ? t.o.name : t.o.n);
+  const tpos = t => (t.kind === 'h' || t.kind === 'a' ? [t.x, t.y] : [t.o.x, t.o.y]);
+  const personal = t => t.kind === 'h' || (t.kind === 'a' && !!t.owner);
+  const has = v => v !== undefined && v !== null && v !== '';
+  function d100() {
+    const cr = window.crypto;
+    if (cr && cr.getRandomValues) { const a = new Uint32Array(1); cr.getRandomValues(a); return a[0] % 100 + 1; }
+    return rint(1, 100);
+  }
+  // ХП и МП: у героя — из расчёта персонажа, у противника и союзника — по бестиарию или расе (тело ×2, дух ×2); ГМ может задать сам
+  function vitals(t) {
+    if (t.kind === 'h') {
+      const d = t.o.der || {}, v = t.o.vit || {};
+      const mhp = has(d.hp) ? d.hp : null, mmp = has(d.mp) ? d.mp : null;
+      return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, od: baseOd() + (+d.od || 0), zor: has(d.zor) ? d.zor : 50 };
+    }
+    const st = creatureOf(t.o.src || t.o.n) || raceOf(t.o.src || t.o.n);
+    const mhp = has(t.o.mhp) ? +t.o.mhp : st ? 2 * st.t : null, mmp = has(t.o.mmp) ? +t.o.mmp : st ? 2 * st.d : null;
+    return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, od: baseOd(), zor: 50 };
+  }
+  const isDown = t => { const v = vitals(t); return has(v.hp) && v.mhp !== null && v.hp <= 0; };
+
+  const turnOn = b => !!(b && b.turn && b.turn.on && (b.turn.order || []).length);
+  const turnKey = b => b.id + ':' + ((b.turn && b.turn.n) || 0);
+  const tokById = (at, id) => [...at.values()].find(t => t.kind !== 'o' && tid(t) === id) || null;
+  function curTok(b, at) {
+    if (!turnOn(b)) return null;
+    const e = b.turn.order[b.turn.cur % b.turn.order.length];
+    return e ? tokById(at, e.id) : null;
+  }
+  // сколько уже потрачено за этот ход
+  function spent(b, t) {
+    const k = turnKey(b);
+    if (personal(t)) {
+      const p = t.kind === 'h' ? t.o.pos : (t.owner.apos || {})[t.o.i];
+      return p && p.k === k ? { mv: +p.mv || 0, od: +p.od || 0, done: !!p.done } : { mv: 0, od: 0, done: false };
+    }
+    const tr = b.turn || {};
+    return tr.tk === k && tr.who === tid(t) ? { mv: +tr.mv || 0, od: +tr.od || 0, done: false } : { mv: 0, od: 0, done: false };
+  }
+  const odUsed = s => Math.ceil(s.mv / MOVE_PER_OD) + s.od;
+  // записать место и расход хода
+  function saveTok(b, hit, patch) {
+    const t = hit.t, k = turnKey(b);
+    if (personal(t)) {
+      const sp = spent(b, t);
+      const next = Object.assign({ b: b.id, x: hit.x, y: hit.y, k, mv: sp.mv, od: sp.od, done: sp.done }, patch);
+      if (t.kind === 'h') ctx.savePos(t.o.id, next); else ctx.saveAllyPos(t.o.of, t.o.i, next);
+      return;
+    }
+    const nb = JSON.parse(JSON.stringify(b));
+    if (has(patch.x)) {
+      if (t.kind === 'a') nb.apos = Object.assign({}, nb.apos || {}, { [t.o.i]: [patch.x, patch.y] });
+      else { const it = (t.kind === 'f' ? nb.foes : nb.objs).find(z => z.i === t.o.i); if (it) { it.x = patch.x; it.y = patch.y; } }
+    }
+    if (has(patch.mv) || has(patch.od)) {
+      const sp = spent(b, t);
+      nb.turn = Object.assign({}, nb.turn, { tk: k, who: tid(t), mv: has(patch.mv) ? patch.mv : sp.mv, od: has(patch.od) ? patch.od : sp.od });
+    }
+    ctx.saveBoard(nb);
+  }
+  // длина пути в клетках (по диагонали тоже 1): в обход предметов; сквозь своих пройти можно, сквозь чужих — нет
+  function pathLen(b, from, to, t) {
+    if (from[0] === to[0] && from[1] === to[1]) return 0;
+    const { at } = layout(b, ctx.heroes);
+    const foeSide = t.kind === 'f';
+    const pass = (x, y) => {
+      const z = at.get(key(x, y));
+      if (!z || tid(z) === tid(t)) return true;
+      if (z.kind === 'o') return false;
+      return foeSide ? z.kind === 'f' : z.kind !== 'f';
+    };
+    const seen = new Map([[key(from[0], from[1]), 0]]), q = [from];
+    while (q.length) {
+      const [x, y] = q.shift(), d = seen.get(key(x, y));
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy, kk = key(nx, ny);
+        if (nx < 0 || ny < 0 || nx >= b.w || ny >= b.h || seen.has(kk)) continue;
+        if (nx === to[0] && ny === to[1]) return d + 1;
+        if (!pass(nx, ny)) continue;
+        seen.set(kk, d + 1); q.push([nx, ny]);
+      }
+    }
+    return null;
+  }
+  // обзор отряда: от каждого героя и союзника круг радиусом «зоркость / 10» клеток
+  function sight(b, at) {
+    const vis = new Set();
+    at.forEach(t => {
+      if (t.kind !== 'h' && t.kind !== 'a') return;
+      const r = Math.max(1, Math.floor(vitals(t).zor / ZOR_PER_CELL));
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const x = t.x + dx, y = t.y + dy;
+        if (dx * dx + dy * dy <= r * r + r && x >= 0 && y >= 0 && x < b.w && y < b.h) vis.add(key(x, y));
+      }
+    });
+    return vis;
+  }
+  // туман войны: у игроков всегда, когда он включён; ГМ видит всё, но может посмотреть «как игроки»
+  const fogOn = b => b.fog !== false;
+  const fogFor = b => fogOn(b) && (!ctx.gm || !!App.ui.btAsPlayer);
+  const pct = (v, m) => Math.max(0, Math.min(100, Math.round(100 * v / m)));
+
+  function turnHtml(board, at, vis) {
+    if (!turnOn(board)) {
+      return ctx.gm ? `<div class="bt-turns"><div class="row-actions"><button type="button" class="btn small primary" data-act="btFight">Начать бой — бросить инициативу</button>
+        <span class="muted small">d100 на каждого на поле; ход переходит по порядку. 1 ОД — ${MOVE_PER_OD} клеток движения.</span></div></div>` : '';
+    }
+    const tr = board.turn, cur = curTok(board, at);
+    const hidden = t => !!vis && t.kind === 'f' && !vis.has(key(...tpos(t)));
+    const items = tr.order.map((e, i) => {
+      const t = tokById(at, e.id);
+      if (!t) return '';
+      const h = hidden(t);
+      return `<li class="k-${t.kind}${i === tr.cur ? ' is-cur' : ''}${isDown(t) ? ' down' : ''}"><button type="button" class="linklike" data-act="btSel" data-v="${esc(e.id)}"${h ? ' disabled' : ''}><b>${e.ini}</b> ${esc(h ? '???' : tname(t))}</button></li>`;
+    }).join('');
+    const sp = cur ? spent(board, cur) : null, v = cur ? vitals(cur) : null;
+    const curHidden = cur && hidden(cur);
+    const myTurn = !!cur && !ctx.gm && canMove(cur);
+    return `<div class="bt-turns">
+      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od}, пройдено ${sp.mv} кл.` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
+      <ol class="bt-order">${items}</ol>
+      <div class="row-actions">
+        ${ctx.gm ? '<button type="button" class="btn small primary" data-act="btNext">Следующий ход</button>' : ''}
+        ${cur && (ctx.gm || myTurn) && !curHidden ? '<button type="button" class="btn small" data-act="btOd">Действие: −1 ОД</button>' : ''}
+        ${myTurn ? '<button type="button" class="btn small primary" data-act="btEndTurn">Закончить ход</button>' : ''}
+        ${ctx.gm ? '<button type="button" class="btn ghost small" data-act="btFight">Перебросить инициативу</button><button type="button" class="linklike small danger" data-act="btEnd">закончить бой</button>' : ''}
+      </div></div>`;
+  }
+  function vitHtml(board, t) {
+    const v = vitals(t);
+    const num = ctx.gm || t.kind !== 'f';       // игроки видят у противника только полоску
+    const canVit = ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me);
+    const bar = (val, max, cls) => (max ? `<span class="bt-vbar ${cls}"><i style="width:${pct(val, max)}%"></i></span>` : '');
+    const ini = turnOn(board) ? (board.turn.order.find(e => e.id === tid(t)) || {}).ini : null;
+    let html = `<div class="bt-vit">
+      <span>ХП ${num ? `<b>${has(v.hp) ? v.hp : '?'} / ${has(v.mhp) ? v.mhp : '?'}</b>` : ''} ${bar(v.hp, v.mhp, 'hp')}</span>
+      <span>МП ${num ? `<b>${has(v.mp) ? v.mp : '?'} / ${has(v.mmp) ? v.mmp : '?'}</b>` : ''} ${bar(v.mp, v.mmp, 'mp')}</span>
+      ${t.kind !== 'f' || ctx.gm ? `<span class="muted small">ОД в ход ${v.od}${t.kind !== 'f' ? ` · обзор ${Math.max(1, Math.floor(v.zor / ZOR_PER_CELL))} кл. (зоркость ${v.zor})` : ''}</span>` : ''}
+      ${has(ini) && ctx.gm ? `<label class="small">инициатива <input type="number" class="mini-num" min="1" max="100" step="1" data-change="btIni" data-k="${esc(tid(t))}" value="${esc(ini)}"></label>` : has(ini) ? `<span class="small">инициатива ${ini}</span>` : ''}</div>`;
+    if (canVit) {
+      html += `<div class="dev-row bt-vit-ctl"><input type="number" min="1" step="1" class="mini-num" data-ui="btAmt" data-ui-target="none" value="${esc(App.ui.btAmt || '')}" placeholder="сколько" aria-label="Сколько">
+        <button type="button" class="btn small" data-act="btVit" data-v="hp:-1">Урон</button><button type="button" class="btn small" data-act="btVit" data-v="hp:1">Лечение</button>
+        <button type="button" class="btn ghost small" data-act="btVit" data-v="mp:-1">−МП</button><button type="button" class="btn ghost small" data-act="btVit" data-v="mp:1">+МП</button>
+        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button>' : ''}</div>`;
+    }
+    return html;
+  }
+  // очередь: новые фишки встают по броску, текущий ход не сбивается
+  function orderAdd(b, id) {
+    if (!turnOn(b)) return;
+    const curId = b.turn.order[b.turn.cur].id;
+    b.turn.order.push({ id, ini: d100() });
+    b.turn.order.sort((p, q) => q.ini - p.ini);
+    b.turn.cur = Math.max(0, b.turn.order.findIndex(e => e.id === curId));
+  }
+  function orderDel(b, id) {
+    if (!turnOn(b)) return;
+    const curId = b.turn.order[b.turn.cur].id;
+    b.turn.order = b.turn.order.filter(e => e.id !== id);
+    if (!b.turn.order.length) { b.turn = null; return; }
+    const ix = b.turn.order.findIndex(e => e.id === curId);
+    if (ix >= 0) b.turn.cur = ix; else { b.turn.cur = Math.min(b.turn.cur, b.turn.order.length - 1); b.turn.n = (b.turn.n || 0) + 1; }
+  }
+  // герой закончил ход (игрок нажал «Закончить ход») — у ГМ ход переходит сам
+  let autoKey = '';
+  function autoNext(board, at) {
+    const cur = curTok(board, at);
+    if (!ctx.gm || !cur || !personal(cur) || !spent(board, cur).done || autoKey === turnKey(board)) return;
+    autoKey = turnKey(board);
+    setTimeout(() => App.actions.btNext(), 0);
+  }
 
   // ------------------------------------------------------------ действия
   // случайные противники по уровню отряда: из бестиария (без боссов и легенд), из рас или вперемешку
@@ -692,7 +899,7 @@
         if (t && (t.kind === 'h' || t.kind === 'a')) { App.toast(t.kind === 'h' ? 'Героев с поля не убрать' : 'Союзника убирают из отряда — в списке «Союзники отряда»'); return; }
         const target = t || (dc ? { kind: 'o', o: dc } : null);
         if (!target) return;
-        if (target.kind === 'f') b.foes = b.foes.filter(z => z.i !== target.o.i); else b.objs = b.objs.filter(z => z.i !== target.o.i);
+        if (target.kind === 'f') { b.foes = b.foes.filter(z => z.i !== target.o.i); orderDel(b, 'f:' + target.o.i); } else b.objs = b.objs.filter(z => z.i !== target.o.i);
         ctx.saveBoard(b);
         return;
       }
@@ -700,7 +907,9 @@
       if (isWalk ? !!dc : !!t) { App.toast('Клетка занята'); return; }
       if (tool === 'foe') {
         const n = String(App.ui.btFoeName || '').trim() || `Противник ${b.foes.length + 1}`;
-        b.foes.push({ i: newId('f'), n, lvl: levelOf(n), x, y });
+        const f = { i: newId('f'), n, lvl: levelOf(n), x, y };
+        b.foes.push(f);
+        orderAdd(b, 'f:' + f.i);
       } else if (T[tool]) b.objs.push({ i: newId('o'), t: tool, x, y });
       else return;
       ctx.saveBoard(b);
@@ -709,11 +918,114 @@
       if (!ctx || !ctx.gm) return;
       const s = b.dataset.v, kind = s.slice(0, 1), id = s.slice(2);
       const nb = JSON.parse(JSON.stringify(ctx.camp.board));
-      if (kind === 'f') nb.foes = nb.foes.filter(z => z.i !== id); else nb.objs = nb.objs.filter(z => z.i !== id);
+      if (kind === 'f') { nb.foes = nb.foes.filter(z => z.i !== id); orderDel(nb, 'f:' + id); } else nb.objs = nb.objs.filter(z => z.i !== id);
       App.ui.btSel = null;
       ctx.saveBoard(nb);
     }
   });
+
+  // бой: инициатива, ходы, ОД, ХП и МП
+  const board0 = () => ctx && ctx.camp && ctx.camp.board;
+  const selTok = () => { const b = board0(), s = App.ui.btSel; return b && s ? findTok(b, s) : null; };
+  Object.assign(App.actions, {
+    btFight() {
+      const b = board0();
+      if (!b || !ctx.gm) return;
+      if (turnOn(b) && !confirm('Перебросить инициативу? Очередь ходов начнётся заново.')) return;
+      const nb = JSON.parse(JSON.stringify(b));
+      const { at } = layout(nb, ctx.heroes);
+      const order = [...at.values()].filter(t => t.kind !== 'o' && !isDown(t)).map(t => ({ id: tid(t), ini: d100() }));
+      order.sort((p, q) => q.ini - p.ini || Math.random() - 0.5);
+      nb.turn = { on: true, round: 1, cur: 0, n: ((b.turn && b.turn.n) || 0) + 1, order, tk: '', who: '', mv: 0, od: 0 };
+      ctx.saveBoard(nb);
+      App.toast('Бой начался — инициатива брошена');
+    },
+    btNext() {
+      const b = board0();
+      if (!b || !ctx.gm || !turnOn(b)) return;
+      const nb = JSON.parse(JSON.stringify(b)), tr = nb.turn;
+      const { at } = layout(nb, ctx.heroes);
+      const alive = e => { const t = tokById(at, e.id); return t && !isDown(t); };
+      let i = tr.cur, round = tr.round, guard = 0;
+      do { i++; if (i >= tr.order.length) { i = 0; round++; } } while (!alive(tr.order[i]) && ++guard < tr.order.length);
+      Object.assign(tr, { cur: i, round, n: (tr.n || 0) + 1, tk: '', who: '', mv: 0, od: 0 });
+      ctx.saveBoard(nb);
+    },
+    btEnd() {
+      const b = board0();
+      if (!b || !ctx.gm || !confirm('Закончить бой? Очередь ходов исчезнет, ХП и МП останутся.')) return;
+      const nb = JSON.parse(JSON.stringify(b));
+      nb.turn = null;
+      ctx.saveBoard(nb);
+    },
+    // действие текущей фишки: −1 ОД (атака, заклинание и т. п.)
+    btOd() {
+      const b = board0();
+      if (!b || !turnOn(b)) return;
+      const cur = curTok(b, layout(b, ctx.heroes).at);
+      if (!cur || !(ctx.gm || canMove(cur))) return;
+      const sp = spent(b, cur), od = vitals(cur).od;
+      if (odUsed(sp) + 1 > od && !ctx.gm) { App.toast(`ОД кончились: ${odUsed(sp)} из ${od}`); return; }
+      saveTok(b, findTok(b, tid(cur)), { od: sp.od + 1 });
+    },
+    btEndTurn() {
+      const b = board0();
+      if (!b || !turnOn(b)) return;
+      const cur = curTok(b, layout(b, ctx.heroes).at);
+      if (!cur || !personal(cur) || !canMove(cur)) return;
+      saveTok(b, findTok(b, tid(cur)), { done: true });
+      App.toast('Ход закончен — ГМ передаст ход дальше');
+    },
+    // урон и лечение: герою — в его персонажа (vit), противнику — в поле, союзнику — в список отряда
+    btVit(btn) {
+      const hit = selTok();
+      if (!hit || hit.t.kind === 'o') return;
+      const t = hit.t;
+      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      const amt = Math.round(+App.ui.btAmt || 0);
+      if (amt <= 0) { App.toast('Впишите, сколько'); return; }
+      const [what, sign] = btn.dataset.v.split(':');
+      const v = vitals(t), max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
+      const val = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * amt) : (+now || 0) + sign * amt);
+      setVit(t, { [what]: val });
+    },
+    btMax(btn) {
+      const hit = selTok();
+      if (!hit || !ctx.gm || hit.t.kind === 'o' || hit.t.kind === 'h') return;
+      const amt = Math.round(+App.ui.btAmt || 0);
+      if (amt <= 0) { App.toast('Впишите число в поле «сколько»'); return; }
+      const w = btn.dataset.v;
+      setVit(hit.t, w === 'hp' ? { mhp: amt, hp: amt } : { mmp: amt, mp: amt });
+    },
+    btIni(inp) {
+      const b = board0();
+      if (!b || !ctx.gm || !turnOn(b)) return;
+      const nb = JSON.parse(JSON.stringify(b)), tr = nb.turn, curId = tr.order[tr.cur].id;
+      const e = tr.order.find(z => z.id === inp.dataset.k);
+      if (!e) return;
+      e.ini = Math.max(1, Math.min(100, Math.round(+inp.value || 1)));
+      tr.order.sort((p, q) => q.ini - p.ini);
+      tr.cur = Math.max(0, tr.order.findIndex(z => z.id === curId));
+      ctx.saveBoard(nb);
+    },
+    btFog() {
+      const b = board0();
+      if (!b || !ctx.gm) return;
+      const nb = JSON.parse(JSON.stringify(b));
+      nb.fog = !fogOn(b);
+      ctx.saveBoard(nb);
+    },
+    btAsPlayer(t) { App.ui.btAsPlayer = !!t.checked; ctx && ctx.rerender(); }
+  });
+  function setVit(t, patch) {
+    if (t.kind === 'h') { ctx.saveVit(t.o.id, Object.assign({}, t.o.vit || {}, patch)); return; }
+    if (t.kind === 'a') { ctx.saveAllies((ctx.allies || []).map(a => (a.i === t.o.i ? Object.assign({}, a, patch) : a))); return; }
+    const nb = JSON.parse(JSON.stringify(board0()));
+    const f = nb.foes.find(z => z.i === t.o.i);
+    if (!f) return;
+    Object.assign(f, patch);
+    ctx.saveBoard(nb);
+  }
 
   // комната подземелья → поле боя: местность по виду комнаты, противники из комнаты
   function fromRoom(r) {
