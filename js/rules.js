@@ -1072,6 +1072,7 @@
     if (noMagic) { slots = 0; slSrc.push('«обычный»: лишает магии'); }
     if (boon && boon.fx.noCast) { slots = 0; slSrc.push('«Антимагия»: не можете применять магию'); }
     der.spellSlots = Math.max(0, slots); der.spellSlotsSrc = slSrc;
+    der.spellSlotsOff = !!(noMagic || (boon && boon.fx.noCast));
     // опыт и проценты
     let exp = 0; traitFx.forEach(([k, fx]) => { if (fx && fx.exp) exp += fx.exp; });
     der.expPct = exp; der.expMul = boon && boon.fx.expMul ? boon.fx.expMul : 1;

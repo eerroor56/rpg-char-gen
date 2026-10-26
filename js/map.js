@@ -1,5 +1,5 @@
 /*
- * Карта мира в справочнике («Мир»): картинка из tools/build_map.py + подписи и области для клика.
+ * Карта мира во вкладке «Мир»: картинка из tools/build_map.py + подписи и области для клика.
  * Клик по земле, морю или месту — карточка с описанием из листа «миростроение».
  * Масштаб: кнопки, двойной клик, щипок, колёсико с Ctrl (или просто колёсико во весь экран); сдвиг — перетаскиванием.
  */
@@ -225,13 +225,13 @@
       if (b.dataset.v === 'reset') { s.k = 1; s.x = 0; s.y = 0; view._apply(); return; }
       view._zoom(b.dataset.v === 'in' ? 1.6 : 1 / 1.6);
     },
-    mapPlaces() { const s = S(); s.places = !s.places; window.Reference.refresh(); },
+    mapPlaces() { const s = S(); s.places = !s.places; window.Reference.refreshWorld(); },
     mapFull() {
       const s = S();
       s.full = !s.full;
       s.k = 1; s.x = 0; s.y = 0;
       document.body.classList.toggle('wmap-open', s.full);
-      window.Reference.refresh();
+      window.Reference.refreshWorld();
     }
   });
   document.addEventListener('keydown', e => {

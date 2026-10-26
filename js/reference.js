@@ -154,19 +154,21 @@
       const M = D.mechanics;
       return M.main.map(s => ({ title: cap(s.title || 'Общее'), cols: s.head.length ? [''].concat(s.head) : null, rows: s.rows.map(r => row(r.map((x, i) => i === 0 ? `<b>${esc(x)}</b>` : esc(x)))) }))
         .concat([generic(M.craft, 'Крафтильни'), generic(M.dungeon, 'Подземелья')]);
-    } },
-    { id: 'world', title: 'Мир', build() {
-      const W = D.world;
-      const blocks = [
-        ...(window.WorldMap && window.WORLD_MAP ? [{ custom: () => window.WorldMap.html() }] : []),
-        { title: 'Уровни мира', note: 'На эти коды ссылается колонка «уровень обитания» рас и существ.', cols: ['Код', 'Название', 'Эффект / условие'], rows: W.layers.map(l => row([`<b>${esc(l.code)}</b>`, esc(l.name), esc(l.effect)])) },
-        { title: 'Улучшенная география', cols: ['Место', 'Эффект на монстров', 'Эффект на игрока'], rows: W.places.filter(p => !p.isRegion).map(p => row([esc(p.name), esc(p.monsters), esc(p.players)], '', p.region ? cap(p.region) : 'Вне регионов')) }
-      ];
-      W.sections.forEach(s => blocks.push({ title: cap(s.title), cols: [cap(s.title)].concat(s.head), rows: s.rows.map(r => row(r.map((x, i) => i === 0 ? `<b>${esc(x)}</b>` : esc(x)))) }));
-      if (D.schemes.length) blocks.push({ title: 'Схемы', note: 'Схемы из книги ГМ.', cols: null, grid: D.schemes, rows: [] });
-      return blocks;
     } }
   ];
+
+  // «Мир» — отдельная вкладка (#world) рядом со справочником: карта и таблицы листа «миростроение»
+  const WORLD = { id: 'world', title: 'Мир', build() {
+    const W = D.world;
+    const blocks = [
+      ...(window.WorldMap && window.WORLD_MAP ? [{ custom: () => window.WorldMap.html() }] : []),
+      { title: 'Уровни мира', note: 'На эти коды ссылается колонка «уровень обитания» рас и существ.', cols: ['Код', 'Название', 'Эффект / условие'], rows: W.layers.map(l => row([`<b>${esc(l.code)}</b>`, esc(l.name), esc(l.effect)])) },
+      { title: 'Улучшенная география', cols: ['Место', 'Эффект на монстров', 'Эффект на игрока'], rows: W.places.filter(p => !p.isRegion).map(p => row([esc(p.name), esc(p.monsters), esc(p.players)], '', p.region ? cap(p.region) : 'Вне регионов')) }
+    ];
+    W.sections.forEach(s => blocks.push({ title: cap(s.title), cols: [cap(s.title)].concat(s.head), rows: s.rows.map(r => row(r.map((x, i) => i === 0 ? `<b>${esc(x)}</b>` : esc(x)))) }));
+    if (D.schemes.length) blocks.push({ title: 'Схемы', note: 'Схемы из книги ГМ.', cols: null, grid: D.schemes, rows: [] });
+    return blocks;
+  } };
 
   // ------------------------------------------------------------ отрисовка
 
@@ -202,7 +204,27 @@
         'Бестиарий, навыки, социум, алхимия, артефакты и механики закрыты паролем ГМ. Данные зашифрованы — без пароля их не прочитать даже из файлов сайта.');
       return;
     }
-    const q = norm(App.ui.refQ || '');
+    fill(box, cur, App.ui.refQ);
+  }
+
+  // вкладка «Мир»: те же таблицы с поиском, без меню разделов
+  function renderWorld(el) {
+    el.innerHTML = `<div class="ref world-page"><div class="ref-body">
+        <div class="ref-head"><h1>Мир</h1>
+          <input type="search" data-ui="worldQ" data-ui-target="world" value="${esc(App.ui.worldQ || '')}" placeholder="Поиск по миру" aria-label="Поиск по миру"></div>
+        <div id="worldContent"></div>
+      </div></div>`;
+    refreshWorld();
+  }
+  function refreshWorld() {
+    const box = document.getElementById('worldContent');
+    if (box) fill(box, WORLD, App.ui.worldQ);
+  }
+  const again = () => (App.tab === 'world' ? refreshWorld() : refresh());
+
+  // таблицы раздела в box; raw — строка поиска
+  function fill(box, cur, raw) {
+    const q = norm(raw || '');
     const blocks = cur.build();
     App.ui.refLimit = App.ui.refLimit || {};
     App.ui.refGroup = App.ui.refGroup || {};
@@ -236,15 +258,15 @@
       }
       return `<section class="ref-block">${head}${table(b, rows, key)}</section>`;
     }).join('');
-    box.innerHTML = html || `<div class="card empty">По запросу «${esc(App.ui.refQ)}» в разделе ничего нет.</div>`;
+    box.innerHTML = html || `<div class="card empty">По запросу «${esc(raw)}» ${cur === WORLD ? 'ничего' : 'в разделе ничего'} нет.</div>`;
     if (window.WorldMap) window.WorldMap.mount(box);
   }
 
   Object.assign(App.actions, {
-    refMore(b) { App.ui.refLimit[b.dataset.key] = (App.ui.refLimit[b.dataset.key] || PAGE) + PAGE * 2; refresh(); },
-    refGroup(b) { App.ui.refGroup[b.dataset.key] = b.dataset.v; refresh(); },
+    refMore(b) { App.ui.refLimit[b.dataset.key] = (App.ui.refLimit[b.dataset.key] || PAGE) + PAGE * 2; again(); },
+    refGroup(b) { App.ui.refGroup[b.dataset.key] = b.dataset.v; again(); },
     gmLock() { window.GMLock.lock(); }
   });
 
-  window.Reference = { render, refresh, SECTIONS };
+  window.Reference = { render, refresh, renderWorld, refreshWorld, SECTIONS, WORLD };
 })();

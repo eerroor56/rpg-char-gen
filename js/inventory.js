@@ -142,9 +142,53 @@
       }).join('')}</ul>` : `<p class="muted small">${inv.items.length ? 'Всё надето.' : 'Рюкзак пуст.'}</p>`}
     </section>`;
 
+    html += spellCard(o.record, v, canEquip);
     html += walletCard(inv.wallet, perms);
     if (perms.gm) html += addCard(v);
     return html;
+  }
+
+  // ------------------------------------------------------------ ячейки заклинаний
+  // «на старте игроку доступно 5 ячеек заклинаний», «персонаж может запомнить до пяти 100% заклинаний (ячеек заклинаний)»:
+  // запомненное заклинание срабатывает без броска на успех. Записывают игрок и ГМ (поле spells: [{ name, formula, note }])
+  const spellsOf = rec => (Array.isArray(rec.spells) ? rec.spells : []).filter(x => x && x.name);
+  const knownSymbols = (rec, v) => [...new Set((v.res.symbols || []).map(s => s.name)
+    .concat(((rec.gm || {}).learned || []).filter(x => x.kind === 'symbol').map(x => x.name)))];
+  function spellCard(rec, v, canEdit) {
+    const d = v.res.der, n = d.spellSlots || 0;
+    const list = spellsOf(rec);
+    const edit = App.ui.spEdit === undefined || App.ui.spEdit === null ? -1 : +App.ui.spEdit;
+    const ui = k => esc(App.ui[k] || '');
+    const form = i => `<div class="sp-form">
+        <label>Заклинание <input type="text" data-ui="spName" data-ui-target="none" value="${ui('spName')}" maxlength="80" placeholder="например, огненный шар"></label>
+        <label>Формула <input type="text" data-ui="spFormula" data-ui-target="none" value="${ui('spFormula')}" maxlength="300" placeholder="символы, из которых собрано"></label>
+        <label>Заметка <input type="text" data-ui="spNote" data-ui-target="none" value="${ui('spNote')}" maxlength="300" placeholder="расход, урон, эффект (необязательно)"></label>
+        <div class="row-actions"><button type="button" class="btn primary small" data-act="spSave" data-v="${i}">Запомнить</button>
+          <button type="button" class="btn ghost small" data-act="spCancel">Отмена</button></div></div>`;
+    const cells = [];
+    for (let i = 0; i < Math.max(n, list.length, edit + 1); i++) {
+      const s = list[i], over = i >= n;
+      let body;
+      if (i === edit) body = form(i);
+      else if (s) {
+        body = `<div class="sp-text"><b>${esc(s.name)}</b>${s.formula ? `<span class="sp-f">${esc(s.formula)}</span>` : ''}${s.note ? `<span class="muted small">${esc(s.note)}</span>` : ''}
+          ${over ? '<span class="bad-text small">Не хватает ячеек: заклинание не помещается.</span>' : ''}</div>
+          ${canEdit ? `<div class="sp-ops"><button type="button" class="linklike small" data-act="spEdit" data-v="${i}">изменить</button>
+            <button type="button" class="linklike small danger" data-act="spDel" data-v="${i}">забыть</button></div>` : ''}`;
+      } else body = canEdit && i === list.length && edit < 0 ? `<button type="button" class="linklike sp-add" data-act="spEdit" data-v="${i}">записать заклинание</button>` : '<span class="muted small">свободна</span>';
+      cells.push(`<li class="sp-cell${s ? ' full' : ''}${over ? ' over' : ''}${i === edit ? ' is-edit' : ''}"><span class="sp-n">${i + 1}</span>${body}</li>`);
+    }
+    const syms = knownSymbols(rec, v);
+    return `<section class="dev-card spell-card"><div class="sec-head"><h2>Ячейки заклинаний</h2><span class="muted small">занято ${fmt(Math.min(list.length, n))} из ${fmt(n)}${(d.spellSlotsSrc || []).length ? ` (${esc(d.spellSlotsSrc.join(', '))})` : ''}</span></div>
+      ${n || list.length || edit >= 0 ? `<ol class="sp-cells">${cells.join('')}</ol>` : '<p class="muted small">Ячеек нет — запомнить заклинание нельзя.</p>'}
+      <p class="muted small">Запомненное заклинание срабатывает наверняка — бросок на успех не нужен.${syms.length ? ` Символы персонажа: ${esc(syms.join(', '))}.` : ''}</p>
+    </section>`;
+  }
+  function spellCommit(mutate, text) {
+    const list = spellsOf(ctx().record).map(x => Object.assign({}, x));
+    if (mutate(list) === false) return;
+    App.ui.spEdit = null;
+    Dev().commit({ spells: list }, text);
   }
 
   // карточка выбранного предмета
@@ -546,7 +590,7 @@
   };
 
   // ------------------------------------------------------------ для листа персонажа
-  function sheetGear(v) {
+  function sheetGear(v, rec) {
     if (!v.inv) return '';
     const byId = new Map(v.inv.items.map(x => [x.id, x]));
     const worn = [];
@@ -565,6 +609,7 @@
     return `${worn.length ? `<ul class="small">${worn.join('')}</ul>` : '<p class="muted">Ничего не надето.</p>'}
       <p><b>Броня:</b> ${fmt(v.eq.armor)}${v.eq.magicArmor ? ` (+ маг ${fmt(v.eq.magicArmor)})` : ''}; <b>уворот:</b> ${fmt(v.res.der.dodge)}; <b>слоты:</b> ${fmt(v.res.der.slotsUsed)} / ${fmt(v.res.der.slots)}</p>
       ${bag.length ? `<p><b>Рюкзак:</b> ${bag.map(x => esc(x.name) + ((+x.qty || 1) > 1 ? ' ×' + x.qty : '')).join(', ')}</p>` : ''}
+      ${rec && spellsOf(rec).length ? `<p><b>Запомненные заклинания</b> (${fmt(spellsOf(rec).length)} из ${fmt(v.res.der.spellSlots || 0)}): ${spellsOf(rec).map(x => esc(x.name) + (x.formula ? ` <span class="muted">(${esc(x.formula)})</span>` : '')).join(', ')}</p>` : ''}
       <p><b>Кошелёк:</b> ${esc(K.money(K.walletCopper(w)))}${(w.other || []).filter(x => x && x.name && num(x.qty)).map(x => `, ${esc(x.name)}: ${fmt(num(x.qty))}`).join('')}</p>`;
   }
   function sheetExtra(v, rec) {
@@ -602,6 +647,26 @@
   }
 
   Object.assign(App.actions, {
+    spEdit(b) {
+      const i = +b.dataset.v, s = spellsOf(ctx().record)[i] || {};
+      App.ui.spEdit = i;
+      App.ui.spName = s.name || ''; App.ui.spFormula = s.formula || ''; App.ui.spNote = s.note || '';
+      rerender();
+      setTimeout(() => { const f = document.querySelector('.sp-form input'); if (f) f.focus(); }, 30);
+    },
+    spCancel() { App.ui.spEdit = null; rerender(); },
+    spSave(b) {
+      const i = +b.dataset.v;
+      const s = { name: String(App.ui.spName || '').trim().slice(0, 80), formula: String(App.ui.spFormula || '').trim().slice(0, 300), note: String(App.ui.spNote || '').trim().slice(0, 300) };
+      if (!s.name) { App.toast('Впишите название заклинания'); return; }
+      const old = spellsOf(ctx().record)[i];
+      spellCommit(list => { list[Math.min(i, list.length)] = s; }, old ? (old.name === s.name ? `Меняет заклинание «${s.name}»` : `Вместо «${old.name}» запоминает «${s.name}»`) : `Запоминает заклинание «${s.name}»`);
+    },
+    spDel(b) {
+      const i = +b.dataset.v, s = spellsOf(ctx().record)[i];
+      if (!s || !confirm(`Забыть заклинание «${s.name}»?`)) return;
+      spellCommit(list => { list.splice(i, 1); }, `Забывает заклинание «${s.name}»`);
+    },
     invSel(b) { App.ui.invSel = b.dataset.v || null; rerender(); if (b.dataset.v) setTimeout(() => { const c = document.querySelector('.item-card'); if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 30); },
     invSlot(b) {
       const v = view();

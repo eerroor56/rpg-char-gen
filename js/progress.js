@@ -85,6 +85,12 @@
       const dReg = eq.statFx.hpRegen - ((res.gear && res.gear.hpRegenMod) || 0);
       if (dReg) { d.hpRegen = Math.max(0, d.hpRegen + dReg); (d.hpRegenSrc || []).push(`надетая броня ${signed(dReg)}`); }
       d.armor = eq.armor; d.magicArmor = eq.magicArmor;
+      // ячейки заклинаний: гримуар из листа создания заменяется тем, что надето и лежит в рюкзаке сейчас
+      const sp0 = (res.gear && res.gear.spellSlots) || 0;
+      if (!d.spellSlotsOff && (sp0 || eq.spellSlots)) {
+        d.spellSlots = Math.max(0, d.spellSlots - sp0 + eq.spellSlots);
+        d.spellSlotsSrc = (d.spellSlotsSrc || []).filter(s => !/^гримуар/.test(s)).concat(eq.spellSrc);
+      }
     }
     return v;
   }
@@ -270,7 +276,7 @@
     const pics = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'dev-portrait') : '';
     let body;
     const I = window.Inv;
-    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, { extra: sheetBlock(o.record, v), gearHtml: I ? I.sheetGear(v) : '' });
+    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, { extra: sheetBlock(o.record, v), gearHtml: I ? I.sheetGear(v, o.record) : '' });
     else if (tab === 'log') body = logList(o.log);
     else if (o.devLocked) body = `<div class="card note">${o.devLocked}</div>`;
     else if (tab === 'gear' && I) body = I.gearTab(o, v);
@@ -295,7 +301,7 @@
     if (App.ui.devFor === id) return;
     App.ui.devFor = id;
     App.ui.devDraft = newDraft();
-    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ'].forEach(k => { App.ui[k] = undefined; });
+    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ', 'spEdit', 'spName', 'spFormula', 'spNote'].forEach(k => { App.ui[k] = undefined; });
   }
 
   function sumVals(o) { return Object.values(o || {}).reduce((a, x) => a + (+x || 0), 0); }

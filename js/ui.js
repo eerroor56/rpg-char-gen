@@ -224,8 +224,10 @@
     // ------------------------------------------------------------ маршруты
     route() {
       const h = location.hash.replace(/^#/, '');
-      const [tab, sub, sub2] = h.split('/');
-      const tabs = ['home', 'create', 'heroes', 'game', 'ref', 'rules'];
+      let [tab, sub, sub2] = h.split('/');
+      // «Мир» раньше был разделом справочника: старые ссылки #ref/world ведут во вкладку
+      if (tab === 'ref' && sub === 'world') { tab = 'world'; sub = ''; history.replaceState(null, '', '#world'); }
+      const tabs = ['home', 'create', 'heroes', 'game', 'ref', 'world', 'rules'];
       const first = !this.routed;
       this.routed = true;
       const prevTab = this.tab, prevRef = this.ui.refSection, prevPath = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
@@ -236,11 +238,18 @@
       const moved = prevTab !== this.tab || (this.tab === 'ref' && sub && sub !== prevRef) || path !== prevPath;
       if (moved) window.scrollTo({ top: 0 });
       if (this.tab !== 'game' && window.Game) window.Game.leave();
+      if (this.tab !== 'world' && this.ui.wmap && this.ui.wmap.full) { this.ui.wmap.full = false; document.body.classList.remove('wmap-open'); }
       if (this.tab === 'create' && sub && this.steps.some(s => s.id === sub)) this.step = sub;
       if (this.tab === 'ref') this.ui.refSection = sub || this.ui.refSection;
       document.querySelectorAll('.tab-pane').forEach(p => { p.hidden = p.id !== 'tab-' + this.tab; });
       document.querySelectorAll('.tabs a, a.brand').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
       document.body.dataset.tab = this.tab;
+      // на телефоне вкладки — лента с прокруткой: текущая должна быть видна
+      const onTab = document.querySelector('.tabs a[aria-current="page"]');
+      if (onTab) {
+        const nav = onTab.parentElement, r = onTab.getBoundingClientRect(), nr = nav.getBoundingClientRect();
+        if (r.left < nr.left || r.right > nr.right) nav.scrollLeft += r.left - nr.left - (nav.clientWidth - onTab.offsetWidth) / 2;
+      }
       this.render();
       if (moved || first) this.enter(document.getElementById('tab-' + this.tab));
       // заставки: «вход в мир» при открытии сайта (кроме «Игры»); если сайт открыт или перезагружен прямо в «Игре» —
@@ -345,6 +354,7 @@
       if (this.tab === 'heroes') window.Heroes.render(document.getElementById('tab-heroes'));
       if (this.tab === 'game') window.Game.render(document.getElementById('tab-game'));
       if (this.tab === 'ref') window.Reference.render(document.getElementById('tab-ref'));
+      if (this.tab === 'world') window.Reference.renderWorld(document.getElementById('tab-world'));
       if (this.tab === 'rules') window.Sheet.renderRules(document.getElementById('tab-rules'));
     },
 
@@ -529,6 +539,7 @@
           this.ui[t.dataset.ui] = t.value;
           const target = t.dataset.uiTarget;
           if (target === 'ref') window.Reference.refresh();
+          else if (target === 'world') window.Reference.refreshWorld();
           else if (target === 'raceList') this.refreshRaceList();
           else if (target === 'boonList') this.refreshBoonList();
           else if (target === 'heroes') this.keepFocus(t, () => window.Heroes.render(document.getElementById('tab-heroes')));

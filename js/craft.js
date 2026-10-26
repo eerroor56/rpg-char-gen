@@ -529,11 +529,25 @@
       out.slotsUsed += slotsOf(it) * (perPiece ? qty : 1);
       if (isBag(it)) out.bagSlots += (parseInt(String(it.effect || '').replace(/\D/g, ''), 10) || 0) * qty;
     });
+    // ячейки заклинаний: «+20 ячеек заклинаний» (гримуар), «+1 ячейка заклинаний» (камень), «даёт +5 ячеек заклинаний» (книги).
+    // Надеваемое считается, только когда надето; книги и прочее, что не надевается, — пока лежат в рюкзаке
+    out.spellSlots = 0; out.spellSrc = [];
+    items.forEach(it => {
+      const calc = worn.get(it.id) || compute(it, ctx);
+      if (calc.cat && !worn.has(it.id)) return;
+      let n = 0;
+      calc.effects.forEach(e => String(e.text || '').replace(SPELL_SLOT_FX, (m, s, d) => { n += (s === '+' ? 1 : -1) * +d; return m; }));
+      if (!n) return;
+      const q = calc.cat ? 1 : Math.max(1, Math.floor(num(it.qty) || 1));
+      out.spellSlots += n * q;
+      out.spellSrc.push(`«${it.name}»${q > 1 ? ` ×${q}` : ''} ${R.signed(n * q)}`);
+    });
     // занятость рук
     const handIds = slots.filter(s => s.cat === 'hand').map(s => (equip || {})[s.id]).filter(Boolean);
     out.handsUsed = handIds.length;
     return out;
   }
+  const SPELL_SLOT_FX = /([+\-−])\s*(\d+)\s*яч\S*\s+заклин/gi;
 
   // ------------------------------------------------------------ валюта
   const COINS = C.CURRENCIES;
