@@ -349,6 +349,21 @@ RACE_FX_FIX = {
 }
 
 
+# Характер «мир» ГМ заменил на «добро» поиском по листу «Расы» (книга (4)), и замена задела слова с «мир» внутри.
+# Пока это не исправлено в таблице, возвращаем исходные слова (иначе и id расы «ал'мирен» сменился бы)
+RACE_TEXT_FIX = [
+    ("ал'доброен", "ал'мирен"), ("фордоброу", "формиру"), ("доброные", "мирные"), ("доброно", "мирно"),
+    ("доброах", "мирах"), ("доброов", "миров"), ("видят добро посредством", "видят мир посредством"),
+]
+
+
+def race_text(v):
+    s = txt(v)
+    for bad, good in RACE_TEXT_FIX:
+        s = s.replace(bad, good)
+    return s
+
+
 def round_level(x):
     """Уровни — целые: округление до ближайшего (0,5 — вверх)."""
     return int(math.floor(x + 0.5))
@@ -358,14 +373,14 @@ def build_races(wb):
     ws = wb["Расы"]
     races = []
     for r in range(2, ws.max_row + 1):
-        name_raw = txt(ws.cell(r, 1).value)
+        name_raw = race_text(ws.cell(r, 1).value)
         if not name_raw:
             continue
         name, marks = strip_marks(name_raw)
         stats = [num(ws.cell(r, c).value) or 0 for c in range(2, 7)]
         lvl = (sum(stats) - 25) / 3
-        bonus = txt(ws.cell(r, 13).value)
-        pen = txt(ws.cell(r, 14).value)
+        bonus = race_text(ws.cell(r, 13).value)
+        pen = race_text(ws.cell(r, 14).value)
         race = {
             "id": name.lower(),
             "name": name,

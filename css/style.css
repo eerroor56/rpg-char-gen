@@ -981,7 +981,8 @@ td:has(> .thumb) { min-width: 170px; }
 .wm-compass path.n { fill: #e9c27a; }
 .wm-compass text { font: 30px var(--font-display); fill: #f2dfb0; stroke: rgba(12, 10, 22, .7); stroke-width: 4px; paint-order: stroke; }
 .wmap-ctl { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.wmap-ctl .btn { min-width: 40px; }
+.wmap-ctl .btn { min-width: 40px; justify-content: center; }
+.wmap-ctl .btn.ic { width: 40px; padding: 0; font-size: 1.15rem; line-height: 1; }
 .wmap-info { margin-top: 10px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-m); }
 .wmap-info h3 { margin: 0 0 6px; font-size: 1.35rem; }
 .wmap-info .tag { font-family: var(--font-body); font-size: .8rem; vertical-align: middle; }

@@ -69,9 +69,9 @@
           </div>
         </div>
         <div class="wmap-ctl" role="toolbar" aria-label="Карта">
-          <button type="button" class="btn small" data-act="mapZoom" data-v="in" aria-label="Приблизить">+</button>
-          <button type="button" class="btn small" data-act="mapZoom" data-v="out" aria-label="Отдалить">−</button>
-          <button type="button" class="btn small" data-act="mapZoom" data-v="reset" aria-label="Показать всю карту">⤢</button>
+          <button type="button" class="btn small ic" data-act="mapZoom" data-v="in" aria-label="Приблизить">+</button>
+          <button type="button" class="btn small ic" data-act="mapZoom" data-v="out" aria-label="Отдалить">−</button>
+          <button type="button" class="btn small ic" data-act="mapZoom" data-v="reset" aria-label="Показать всю карту">⤢</button>
           <button type="button" class="btn small" data-act="mapPlaces" aria-pressed="${s.places}">${s.places ? 'Места: вкл' : 'Места: выкл'}</button>
           <button type="button" class="btn small" data-act="mapFull">${s.full ? 'Свернуть' : 'Во весь экран'}</button>
         </div>

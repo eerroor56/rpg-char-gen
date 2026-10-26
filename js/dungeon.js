@@ -72,7 +72,7 @@
     const all = unlocked() ? D().creatures || [] : [];
     const mid = (o.min + o.max) / 2;
     const near = list => list.slice().sort((a, b) => Math.abs(lvlOf(a) - mid) - Math.abs(lvlOf(b) - mid));
-    const here = all.filter(c => !c.cat && habMatch(c.hab, o.hab));
+    const here = all.filter(c => !c.cat && habMatch(c.hab, o.hab) && !/неспокойн\S*\s+вод/i.test(c.sec || ''));   // водные существа в комнатах не живут
     let foes = here.filter(c => lvlOf(c) >= o.min && lvlOf(c) <= o.max);
     if (foes.length < 3) foes = near(here).slice(0, 12);
     const allBoss = all.filter(c => c.cat === 'босс');

@@ -501,10 +501,15 @@
     return r ? R.roundLevel(r.lvl) : null;
   }
 
+  // выбранная местность; пока ГМ не трогал список — первый тип поля из таблицы (так он и показан в списке)
+  function pickedPreset() {
+    const list = presetList();
+    return App.ui.btPreset || (list[1] && list[1][1][0] ? list[1][1][0][0] : 'forest');
+  }
   function genForm(open) {
     const ui = (k, d) => esc(App.ui[k] !== undefined ? App.ui[k] : d);
     const list = presetList();
-    const pre = App.ui.btPreset || (list[1] && list[1][1][0] ? list[1][1][0][0] : 'forest');
+    const pre = pickedPreset();
     const src = App.ui.btFoeSrc || 'bestiary';
     return `<details class="bt-new"${open ? ' open' : ''}><summary>${open ? 'Создать поле боя' : 'Новое поле боя'}</summary>
       <div class="form-grid bt-form">
@@ -577,7 +582,7 @@
       if (mine) {
         const steps = pathLen(board, [hit.x, hit.y], [x, y], hit.t);
         if (steps === null) { App.toast('Туда не пройти'); return false; }
-        const sp = spent(board, hit.t), od = vitals(hit.t).od;
+        const sp = spent(board, hit.t), od = odCap(board, hit.t);
         const need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
         if (need > od && !ctx.gm) { App.toast(`Не хватает ОД: нужно ${need}, в ход ${od} (1 ОД — ${MOVE_PER_OD} клеток)`); return false; }
         if (need > od) App.toast(`ОД: ${need} из ${od} — больше, чем в ход`);
@@ -632,7 +637,7 @@
       let text = steps === null ? 'нет пути' : steps + ' кл.';
       const cur = hit && hit.t.kind !== 'o' && turnOn(board) ? curTok(board, layout(board, ctx.heroes).at) : null;
       if (cur && tid(cur) === tid(hit.t) && steps !== null) {
-        const sp = spent(board, hit.t), od = vitals(hit.t).od, need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
+        const sp = spent(board, hit.t), od = odCap(board, hit.t), need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
         text += ` · ОД ${need}/${od}`;
         if (need > od && !ctx.gm) ok = false;
       }
@@ -677,7 +682,8 @@
   // ------------------------------------------------------------ бой: очередь ходов, ОД, ХП и МП, обзор
   // Уточнения ГМ (2026-10-25): «за каждые 5 клеток движения тратится 1 ОД», «каждые 10 зоркости дают +1 клетку обзора».
   // Очередь и расход хода противников и союзников отряда — в поле (board.turn); героя и союзника героя — в персонаже героя
-  // (pos / apos: k — какой это ход, mv — пройдено клеток, od — ОД на действия, done — ход закончен), их пишет игрок.
+  // (pos / apos: k — какой это ход, mv — пройдено клеток, od — ОД на действия, bon — ОД, добавленные ГМ в этот ход
+  // за навыки и умения, done — ход закончен), их пишет игрок.
   const MOVE_PER_OD = 5, ZOR_PER_CELL = 10;
   const baseOd = () => ((window.GM_CONFIG || {}).BASE_OD_TURN || 3);
   const tid = t => t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
@@ -727,18 +733,19 @@
     const k = turnKey(b);
     if (personal(t)) {
       const p = t.kind === 'h' ? t.o.pos : (t.owner.apos || {})[t.o.i];
-      return p && p.k === k ? { mv: +p.mv || 0, od: +p.od || 0, done: !!p.done } : { mv: 0, od: 0, done: false };
+      return p && p.k === k ? { mv: +p.mv || 0, od: +p.od || 0, bon: +p.bon || 0, done: !!p.done } : { mv: 0, od: 0, bon: 0, done: false };
     }
     const tr = b.turn || {};
-    return tr.tk === k && tr.who === tid(t) ? { mv: +tr.mv || 0, od: +tr.od || 0, done: false } : { mv: 0, od: 0, done: false };
+    return tr.tk === k && tr.who === tid(t) ? { mv: +tr.mv || 0, od: +tr.od || 0, bon: +tr.bon || 0, done: false } : { mv: 0, od: 0, bon: 0, done: false };
   }
   const odUsed = s => Math.ceil(s.mv / MOVE_PER_OD) + s.od;
+  const odCap = (b, t) => vitals(t).od + spent(b, t).bon;   // ОД в этот ход: свои + добавленные ГМ
   // записать место и расход хода
   function saveTok(b, hit, patch) {
     const t = hit.t, k = turnKey(b);
     if (personal(t)) {
       const sp = spent(b, t);
-      const next = Object.assign({ b: b.id, x: hit.x, y: hit.y, k, mv: sp.mv, od: sp.od, done: sp.done }, patch);
+      const next = Object.assign({ b: b.id, x: hit.x, y: hit.y, k, mv: sp.mv, od: sp.od, bon: sp.bon, done: sp.done }, patch);
       if (t.kind === 'h') ctx.savePos(t.o.id, next); else ctx.saveAllyPos(t.o.of, t.o.i, next);
       return;
     }
@@ -747,9 +754,9 @@
       if (t.kind === 'a') nb.apos = Object.assign({}, nb.apos || {}, { [t.o.i]: [patch.x, patch.y] });
       else { const it = (t.kind === 'f' ? nb.foes : nb.objs).find(z => z.i === t.o.i); if (it) { it.x = patch.x; it.y = patch.y; } }
     }
-    if (has(patch.mv) || has(patch.od)) {
+    if (has(patch.mv) || has(patch.od) || has(patch.bon)) {
       const sp = spent(b, t);
-      nb.turn = Object.assign({}, nb.turn, { tk: k, who: tid(t), mv: has(patch.mv) ? patch.mv : sp.mv, od: has(patch.od) ? patch.od : sp.od });
+      nb.turn = Object.assign({}, nb.turn, { tk: k, who: tid(t), mv: has(patch.mv) ? patch.mv : sp.mv, od: has(patch.od) ? patch.od : sp.od, bon: has(patch.bon) ? patch.bon : sp.bon });
     }
     ctx.saveBoard(nb);
   }
@@ -840,11 +847,12 @@
     const curHidden = cur && hidden(cur);
     const myTurn = !!cur && !ctx.gm && canMove(cur);
     return `<div class="bt-turns">
-      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od}, пройдено ${sp.mv} кл.` : ''}${cur && !curHidden && (ctx.gm || cur.kind !== 'f') && (has(v.rhp) || has(v.rmp)) ? ` <span class="muted small">· реген в ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '?'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '?'}</span>` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
+      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od + sp.bon}${sp.bon ? ` <span class="muted small">(${v.od} ${signed(sp.bon)} от ГМ)</span>` : ''}, пройдено ${sp.mv} кл.` : ''}${cur && !curHidden && (ctx.gm || cur.kind !== 'f') && (has(v.rhp) || has(v.rmp)) ? ` <span class="muted small">· реген в ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '?'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '?'}</span>` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
       <ol class="bt-order">${items}</ol>
       <div class="row-actions">
         ${ctx.gm ? '<button type="button" class="btn small primary" data-act="btNext">Следующий ход</button>' : ''}
         ${cur && (ctx.gm || myTurn) && !curHidden ? '<button type="button" class="btn small" data-act="btOd">Действие: −1 ОД</button>' : ''}
+        ${cur && ctx.gm ? '<button type="button" class="btn small" data-act="btOdPlus" title="Добавить ОД тому, чей сейчас ход (навыки, умения) — только на этот ход">+1 ОД</button>' : ''}
         ${myTurn ? '<button type="button" class="btn small primary" data-act="btEndTurn">Закончить ход</button>' : ''}
         ${ctx.gm ? '<button type="button" class="btn ghost small" data-act="btFight">Перебросить инициативу</button><button type="button" class="linklike small danger" data-act="btEnd">закончить бой</button>' : ''}
       </div></div>`;
@@ -919,9 +927,13 @@
   }
 
   // ------------------------------------------------------------ действия
-  // случайные противники по уровню отряда: из бестиария (без боссов и легенд), из рас или вперемешку
-  function randomFoes(n, src) {
-    const cr = src === 'races' ? [] : (D().creatures || []).filter(c => c.cat !== 'босс' && c.cat !== 'легенда' && !/босс|легенд/i.test(c.sec || '')).map(c => ({ n: c.n, lvl: R.roundLevel(c.lvl) }));
+  // случайные противники по уровню отряда: из бестиария (без боссов и легенд), из рас или вперемешку.
+  // Существа раздела «неспокойные воды» живут в воде: на водном поле — только они, на суше и в помещениях их нет
+  // (кита в лесу не будет). Вписать вручную или поставить инструментом ГМ может кого угодно
+  const isWater = c => /неспокойн\S*\s+вод/i.test(c.sec || '');
+  function randomFoes(n, src, pid) {
+    const wet = preset(pid).group === 'Водные';
+    const cr = src === 'races' ? [] : (D().creatures || []).filter(c => c.cat !== 'босс' && c.cat !== 'легенда' && !/босс|легенд/i.test(c.sec || '') && isWater(c) === wet).map(c => ({ n: c.n, lvl: R.roundLevel(c.lvl) }));
     const rc = src === 'bestiary' && cr.length ? [] : (D().races || []).filter(r => r.id !== 'полукровка').map(r => ({ n: cap(r.name), lvl: R.roundLevel(r.lvl) }));
     const all = cr.concat(rc);
     if (!all.length) return Array.from({ length: n }, (_, k) => ({ n: `Противник ${k + 1}` }));
@@ -948,8 +960,8 @@
       const raw = App.ui.btFoeN;
       const n = raw === undefined || raw === '' ? 4 : Math.max(0, Math.min(40, Math.round(+raw) || 0));
       const names = String(App.ui.btFoeNames || '').split(',').map(s => s.trim()).filter(Boolean);
-      const foes = names.length ? Array.from({ length: Math.max(n, names.length) }, (_, k) => { const nm = names[k % names.length]; return { n: nm, lvl: levelOf(nm) }; }) : randomFoes(n, App.ui.btFoeSrc || 'bestiary');
-      make(App.ui.btPreset || 'forest', foes);
+      const foes = names.length ? Array.from({ length: Math.max(n, names.length) }, (_, k) => { const nm = names[k % names.length]; return { n: nm, lvl: levelOf(nm) }; }) : randomFoes(n, App.ui.btFoeSrc || 'bestiary', pickedPreset());
+      make(pickedPreset(), foes);
     },
     btClear() {
       if (!ctx || !ctx.gm || !confirm('Убрать поле боя у всех участников?')) return;
@@ -1025,7 +1037,7 @@
       const alive = e => { const t = tokById(at, e.id); return t && !isDown(t); };
       let i = tr.cur, round = tr.round, guard = 0;
       do { i++; if (i >= tr.order.length) { i = 0; round++; } } while (!alive(tr.order[i]) && ++guard < tr.order.length);
-      Object.assign(tr, { cur: i, round, n: (tr.n || 0) + 1, tk: '', who: '', mv: 0, od: 0 });
+      Object.assign(tr, { cur: i, round, n: (tr.n || 0) + 1, tk: '', who: '', mv: 0, od: 0, bon: 0 });
       ctx.saveBoard(nb);
     },
     btEnd() {
@@ -1041,9 +1053,19 @@
       if (!b || !turnOn(b)) return;
       const cur = curTok(b, layout(b, ctx.heroes).at);
       if (!cur || !(ctx.gm || canMove(cur))) return;
-      const sp = spent(b, cur), od = vitals(cur).od;
+      const sp = spent(b, cur), od = odCap(b, cur);
       if (odUsed(sp) + 1 > od && !ctx.gm) { App.toast(`ОД кончились: ${odUsed(sp)} из ${od}`); return; }
       saveTok(b, findTok(b, tid(cur)), { od: sp.od + 1 });
+    },
+    // ГМ добавляет ОД тому, чей сейчас ход (навыки и умения), — только на этот ход
+    btOdPlus() {
+      const b = board0();
+      if (!b || !ctx.gm || !turnOn(b)) return;
+      const cur = curTok(b, layout(b, ctx.heroes).at);
+      if (!cur) return;
+      const sp = spent(b, cur);
+      saveTok(b, findTok(b, tid(cur)), { bon: sp.bon + 1 });
+      App.toast(`${tname(cur)}: +1 ОД в этот ход (всего ${vitals(cur).od + sp.bon + 1})`);
     },
     btEndTurn() {
       const b = board0();

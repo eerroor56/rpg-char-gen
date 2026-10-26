@@ -157,13 +157,24 @@
         if (/нос/.test(n)) return 'nose';
         if (/бров/.test(n)) return 'brow';
         return 'neck';
+      case 'artifact': return (ARTIFACT_CATS.find(([re]) => re.test(n)) || [, 'artifact'])[1];
       default: return null;
     }
   }
+  // артефакт носится по названию: коса — в руке, корона — на голове, кольцо — на пальце; камни, сердца, монеты,
+  // сферы и прочее без своего места — в слотах «Артефакт» (их число — INVENTORY.ARTIFACT_SLOTS в config.js)
+  const ARTIFACT_CATS = [
+    [/(^|[\s(])(коса|меч|щит|нож)|булав|посох|клинок|кинжал|стилет|топор|молот|копь|(^|[\s(])лук($|[\s)])|арбалет|жезл|скипетр|кнут|плеть|секир|глеф|рапир|сабл|трезуб|серп|катана|клеймор|нагинат|тесак|кистен|кадил|розари|гримуар|(^|[\s(])(книга|том)($|[\s)])|фонарь/, 'hand'],
+    [/браслет|наруч/, 'bracelet'], [/кольц|перстен|печатк/, 'ring'], [/серьг/, 'earring'],
+    [/корон|шлем|венец|диадем|капюшон|обруч|заколк/, 'head'], [/маск/, 'face'],
+    [/амулет|кулон|ожерель|медал|подвеск|талисман|ошейник/, 'neck'],
+    [/плащ|накидк/, 'cloak'], [/доспех|брон|кирас|кирса|мантия|роба|одеяни/, 'body'],
+    [/перчат|рукавиц/, 'gloves'], [/пояс/, 'belt'], [/сапог|ботин|обувь/, 'feet'], [/понож/, 'legs'], [/брош/, 'brooch']
+  ];
   const CATS = {
     head: 'Голова', face: 'Лицо', neck: 'Амулет', cloak: 'Плащ', body: 'Тело', gloves: 'Перчатки', belt: 'Пояс',
     legs: 'Поножи', feet: 'Ботинки', brooch: 'Брошь', hand: 'Рука', ammo: 'Боеприпасы', ring: 'Кольцо',
-    bracelet: 'Браслет', earring: 'Серьга', nose: 'Нос', brow: 'Бровь', prosth: 'Протез'
+    bracelet: 'Браслет', earring: 'Серьга', nose: 'Нос', brow: 'Бровь', prosth: 'Протез', artifact: 'Артефакт'
   };
   // все слоты персонажа; рук — сколько у расы, браслетов «2 / +2 если есть доп руки»
   function slotsFor(hands) {
@@ -172,7 +183,7 @@
     const many = (cat, n) => Array.from({ length: n }, (_, i) => ({ id: cat + (i + 1), cat, t: `${CATS[cat]} ${i + 1}` }));
     return [].concat(one('head'), one('face'), one('neck'), one('cloak'), one('body'), one('gloves'), one('belt'),
       one('legs'), one('feet'), one('brooch'), many('hand', h), one('ammo'), many('ring', 10), many('bracelet', h > 2 ? 4 : 2),
-      many('earring', 6), one('nose'), many('brow', 2), many('prosth', 4));
+      many('earring', 6), one('nose'), many('brow', 2), many('prosth', 4), many('artifact', (C.INVENTORY && C.INVENTORY.ARTIFACT_SLOTS) || 5));
   }
 
   // ------------------------------------------------------------ расчёт кастомного предмета

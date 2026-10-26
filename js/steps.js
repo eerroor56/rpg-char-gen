@@ -83,7 +83,7 @@
     return `<div class="picker">
       <div class="picker-tools">
         <input type="search" placeholder="Поиск по названию или бонусу" value="${esc(App.ui.raceQ || '')}" data-ui="raceQ" data-ui-target="raceList" aria-label="Поиск расы" autocomplete="off">
-        <select data-ui="raceAlign" data-ui-target="raceList" aria-label="Характер"><option value="">любой характер</option>${aligns.map(a => `<option ${a === al ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+        <select data-ui="raceAlign" data-ui-target="raceList" aria-label="Характер"><option value="">любой характер</option>${aligns.map(a => `<option value="${esc(a)}" ${a === al ? 'selected' : ''}>${esc(cap(a))}</option>`).join('')}</select>
         <select data-ui="raceSize" data-ui-target="raceList" aria-label="Размер"><option value="">любой размер</option>${R.SIZES.map(s => `<option value="${s.id}" ${s.id === sz ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
       </div>
       <div id="raceResults">${raceResults(st)}</div></div>`;
@@ -138,7 +138,7 @@
         <div class="form-grid">
           <label>Первая родительская раса ${select('parentA', opts, st.parentA, 'data-rerender')}</label>
           <label>Вторая родительская раса ${select('parentB', opts, st.parentB)}</label>
-          <label>Характер ${select('hbAlign', [{ v: '', t: '— выбрать —' }, 'добро', 'нейтрал', 'зло', 'мир'].map(x => typeof x === 'string' ? { v: x, t: x } : x), st.hbAlign)}</label>
+          <label>Характер ${select('hbAlign', [{ v: '', t: '— выбрать —' }, 'добро', 'нейтрал', 'зло'].map(x => typeof x === 'string' ? { v: x, t: x } : x), st.hbAlign)}</label>
           <label>Размер ${select('hbSize', [{ v: '', t: '— выбрать —' }].concat((race.sizeOptions || []).map(z => ({ v: z, t: sizeName(z) }))), st.hbSize)}</label>
         </div>`;
     }

@@ -218,6 +218,7 @@
       if (st.talents) st.talents = Object.fromEntries(Object.entries(st.talents).map(([k, v]) => [fix(k), v]));
       Object.values(st.rolls || {}).forEach(r => { if (r && r.v) r.v = fix(r.v); });
       delete st.faction; delete st.religion;   // фракция и религия на старте не выдаются
+      if (st.hbAlign === 'мир') st.hbAlign = 'добро';   // характер «мир» ГМ заменил на «добро» (книга (4))
       return st;
     },
 

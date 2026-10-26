@@ -103,6 +103,7 @@
     const pic = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'doll-pic') : '';
     const jewelWorn = eq.slots.some(s => ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(s.cat) && inv.equip[s.id]);
     const prWorn = by('prosth').some(s => inv.equip[s.id]);
+    const artWorn = by('artifact').some(s => inv.equip[s.id]);
     const selJewel = selCalc && ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(selCalc.cat);
     const weapons = eq.weapons.filter(w => roleKind(w.kind));
 
@@ -123,6 +124,7 @@
       <div class="doll-hands">${group(['hand', 'ammo'])}</div>
       <details class="doll-more" ${jewelWorn || selJewel ? 'open' : ''}><summary>Украшения</summary><div class="doll-jewel">${group(['ring', 'bracelet', 'earring', 'nose', 'brow'])}</div></details>
       <details class="doll-more" ${prWorn || (selCalc && selCalc.cat === 'prosth') ? 'open' : ''}><summary>Протезы</summary><div class="doll-jewel">${group(['prosth'])}</div></details>
+      <details class="doll-more" ${artWorn || (selCalc && selCalc.cat === 'artifact') ? 'open' : ''}><summary>Артефакты</summary><div class="doll-jewel">${group(['artifact'])}</div></details>
       ${canEquip ? '<p class="muted small">Выберите предмет в рюкзаке и нажмите «Надеть» или подсвеченный слот. Нажатие на занятый слот показывает предмет.</p>' : ''}
     </section>`;
 
@@ -191,6 +193,15 @@
     Dev().commit({ spells: list }, text);
   }
 
+  // артефакт, «своё» и предмет из таблиц ГМ может надеть в любой слот: «авто» — по названию (артефакт) или не надевается
+  const WEARABLE_ANY = ['artifact', 'custom', 'item'];
+  function catOptions(it) {
+    const auto = K.slotCat(Object.assign({}, it, { cat: undefined }));
+    const cur = it.cat === undefined || it.cat === '' ? '' : it.cat === null ? 'none' : it.cat;
+    return opt('', `авто: ${auto ? K.CATS[auto].toLowerCase() : 'не надевается'}`, cur) + opt('none', 'не надевается', cur)
+      + Object.entries(K.CATS).map(([k, t]) => opt(k, t.toLowerCase(), cur)).join('');
+  }
+
   // карточка выбранного предмета
   // уровень ремесла, нужный игроку, чтобы изготовить предмет самому (число после дроби в таблице)
   const skillText = c => (c.skill === null || c.skill === undefined ? '' : `<span class="${c.skillOk === false ? 'req-bad' : c.skillOk ? 'req-ok' : ''}">ремесло ур. ${c.skill}</span>${c.craftHave !== null && c.craftHave !== undefined ? ` <span class="muted small">(у персонажа ${fmt(c.craftHave)})</span>` : ''}`);
@@ -214,7 +225,7 @@
         ${kv('Гнёзда для камней', K.CRAFTABLE.includes(it.kind) && c.base ? `${c.sockets}${((it.craft || {}).inlays || []).length ? `, занято ${((it.craft || {}).inlays || []).length}` : ''}` : '')}
         ${kv('Размер', K.CRAFTABLE.includes(it.kind) ? esc(c.size.name) : '')}
         ${kv('Заточка', c.sharpen ? `${c.sharpen} из ${C.CRAFT.SHARPEN_MAX}` : '')}
-        ${kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
+        ${perms.gm && WEARABLE_ANY.includes(it.kind) ? kv('Где носить', `<select data-change="invCat" data-v="${esc(it.id)}" aria-label="Где носить">${catOptions(it)}</select>`) : kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
       </dl>
       ${c.effects.length ? `<ul class="fx-list">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}</li>`).join('')}</ul>` : ''}
@@ -687,6 +698,18 @@
       if (!it || !confirm(`Убрать «${it.name}» из инвентаря?`)) return;
       App.ui.invSel = null;
       gmChange((gm, v, equip) => { gm.items = gm.items.filter(x => x.id !== it.id); Object.keys(equip).forEach(k => { if (equip[k] === it.id) delete equip[k]; }); }, `Убран предмет «${it.name}»`);
+    },
+    // ГМ выбирает, куда носится предмет; надетый на старое место снимается
+    invCat(t) {
+      const id = t.dataset.v, val = t.value;
+      const it = view().inv.items.find(x => x.id === id);
+      if (!it) return;
+      gmChange((gm, v, equip) => {
+        const x = gm.items.find(y => y.id === id);
+        if (!x) return false;
+        if (val === '') delete x.cat; else x.cat = val === 'none' ? null : val;
+        Object.keys(equip).forEach(k => { if (equip[k] === id) delete equip[k]; });
+      }, `«${it.name}»: ${val === '' ? 'место по названию' : val === 'none' ? 'не надевается' : 'носится — ' + K.CATS[val].toLowerCase()}`);
     },
     invEdit(b) {
       const it = view().inv.items.find(x => x.id === b.dataset.v);

@@ -63,7 +63,7 @@
     if (r.id === 'полукровка') {
       const pool = races.filter(x => x.id !== 'полукровка');
       const [a, b] = shuffle(pool);
-      Object.assign(st, { parentA: a.id, parentB: b.id, hbAlign: pick(['добро', 'нейтрал', 'зло', 'мир']) });
+      Object.assign(st, { parentA: a.id, parentB: b.id, hbAlign: pick(['добро', 'нейтрал', 'зло']) });
       const res = R.compute(st);
       st.hbSize = pick((res.race && res.race.sizeOptions) || []) || '';
     }
