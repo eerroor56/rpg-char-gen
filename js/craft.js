@@ -335,6 +335,19 @@
     }
     const q = [1, 2, 3].includes(+cr.quality) ? +cr.quality : 1;
     if (q > 1) applyMul(q, `усиленное ремесло`, true, true);
+    // инкрустация: «урон +30%» (кварц) умножает урон оружия, «броня +N%» — броню; проценты камней складываются, как заточка
+    // (обогатитель удваивает). Остальные эффекты камней (мощь магии, реген…) — для персонажа, они остаются текстом
+    const inlayPct = { dmg: [], arm: [] };
+    (cr.inlays || []).filter(Boolean).forEach(n => {
+      const m = material(n), p = m && m.ej ? inlayStat(m.ej.t) : null;
+      if (p) inlayPct[p.what].push({ v: p.v * (cr.enrich ? 2 : 1), name: m.name });
+    });
+    [['dmg', damage, true], ['arm', armor, false]].forEach(([w, val, onDmg]) => {
+      const list = inlayPct[w];
+      if (val === null || !list.length) return;
+      const pct = list.reduce((a, x) => a + x.v, 0);
+      applyMul(1 + pct / 100, `инкрустация (${[...new Set(list.map(x => x.name))].join(', ')} +${fmt(pct)}%)`, onDmg, !onDmg);
+    });
     // раса: бонусы к оружию, клан они, баситины
     out.bonus = [];
     if (kind === 'weapon' && damage !== null) {
@@ -558,7 +571,15 @@
     out.handsUsed = handIds.length;
     return out;
   }
-  const SPELL_SLOT_FX = /([+\-−])\s*(\d+)\s*яч\S*\s+заклин/gi;
+  // эффект камня, который меняет сам предмет: «урон +30%», «+30% урона», «броня +10%»; условные («днём…», «против…») — нет
+  function inlayStat(text) {
+    const t = norm(text).replace(/^\.+/, '');
+    const m = t.match(/^(урон|атака|атк|броня)\s*\+\s*(\d+(?:[.,]\d+)?)\s*%$/) || t.match(/^\+\s*(\d+(?:[.,]\d+)?)\s*%\s*(?:к\s+)?(урон[ау]?|атак[еи]|атк|брон[еия])$/);
+    if (!m) return null;
+    const word = /^\d/.test(m[1]) ? m[2] : m[1], v = num(/^\d/.test(m[1]) ? m[1] : m[2]);
+    return v ? { what: /^брон/.test(word) ? 'arm' : 'dmg', v } : null;
+  }
+  const SPELL_SLOT_FX =/([+\-−])\s*(\d+)\s*яч\S*\s+заклин/gi;
 
   // ------------------------------------------------------------ валюта
   const COINS = C.CURRENCIES;
