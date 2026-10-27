@@ -652,6 +652,19 @@
 
   // ------------------------------------------------------------ случайный герой: панель переброса на листе
 
+  // герой уже в игре (сохранённый с развитием или лист кампании, открытый ГМ): лист показывает и развитие —
+  // уровень, очки, снаряжение, состояния, ХП после боя. Проверки правил — по листу создания
+  function liveSheet(st) {
+    const Dev = window.Dev;
+    const saved = App.editingId ? (App.store.get('hero-workshop:heroes', []) || []).find(h => h.id === App.editingId) : null;
+    const src = saved || (window.Game && window.Game.targetRecord && window.Game.targetRecord());
+    if (!Dev || !src || !Dev.hasProgress(src)) return {};
+    const rec = Object.assign(JSON.parse(JSON.stringify(src)), { state: JSON.parse(JSON.stringify(st)) });
+    const v = Dev.compute(rec);
+    return Object.assign(Dev.sheetOpts(rec, v), { res: v.res,
+      note: `Лист с развитием в игре (уровень ${fmt(v.res.level)}${v.lv.levels ? `, при создании ${fmt(v.res0.level)}` : ''}): опыт, очки, снаряжение и состояния уже учтены. В мастере меняется только лист создания, развитие ведётся на странице героя.` });
+  }
+
   function randomBar(st) {
     if (!window.RandomHero || !st.raceId) return '';
     const parts = [['race', 'Раса'], ['age', 'Возраст'], ['boon', 'Дар'], ['traits', 'Черты'], ['stats', 'Характеристики'], ['talents', 'Таланты'], ['gear', 'Снаряжение'], ['story', 'Имя и история']];
@@ -675,7 +688,7 @@
     { id: 'talents', title: 'Таланты', render: talentsStep },
     { id: 'gear', title: 'Снаряжение', render: gearStep },
     { id: 'story', title: 'Предыстория', render: storyStep },
-    { id: 'summary', title: 'Лист персонажа', short: 'Итог', render: (st, res) => randomBar(st) + window.Sheet.render(st, res, true) }
+    { id: 'summary', title: 'Лист персонажа', short: 'Итог', render: (st, res) => randomBar(st) + window.Sheet.render(st, res, true, liveSheet(st)) }
   ];
 
   // ------------------------------------------------------------ действия

@@ -212,7 +212,7 @@
     const reqs = (c.req || []).map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ');
     return `<section class="dev-card item-card"><div class="sec-head"><h2>${esc(it.name)}${(+it.qty || 1) > 1 ? ` ×${+it.qty}` : ''}</h2><span class="tag">${esc(K.KIND_NAMES[it.kind] || it.kind)}${it.base && it.base !== it.name ? ': ' + esc(it.base) : ''}</span></div>
       <dl class="kv-list compact item-kv">
-        ${kv('Урон', c.damage !== null && c.damage !== undefined ? `<strong>${fmt(c.damage)}</strong>${c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : ''}${gunDmgParts(c)}${c.mult && c.mult.length ? ` <span class="muted small">(${esc(c.mult.join(', '))})</span>` : ''}${(c.bonus || []).filter(b => b.kind === 'урон').map(b => ` <span class="muted small">+${b.v} ${esc(b.src)}</span>`).join('')}` : '')}
+        ${kv('Урон', c.damage !== null && c.damage !== undefined ? `<strong>${fmt(c.damage)}</strong>${c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : ''}${gunDmgParts(c)}` : '')}
         ${kv('Броня', c.armor !== null && c.armor !== undefined ? `<strong>${fmt(c.armor)}</strong>${c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : ''}` : '')}
         ${kv('Материал', parts.length ? esc(parts.map(p => `${p.mat} ${fmt(num(p.u))} ед.${p.role === 'non' && roleKind(it.kind) ? ' (не на урон)' : ''}`).join(', ')) + (c.need ? ` <span class="muted small">— нужно ${fmt(c.need)} ед.</span>` : '') : '')}
         ${kv('Огнестрел', c.gun ? esc(gunStats(c)) : '')}
@@ -228,8 +228,8 @@
         ${perms.gm && WEARABLE_ANY.includes(it.kind) ? kv('Где носить', `<select data-change="invCat" data-v="${esc(it.id)}" aria-label="Где носить">${catOptions(it)}</select>`) : kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
       </dl>
-      ${c.effects.length ? `<ul class="fx-list">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}</li>`).join('')}</ul>` : ''}
-      ${c.glyphs.length ? `<p class="small"><b>Глифы</b> (мощь ${fmt(c.glyphPower)}${c.glyphMul > 1 ? `, ×${c.glyphMul}` : ''}; предел ${c.glyphMax}): ${c.glyphs.map(g => esc(g.sym) + (g.temp ? ' (временный)' : '') + (g.over ? ' ⚠' : '')).join(', ')}</p>` : ''}
+      ${c.effects.length ? `<ul class="fx-list">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}${e.applied ? ` <span class="muted small">— учтено в ${e.applied === 'dmg' ? 'уроне' : 'броне'}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${boostHtml(c)}
       ${it.note ? `<p class="small pre">${esc(it.note)}</p>` : ''}
       ${K.isTome(it) && perms.gm ? `<div class="dev-row tome-row"><label>Прочитать: какой параметр повысить
           <select data-ui="invTome" data-ui-target="none">${R.STATS.map(k => opt(k, R.STAT_NAMES[k].toLowerCase(), App.ui.invTome || 's')).join('')}</select></label>
@@ -470,13 +470,31 @@
     if (nm) nm.placeholder = K.autoName(d);
   }
 
+  // что дают усиления: материал → каждое усиление со своей прибавкой → итог; у глифов — мощь каждого
+  function boostHtml(c) {
+    const line = (what, base, total, title) => {
+      const st = (c.steps || []).filter(x => x.what === what);
+      if (!st.length) return '';
+      return `<li><b>${title}:</b> ${c.gun && what === 'dmg' ? 'металл' : 'материал'} ${fmt(base || 0)}${st.map(x => ` · ${esc(x.src)}${x.how ? ' ' + x.how : ''} <span class="${x.d >= 0 ? 'good-text' : 'bad-text'}">${signed(x.d)}</span>`).join('')} = <b>${fmt(total)}</b></li>`;
+    };
+    const glyphs = (c.glyphs || []).map((g, i) => `<li><b>Глиф «${esc(g.sym)}»${g.temp ? ' (временный)' : ''}:</b> мощь ${fmt(g.power)} — ${C.CRAFT.GLYPH_POWER}% ${c.glyphOf} ${fmt(c.glyphBase)}${c.glyphMul > 1 ? ` ×${c.glyphMul}` : ''}${g.over ? ` <span class="bad-text">— ${i + 1}-й при пределе ${c.glyphMax}: риск разрушить предмет</span>` : ''}</li>`);
+    const list = [line('dmg', c.dmgBase, c.damage, 'Урон'), line('arm', c.armBase, c.armor, 'Броня')].filter(Boolean).concat(glyphs);
+    return list.length ? `<ul class="boost-list small">${list.join('')}</ul>` : '';
+  }
+  // то же коротко — для листа персонажа
+  function boostShort(c) {
+    const parts = (c.steps || []).map(x => `${x.src} ${signed(x.d)}`).concat((c.glyphs || []).map(g => `глиф «${g.sym}» ${fmt(g.power)}`));
+    return parts.length ? ` <span class="muted">(${esc(parts.join(', '))})</span>` : '';
+  }
+
   function previewCard(item, c) {
     if (!c) return '';
     const kv = (t, x) => `<span><b>${App.cap(t)}:</b> ${x}</span>`;
     return `<div class="craft-preview">
-      ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '') + gunDmgParts(c) + (c.mult.length ? ` <span class="muted small">(${esc(c.mult.join(', '))})</span>` : '')) : '',
+      ${[c.damage !== null && c.damage !== undefined ? kv('урон', fmt(c.damage) + (c.magicDamage ? ` + маг ${fmt(c.magicDamage)}` : '') + gunDmgParts(c)) : '',
         c.gun ? kv('огнестрел', esc(gunStats(c))) : '', c.armor !== null && c.armor !== undefined ? kv('броня', fmt(c.armor) + (c.magicArmor ? ` + маг ${fmt(c.magicArmor)}` : '')) : '', c.pen ? kv('штраф ловк.', c.pen) : '',
         c.req.length ? kv('требования', c.req.map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ')) : '', kv('гнёзда для камней', c.sockets), c.skill !== null && c.skill !== undefined ? kv('изготовить самому', skillText(c)) : '', c.cat ? kv('надевается', K.CATS[c.cat]) : ''].filter(Boolean).join(' · ')}
+      ${boostHtml(c)}
       ${c.effects.length ? `<ul class="fx-list small">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}</li>`).join('')}</ul>` : ''}
       ${c.warnings.length ? `<ul class="small item-warn">${c.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
       ${c.notes.length ? `<ul class="small item-warn">${c.notes.map(w => `<li class="muted">${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -613,7 +631,7 @@
       const it = byId.get(id);
       const c = K.compute(it, v.ctx);
       const nums = [c.damage !== null && c.damage !== undefined ? `урон ${fmt(c.damage)}` : '', c.armor ? `броня ${fmt(c.armor)}` : ''].filter(Boolean).join(', ');
-      worn.push(`<li><b>${esc(s.t.replace(/ \d+$/, ''))}:</b> ${esc(it.name)}${nums ? ` — ${nums}` : ''}${c.effects.filter(e => e.src !== 'свойство').length ? ` <span class="muted">(${esc(c.effects.filter(e => e.src !== 'свойство').map(e => e.text).join('; '))})</span>` : ''}</li>`);
+      worn.push(`<li><b>${esc(s.t.replace(/ \d+$/, ''))}:</b> ${esc(it.name)}${nums ? ` — ${nums}${boostShort(c)}` : ''}${c.effects.filter(e => e.src !== 'свойство' && !e.applied).length ? ` <span class="muted">(${esc(c.effects.filter(e => e.src !== 'свойство' && !e.applied).map(e => e.text).join('; '))})</span>` : ''}</li>`);
     });
     const bag = v.inv.items.filter(x => !seen.has(x.id));
     const w = v.inv.wallet;

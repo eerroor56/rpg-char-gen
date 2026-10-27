@@ -256,6 +256,19 @@
   }
 
   // сводка развития для листа персонажа
+  // лист с развитием: блок «Развитие», снаряжение сейчас, ХП и МП после боя, символы, изученные в игре
+  function sheetOpts(rec, v) {
+    const I = window.Inv;
+    return { extra: sheetBlock(rec, v), gearHtml: I ? I.sheetGear(v, rec) : '', vit: rec.vit || {},
+      symbols: ((rec.gm || {}).learned || []).filter(x => x.kind === 'symbol').map(x => x.name) };
+  }
+  // в записи есть что-то из игры: опыт, очки, общины, изученное, снаряжение, состояния, заклинания
+  function hasProgress(rec) {
+    const g = rec.gm || {}, p = rec.prog || {};
+    return !!(+g.xp || g.invInit || (g.effects || []).length || (g.learned || []).length || (g.groups || []).length || +g.karma
+      || sumVals(p.alloc) || sumVals(p.talents) || sumVals(p.passives) || Object.keys(rec.equip || {}).length || (rec.spells || []).length || rec.vit);
+  }
+
   function sheetBlock(rec, v) {
     const g = rec.gm || {};
     const parts = [];
@@ -276,7 +289,7 @@
     const pics = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'dev-portrait') : '';
     let body;
     const I = window.Inv;
-    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, { extra: sheetBlock(o.record, v), gearHtml: I ? I.sheetGear(v, o.record) : '' });
+    if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, sheetOpts(o.record, v));
     else if (tab === 'log') body = logList(o.log);
     else if (o.devLocked) body = `<div class="card note">${o.devLocked}</div>`;
     else if (tab === 'gear' && I) body = I.gearTab(o, v);
@@ -466,5 +479,5 @@
     }
   });
 
-  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sumVals, commit, gmCopy, creatures, zero };
+  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sheetOpts, hasProgress, sumVals, commit, gmCopy, creatures, zero };
 })();

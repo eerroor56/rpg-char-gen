@@ -374,6 +374,10 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
 .gear + .card { margin-top: 20px; }
 .fx-list { margin: 8px 0 0; padding-left: 18px; font-size: .93rem; }
 .fx-list li { margin-bottom: 4px; }
+/* из чего урон и броня: материал и каждое усиление; мощь глифов */
+.boost-list { list-style: none; margin: 8px 0 0; padding: 8px 10px !important; border-left: 2px solid var(--brass); background: var(--ink-2); border-radius: var(--radius-s); }
+.boost-list li { margin: 2px 0; }
+.sheet-note { margin: 0 0 10px; }
 .items { display: grid; gap: 10px; margin-bottom: 12px; }
 .item-slot { display: grid; grid-template-columns: 28px minmax(130px, 170px) minmax(0, 1fr); gap: 8px; align-items: center; }
 .item-slot > *:nth-child(n+4) { grid-column: 3; }
@@ -463,6 +467,12 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
 /* ---------- таблицы справочника */
 .tbl { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .tbl th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 500; text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 1; }
+/* заголовок колонки сортирует таблицу */
+.tbl th:has(.th-sort) { padding: 0; }
+.th-sort { display: flex; align-items: center; gap: 4px; width: 100%; padding: 7px 8px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; }
+.th-sort:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
+.th-sort.is-on { color: var(--brass); }
+.th-arrow { font-size: .7em; }
 .tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
 .tbl tbody th { position: static; background: transparent; color: var(--text); white-space: normal; font-weight: 700; border-bottom: 1px solid var(--line-soft); }
 .tbl td.long { min-width: 260px; }

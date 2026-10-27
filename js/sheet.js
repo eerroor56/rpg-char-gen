@@ -6,9 +6,15 @@
 
   function sizeName(code) { const s = R.SIZES.find(x => x.id === code); return s ? s.name : code === 'наст' ? 'Настраиваемый' : code; }
 
+  // opts: { extra, gearHtml — блоки развития и снаряжения в игре; res — расчёт с развитием (проверки правил — по листу создания);
+  //         vit — ХП, МП и зоркость сейчас (бой); symbols — символы, изученные в игре; note — пометка над листом }
   function render(st, res, interactive, opts) {
     opts = opts || {};
-    const race = res.race, d = res.der;
+    const chk = res;
+    if (opts.res) res = opts.res;
+    const race = res.race, d = res.der, vit = opts.vit || {};
+    const now = (v, max) => (v !== undefined && v !== null && v !== '' && +v !== max ? `<span title="сейчас / максимум">${fmt(+v)} / </span>` : '');
+    const syms = res.symbols.map(x => x.name).concat((opts.symbols || []).filter(n => !res.symbols.some(x => norm(x.name) === norm(n))));
     if (!race) return '<div class="card empty">Лист появится, когда будет выбрана раса.</div>';
     const raceTitle = race.isHalf && race.parents && race.parents[0] && race.parents[1]
       ? `полукровка (${race.parents[0].name} и ${race.parents[1].name})` : race.name;
@@ -23,8 +29,9 @@
         <button type="button" class="btn" data-act="exportImage">Скачать картинку</button>
         <button type="button" class="btn ghost" data-act="reset">Новый персонаж</button>
       </div>`;
-      html += checks(res);
+      html += checks(chk);
     }
+    if (opts.note) html += `<p class="sheet-note muted small no-print">${opts.note}</p>`;
     const pics = window.App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'sh-portrait');
     html += `<article class="sheet" id="sheet">
       <header class="sh-head ${pics ? 'has-portrait' : ''}">
@@ -45,12 +52,12 @@
           <p class="small muted">Характер: ${esc(d.align || '—')}. Размер: ${res.size ? esc(res.size.name.toLowerCase()) : '—'}${res.size && res.size.fx !== 'без эффектов' ? ` (${esc(res.size.fx)})` : ''}. Рук: ${res.hands}.</p>
         </section>
         <section class="sh-block"><h3>Параметры</h3><dl class="sh-der">
-          <div><dt>ХП</dt><dd>${fmt(d.hp)}</dd></div><div><dt>Реген ХП</dt><dd>${fmt(d.hpRegen)}</dd></div>
-          <div><dt>МП</dt><dd>${fmt(d.mp)}</dd></div><div><dt>Реген МП</dt><dd>${fmt(d.mpRegen)}</dd></div>
+          <div><dt>ХП</dt><dd>${now(vit.hp, d.hp)}${fmt(d.hp)}</dd></div><div><dt>Реген ХП</dt><dd>${fmt(d.hpRegen)}</dd></div>
+          <div><dt>МП</dt><dd>${now(vit.mp, d.mp)}${fmt(d.mp)}</dd></div><div><dt>Реген МП</dt><dd>${fmt(d.mpRegen)}</dd></div>
           <div><dt>Пси</dt><dd>${fmt(d.psi)}</dd></div><div><dt>Живость</dt><dd>${d.viv === null ? '—' : fmt(d.viv)}</dd></div>
           ${d.vamp ? `<div><dt>Вампиризм</dt><dd>${d.vamp}%</dd></div>` : ''}
           <div><dt>Уворот</dt><dd>${fmt(d.dodge)}</dd></div><div><dt>Слоты</dt><dd>${fmt(d.slotsUsed)} / ${fmt(d.slots)}</dd></div>
-          <div><dt>Зоркость</dt><dd>${fmt(d.zor)}</dd></div><div><dt>Харизма</dt><dd>${fmt(d.charisma)}</dd></div>
+          <div><dt>Зоркость</dt><dd>${fmt(d.zor)}${+vit.zor ? ` <span class="muted small">(${signed(+vit.zor)} в бою)</span>` : ''}</dd></div><div><dt>Харизма</dt><dd>${fmt(d.charisma)}</dd></div>
           <div><dt>Привлекат.</dt><dd>${signed(d.attr)}</dd></div><div><dt>Молитвы</dt><dd>${d.prayers}</dd></div>
           <div><dt>Ячейки закл.</dt><dd>${d.spellSlots}</dd></div><div><dt>Опыт</dt><dd>${d.expPct ? signed(d.expPct) + '%' : '±0%'}${d.expMul !== 1 ? ' ×' + d.expMul : ''}</dd></div>
           ${d.magPct ? `<div><dt>Маг. урон</dt><dd>${signed(d.magPct)}%</dd></div>` : ''}
@@ -64,7 +71,7 @@
         </ul></section>
         <section class="sh-block"><h3>Обитание и символы</h3>
           <p><b>Уровень обитания:</b> ${esc(R.habitatNames(race.habitat).join('; ') || '—')}</p>
-          <p><b>Символы:</b> ${res.symbols.length ? res.symbols.map(s => esc(s.name)).join(', ') : 'нет'}</p>
+          <p><b>Символы:</b> ${syms.length ? syms.map(n => esc(n)).join(', ') : 'нет'}</p>
           <p class="small muted">Фракцию и религию персонаж получает в игре, выйдя в мир.</p>
         </section>
         <section class="sh-block wide"><h3>Особенности</h3>
@@ -86,7 +93,7 @@
           ${st.gmBonus ? `<p><b>Бонусы за предысторию (ГМ):</b> ${esc(st.gmBonus)}</p>` : ''}</section>` : ''}
         ${opts.extra || ''}
       </div>
-      <footer class="sh-foot small muted">Собрано в «Мастерской героя». ${res.ok ? 'Проверка правил пройдена.' : `Не пройдено проверок: ${res.errors.length}.`}</footer>
+      <footer class="sh-foot small muted">Собрано в «Мастерской героя». ${chk.ok ? 'Проверка правил пройдена.' : `Не пройдено проверок: ${chk.errors.length}.`}</footer>
     </article>`;
     return html;
   }

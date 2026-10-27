@@ -228,10 +228,17 @@
     const blocks = cur.build();
     App.ui.refLimit = App.ui.refLimit || {};
     App.ui.refGroup = App.ui.refGroup || {};
-    const table = (b, rows, limKey) => {
+    App.ui.refSort = App.ui.refSort || {};
+    // заголовок колонки — кнопка сортировки: числа — сначала большие, текст — по алфавиту; повторное нажатие — наоборот
+    const th = (key, i, c, rows) => {
+      if (!c) return '<th></th>';
+      const st = App.ui.refSort[key], on = st && st.col === i;
+      return `<th><button type="button" class="th-sort${on ? ' is-on' : ''}" data-act="refSort" data-key="${esc(key)}" data-col="${i}" data-num="${numCol(rows, i) ? 1 : 0}" title="Сортировать по колонке «${esc(c)}»">${esc(c)}${on ? `<span class="th-arrow" aria-hidden="true">${st.dir > 0 ? '▲' : '▼'}</span>` : ''}</button></th>`;
+    };
+    const table = (b, rows, limKey, key) => {
       const lim = App.ui.refLimit[limKey] || PAGE;
       const shown = rows.slice(0, lim);
-      return `<div class="tbl-wrap"><table class="tbl">${b.cols ? `<thead><tr>${b.cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>` : ''}
+      return `<div class="tbl-wrap"><table class="tbl">${b.cols ? `<thead><tr>${b.cols.map((c, i) => th(key, i, c, rows)).join('')}</tr></thead>` : ''}
         <tbody>${shown.map(r => `<tr>${r.cells.map(c => { const v = c === undefined || c === null ? '' : String(c); const len = v.replace(/<[^>]+>/g, '').length; return `<td${len > 70 ? ' class="long"' : len > 25 ? ' class="mid"' : ''}>${App.capHtml(v)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
         ${rows.length > lim ? `<button type="button" class="btn ghost more" data-act="refMore" data-key="${esc(limKey)}">Показать ещё (${rows.length - lim})</button>` : ''}`;
     };
@@ -241,9 +248,9 @@
       if (b.grid) {
         return `<section class="ref-block"><h2>${esc(b.title)}</h2>${b.note ? `<p class="muted small">${App.sentCap(b.note)}</p>` : ''}<div class="tbl-wrap"><table class="tbl grid">${b.grid.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div></section>`;
       }
-      const rows = q ? b.rows.filter(r => r.text.includes(q)) : b.rows;
+      const rows = sortRows(q ? b.rows.filter(r => r.text.includes(q)) : b.rows, b.cols ? App.ui.refSort[key] : null);
       if (q && !rows.length) return '';
-      const head = `<div class="rb-head"><h2>${esc(b.title)} <small>${rows.length}</small></h2>${b.tools || ''}</div>${b.note ? `<p class="muted small">${App.sentCap(b.note)}</p>` : ''}`;
+      const head = `<div class="rb-head"><h2>${esc(b.title)} <small>${rows.length}</small></h2>${b.tools || ''}${b.cols && App.ui.refSort[key] ? `<button type="button" class="linklike small" data-act="refSortReset" data-key="${esc(key)}">сбросить сортировку</button>` : ''}</div>${b.note ? `<p class="muted small">${App.sentCap(b.note)}</p>` : ''}`;
       // разбивка по группам: кнопки групп и отдельная таблица на каждую
       if (b.rows.some(r => r.g)) {
         const all = [...new Set(b.rows.map(r => r.g || 'Другое'))];
@@ -252,17 +259,40 @@
         let sel = App.ui.refGroup[key] || '';
         if (sel && !names.includes(sel)) sel = '';
         const chips = `<div class="seg ref-chips" role="tablist"><button type="button" role="tab" aria-selected="${!sel}" class="${!sel ? 'is-on' : ''}" data-act="refGroup" data-key="${esc(key)}" data-v="">Все <small>${rows.length}</small></button>${names.map(n => { const c = by(n).length; return `<button type="button" role="tab" aria-selected="${sel === n}" class="${sel === n ? 'is-on' : ''}" data-act="refGroup" data-key="${esc(key)}" data-v="${esc(n)}" ${c ? '' : 'disabled'}>${esc(n)} <small>${c}</small></button>`; }).join('')}</div>`;
-        const body = sel ? table(b, by(sel), key + ':' + sel)
-          : names.map(n => { const rr = by(n); return rr.length ? `<h3 class="rg-head">${esc(n)} <small>${rr.length}</small></h3>${table(b, rr, key + ':' + n)}` : ''; }).join('');
+        const body = sel ? table(b, by(sel), key + ':' + sel, key)
+          : names.map(n => { const rr = by(n); return rr.length ? `<h3 class="rg-head">${esc(n)} <small>${rr.length}</small></h3>${table(b, rr, key + ':' + n, key)}` : ''; }).join('');
         return `<section class="ref-block">${head}${names.length > 1 ? chips : ''}${body}</section>`;
       }
-      return `<section class="ref-block">${head}${table(b, rows, key)}</section>`;
+      return `<section class="ref-block">${head}${table(b, rows, key, key)}</section>`;
     }).join('');
     box.innerHTML = html || `<div class="card empty">По запросу «${esc(raw)}» ${cur === WORLD ? 'ничего' : 'в разделе ничего'} нет.</div>`;
     if (window.WorldMap) window.WorldMap.mount(box);
   }
 
+  // сортировка таблиц: число — только если вся ячейка число («53», «1 200», «0,25», «10%»), иначе текст;
+  // числа всегда выше текста и прочерков, пустые — в конце
+  const cellText = c => String(c === undefined || c === null ? '' : c).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const cellNum = t => (/^[−-]?\d[\d\s]*([.,]\d+)?\s*%?$/.test(t) ? parseFloat(t.replace(/[\s%]/g, '').replace('−', '-').replace(',', '.')) : null);
+  const numCol = (rows, i) => { const xs = rows.slice(0, 40).map(r => cellText(r.cells[i])).filter(t => t && t !== '—'); return xs.length > 0 && xs.filter(t => cellNum(t) !== null).length >= xs.length / 2; };
+  function sortRows(rows, st) {
+    if (!st) return rows;
+    const empty = t => !t || t === '—' || t === '-';
+    return rows.map(r => { const t = cellText(r.cells[st.col]); return [r, t, cellNum(t)]; }).sort((a, b) => {
+      if (a[2] !== null && b[2] !== null) return (a[2] - b[2]) * st.dir;
+      if (a[2] !== null) return -1;
+      if (b[2] !== null) return 1;
+      if (empty(a[1]) || empty(b[1])) return empty(a[1]) - empty(b[1]);
+      return a[1].localeCompare(b[1], 'ru') * st.dir;
+    }).map(x => x[0]);
+  }
+
   Object.assign(App.actions, {
+    refSort(b) {
+      const k = b.dataset.key, col = +b.dataset.col, cur = App.ui.refSort[k];
+      App.ui.refSort[k] = cur && cur.col === col ? { col, dir: -cur.dir } : { col, dir: b.dataset.num === '1' ? -1 : 1 };
+      again();
+    },
+    refSortReset(b) { delete App.ui.refSort[b.dataset.key]; again(); },
     refMore(b) { App.ui.refLimit[b.dataset.key] = (App.ui.refLimit[b.dataset.key] || PAGE) + PAGE * 2; again(); },
     refGroup(b) { App.ui.refGroup[b.dataset.key] = b.dataset.v; again(); },
     gmLock() { window.GMLock.lock(); }

@@ -312,11 +312,14 @@
     if (base.cartridge) damage = null;   // патроны урона не дают — только эффект (уточнение ГМ)
     if (armor !== null) armor = ri(armor);
     if (kind === 'weapon' && norm(base.name) === 'катар') { const non = parts.filter(p => p.role === 'non'); if (non.length) armor = ri(non.reduce((a, p) => a + (p.mat ? p.mat.dmg * p.u : 0), 0)); }
-    const mult = [];
+    // из чего сложились урон и броня: материал, потом каждое усиление со своей прибавкой (для карточки предмета)
+    const mult = [], steps = [];
+    out.dmgBase = damage; out.armBase = armor;
+    const step = (what, src, before, after, how) => { if (after !== before) steps.push({ what, src, how, d: after - before }); };
     const applyMul = (m, src, onDmg, onArm) => {
-      if (onDmg && damage !== null) damage = ri(damage * m);
-      if (onArm && armor !== null) armor = ri(armor * m);
-      mult.push(`${src} ×${fmt(m)}`);
+      if (onDmg && damage !== null) { const b = damage; damage = ri(damage * m); step('dmg', src, b, damage, `×${mulText(m)}`); }
+      if (onArm && armor !== null) { const b = armor; armor = ri(armor * m); step('arm', src, b, armor, `×${mulText(m)}`); }
+      mult.push(`${src} ×${mulText(m)}`);
     };
     // пушка: урон металла, затем модель (пневматика ½, магнитно-электронное ×1,5) и топливо
     if (gb) {
@@ -360,7 +363,7 @@
         const cl = R.ONI_CLANS.find(c => c.id === ctx.oniClan);
         if (cl && norm(cl.weapon) === norm(base.name)) out.bonus.push({ kind: 'урон', v: 50, src: `оружие клана (${cl.id})` });
       }
-      damage += out.bonus.filter(b => b.kind === 'урон').reduce((a, b) => a + b.v, 0);
+      out.bonus.filter(b => b.kind === 'урон').forEach(b => { step('dmg', b.src, damage, damage + b.v, ''); damage += b.v; });
     }
     // существо в предмете
     const soul = cr.soul && cr.soul.creature ? cr.soul : null;
@@ -369,17 +372,17 @@
       if (!c) out.warnings.push(`Существо «${soul.creature}» не найдено (бестиарий открывается паролем ГМ).`);
       else if (soul.mode === 'monster') {
         // «предмет из монстра»: с — физ урон, и — маг урон, т — физ броня, д — маг броня
-        if (isWeapon) { damage = (damage || 0) + ri(c.s); out.magicDamage = ri(c.i); }
-        if (isArmor) { armor = (armor || 0) + ri(c.t); out.magicArmor = ri(c.d); }
+        if (isWeapon) { step('dmg', `из монстра «${c.n}» (сила)`, damage || 0, (damage || 0) + ri(c.s), ''); damage = (damage || 0) + ri(c.s); out.magicDamage = ri(c.i); }
+        if (isArmor) { step('arm', `из монстра «${c.n}» (тело)`, armor || 0, (armor || 0) + ri(c.t), ''); armor = (armor || 0) + ri(c.t); out.magicArmor = ri(c.d); }
         out.effects.push({ src: 'предмет из монстра', text: `«${c.n}»: гибридный ${isWeapon ? 'урон (физ + маг)' : 'доспех (физ + маг)'}; 1 пассивная и 1 активная способность существа${(soul.abilities || []).length ? ': ' + soul.abilities.join('; ') : ''}` });
       } else {
         // «предмет с заточённой душой» / камень душ: сумма статов существа
         const sum = ri(c.t + c.d + c.s + c.i + c.l);
-        if (isWeapon) damage = (damage || 0) + sum; else armor = (armor || 0) + sum;
+        if (isWeapon) { step('dmg', `заточённая душа «${c.n}»`, damage || 0, (damage || 0) + sum, ''); damage = (damage || 0) + sum; } else { step('arm', `заточённая душа «${c.n}»`, armor || 0, (armor || 0) + sum, ''); armor = (armor || 0) + sum; }
         out.effects.push({ src: 'заточённая душа', text: `«${c.n}»: +${sum} ${isWeapon ? 'урона' : 'брони'} (сумма статов); 50% урона наносится стихией существа (символ ${c.sym || '—'}); можно призвать заточённое существо` });
       }
     }
-    out.damage = damage; out.armor = armor; out.mult = mult; out.quality = q; out.sharpen = sharpen;
+    out.damage = damage; out.armor = armor; out.mult = mult; out.steps = steps; out.quality = q; out.sharpen = sharpen;
 
     // эффекты материалов: не меньше половины слитка (для мелких предметов — 0,1)
     const field = kind === 'jewelry' ? 'ej' : isArmor ? 'ea' : 'ew';
@@ -411,7 +414,7 @@
     out.sockets = num(base.slots);
     const inl = (cr.inlays || []).filter(Boolean);
     if (inl.length > out.sockets) out.warnings.push(`Камней ${inl.length}, а гнёзд у предмета ${out.sockets}.`);
-    (cr.inlays || []).filter(Boolean).forEach(n => { const m = material(n); if (!m) { out.warnings.push(`Неизвестный камень «${n}».`); return; } if (m.ej && m.ej.t) out.effects.push({ src: `инкрустация: ${m.name}`, text: enrich ? (R.multiplyEffect(m.ej.t, 2) || m.ej.t + ' (×2)') : m.ej.t }); });
+    (cr.inlays || []).filter(Boolean).forEach(n => { const m = material(n); if (!m) { out.warnings.push(`Неизвестный камень «${n}».`); return; } if (m.ej && m.ej.t) { const p = inlayStat(m.ej.t); out.effects.push({ src: `инкрустация: ${m.name}`, text: enrich ? (R.multiplyEffect(m.ej.t, 2) || m.ej.t + ' (×2)') : m.ej.t, applied: p && (p.what === 'dmg' ? damage : armor) !== null ? p.what : '' }); } });
     // модули и модель
     const crystalItem = parts.length > 0 && parts.every(p => p.mat && isCrystal(p.mat.name));
     out.crystal = crystalItem;
@@ -431,6 +434,7 @@
     if (present('рунный кристалл')) gmul *= 4;
     const basePower = isWeapon ? (damage || 0) : (armor || damage || 0);
     out.glyphPower = ri(basePower * CR.GLYPH_POWER / 100 * gmul);
+    out.glyphBase = basePower; out.glyphOf = isWeapon || armor === null ? 'урона' : 'брони';
     out.glyphMul = gmul;
     gl.forEach((g, i) => out.glyphs.push({ sym: g.sym, temp: !!g.temp, power: out.glyphPower, over: i >= out.glyphMax }));
     const over = Math.max(0, gl.length - out.glyphMax);
@@ -571,6 +575,8 @@
     out.handsUsed = handIds.length;
     return out;
   }
+  // множитель без лишнего округления: заточка ×1,25, а не ×1,3
+  const mulText = m => (Math.round(m * 100) / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
   // эффект камня, который меняет сам предмет: «урон +30%», «+30% урона», «броня +10%»; условные («днём…», «против…») — нет
   function inlayStat(text) {
     const t = norm(text).replace(/^\.+/, '');

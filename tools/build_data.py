@@ -549,13 +549,22 @@ def build_skills(wb):
     prayers = generic_block(ws, 101, 125, "A", "D", header_row=101)
     special = generic_block(ws, 129, 134, "A", "F")
     chords = generic_block(ws, 143, 151, "A", "D", header_row=143)
+    # стойки, активки и пассивки ищутся по заголовкам в колонке A: ГМ добавляет и убирает строки (книга (5) сдвинула всё на 5)
+    def find_row(text, start=1):
+        for r in range(start, ws.max_row + 1):
+            if txt(ws.cell(r, 1).value).lower() == text:
+                return r
+        raise SystemExit(f"Лист «скилы»: не найден заголовок «{text}» в колонке A")
+    r_stance = find_row("стойка", 140)
+    r_active = find_row("активки", r_stance)
+    r_passive = find_row("пасивки", r_active)
     stances = []
-    for r in range(156, 179):
+    for r in range(r_stance + 1, r_active):
         v = row_txt(ws, r, "A", "D")
         if v[0]:
             stances.append({"name": v[0], "effect": v[1], "req": v[2], "price": v[3]})
     actives = []
-    for r in range(185, 264):
+    for r in range(r_active + 2, r_passive):   # за «активки» — строка заголовков «навык | эффект | …»
         v = row_txt(ws, r, "A", "F")
         if v[0]:
             actives.append({"name": v[0], "effect": v[1], "req": v[2], "cd": v[3], "type": v[4], "price": v[5],
@@ -563,7 +572,7 @@ def build_skills(wb):
     # пассивки (с 2026-10-25): навык | эффекты за уровни | требования | эффект на максимальном уровне | максимальный уровень | цена.
     # chance и q — прежние имена колонок D и E, их читает старый код; max — число (0 — «не прокачивается»)
     passives = []
-    for r in range(270, ws.max_row + 1):
+    for r in range(r_passive + 2, ws.max_row + 1):
         v = row_txt(ws, r, "A", "F")
         if not v[0]:
             break

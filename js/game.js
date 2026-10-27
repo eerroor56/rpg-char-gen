@@ -662,7 +662,9 @@
       if (App.state && App.state.raceId && !(t && t.chid === ch.id) && !confirm(`Черновик в мастере будет заменён листом «${ch.name}». Продолжить?`)) return;
       App.state = App.migrate(JSON.parse(JSON.stringify(ch.state)));
       App.editingId = null; App.save();
-      setTarget({ cid: c.id, chid: ch.id, cname: c.name, status: ch.status });
+      // развитие в игре едет вместе с листом: в мастере лист показывается с ним (меняется только лист создания)
+      setTarget({ cid: c.id, chid: ch.id, cname: c.name, status: ch.status,
+        rec: JSON.parse(JSON.stringify({ prog: ch.prog, gm: ch.gm, equip: ch.equip, spells: ch.spells, vit: ch.vit, purse: ch.purse, notes: ch.notes })) });
       location.hash = '#create/summary';
     },
     gStatus(b) {
@@ -765,5 +767,6 @@
     }
   });
 
-  window.Game = { render, leave, banner, sheetButtons, target };
+  const targetRecord = () => { const t = target(); return t && t.chid && t.rec ? t.rec : null; };
+  window.Game = { render, leave, banner, sheetButtons, target, targetRecord };
 })();
