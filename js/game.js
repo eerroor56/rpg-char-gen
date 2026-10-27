@@ -69,8 +69,14 @@
   function repaint() {
     if (App.tab !== 'game' || !G.el) return;
     if (window.Battle && window.Battle.busy()) return;      // фишку тянут — перерисуем после того, как отпустят
+    // прокрутка журнала и панели у карты не сбрасывается, когда страница перерисовывается
+    const kept = [...G.el.querySelectorAll('[data-keep]')].map(x => [x.dataset.keep, x.scrollTop]);
+    const draw = () => {
+      paint();
+      kept.forEach(([k, top]) => { const x = G.el.querySelector(`[data-keep="${k}"]`); if (x) x.scrollTop = top; });
+    };
     const a = document.activeElement;
-    if (a && a.dataset && a.dataset.ui && G.el.contains(a)) App.keepFocus(a, paint); else paint();
+    if (a && a.dataset && a.dataset.ui && G.el.contains(a)) App.keepFocus(a, draw); else draw();
   }
 
   // ------------------------------------------------------------ бросок d100
@@ -82,14 +88,15 @@
     do { cr.getRandomValues(a); } while (a[0] >= lim);
     return a[0] % 100 + 1;
   }
-  // o: { cid } — бросок в журнал кампании; { cid, chid, chName } — за персонажа; {} — без записи
+  // o: { cid } — бросок в журнал кампании; { cid, chid, chName } — за персонажа; {} — без записи;
+  // compact — поменьше, side — в панели у карты боя (без подсказки)
   function diceBox(o) {
     o = o || {};
     const last = App.ui.gDiceLast, hist = App.ui.gDiceHist || [];
     const fresh = last && Date.now() - last.ms < 900;
     const hint = o.cid ? (o.chid ? `Бросок за «${esc(o.chName || 'персонажа')}» попадёт в журнал кампании — его увидят ГМ и игроки.` : 'Результат попадает в журнал кампании — его видят ГМ и все игроки.')
       : 'Бросок никуда не записывается — в кампании результат попадает в журнал.';
-    return `<section class="card dice-box${o.compact ? ' compact' : ''}" data-o="${esc(JSON.stringify(o))}">
+    return `<section class="card dice-box${o.compact ? ' compact' : ''}${o.side ? ' side' : ''}" data-o="${esc(JSON.stringify(o))}"${o.side ? ` title="${hint}"` : ''}>
       <h2>${App.DICE}<span>Бросок d100${o.chid ? ` за «${esc(o.chName || 'персонажа')}»` : ''}</span></h2>
       <div class="dice-row">
         <div class="dice-face${fresh ? ' fresh' : ''}${last ? '' : ' empty'}${last && (last.n === 1 || last.n === 100) ? ' edge' : ''}" aria-live="polite" aria-label="Результат броска">${last ? last.n : '—'}</div>
@@ -98,8 +105,8 @@
           <button type="button" class="btn primary" data-act="gRoll">Бросить d100</button>
         </div>
       </div>
-      ${hist.length > 1 ? `<p class="small dice-hist">Предыдущие: ${hist.slice(1, 9).map(h => `<span title="${esc(h.why || '')}">${h.n}</span>`).join(' ')}</p>` : ''}
-      <p class="muted small">${hint}</p></section>`;
+      ${hist.length > 1 ? `<p class="small dice-hist">Предыдущие: ${hist.slice(1, o.side ? 7 : 9).map(h => `<span title="${esc(h.why || '')}">${h.n}</span>`).join(' ')}</p>` : ''}
+      ${o.side ? '' : `<p class="muted small">${hint}</p>`}</section>`;
   }
   function redrawDice(box) {
     let o = {};
@@ -371,9 +378,13 @@
     const inGame = (chars || []).filter(x => x.status === 'active');
     const treasuryHtml = gm && chars ? treasury(inGame, cid) : '';
     const partyLevel = inGame.length ? inGame.reduce((a, ch) => a + (charView(ch).res.level || 0), 0) / inGame.length : 1;
-    // поле боя: видят все участники; герой двигается записью в своего персонажа (pos), остальное — полем в кампании
+    // поле боя: видят все участники; герой двигается записью в своего персонажа (pos), остальное — полем в кампании.
+    // Пока поле есть, бросок и журнал — в панели рядом с картой (игрок бросает за своего героя), а не внизу страницы
+    const arena = !!(window.Battle && camp.board);
+    const myHero = gm ? null : inGame.find(ch => ch.owner === me);
+    const sideHtml = arena ? diceBox(myHero ? { cid, chid: myHero.id, chName: myHero.name || 'Безымянный герой', compact: true, side: true } : { cid, compact: true, side: true }) + feedHtml : '';
     const battleHtml = window.Battle ? window.Battle.card({
-      cid, camp, gm, me, level: partyLevel, rerender: repaint,
+      cid, camp, gm, me, level: partyLevel, rerender: repaint, side: sideHtml,
       heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race }; }),
       saveAllies,
       allies: camp.allies || [],
@@ -404,14 +415,14 @@
     }) : '';
     const dungeonHtml = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender: repaint }) : '';
 
-    el.innerHTML = `<div class="page game">
+    el.innerHTML = `<div class="page game${arena ? ' has-arena' : ''}">
       <p class="crumbs"><a href="#game">Все кампании</a></p>
       <div class="page-head"><h1>${esc(camp.name)}</h1><span class="row-actions">${helpBtn()}${userBar()}</span></div>
       <p class="muted">${gm ? 'Вы ГМ этой кампании.' : `ГМ: ${esc(camp.gmName || '—')}.`} ${s.active ? `<b class="live">Идёт сессия ${s.n}.</b>` : ''}</p>
       ${G.d.err ? `<div class="checks bad"><p>${esc(G.d.err)}</p></div>` : ''}
       ${battleHtml}
       <div class="camp-grid">
-        <div class="camp-main">${charsHtml}${diceBox({ cid })}${dungeonHtml}${feedHtml}</div>
+        <div class="camp-main">${charsHtml}${arena ? '' : diceBox({ cid })}${dungeonHtml}${arena ? '' : feedHtml}</div>
         <aside class="camp-side">${sessionHtml}${treasuryHtml}${inviteHtml}${membersHtml}${sessionsHtml}${privHtml}${settingsHtml}</aside>
       </div></div>`;
   }
@@ -458,7 +469,7 @@
     const body = e => (e.kind === 'roll' && typeof e.roll === 'number'
       ? `<span class="roll-ev">${App.DICE}d100: <b class="roll-num${e.roll === 1 || e.roll === 100 ? ' edge' : ''}">${e.roll}</b>${e.why ? ` — ${esc(e.why)}` : ''}</span>`
       : esc(e.text));
-    return `<ol class="feed">${events.map(e => `<li class="ev-${esc(e.kind || 'note')}">
+    return `<ol class="feed" data-keep="feed">${events.map(e => `<li class="ev-${esc(e.kind || 'note')}">
       <span class="muted small">${when(e.ms)}${e.session ? ` · <span class="tag">сессия ${e.session}</span>` : ''}</span>
       <span>${e.chid && e.chName ? (alive.has(e.chid) ? `<a href="#game/${esc(cid)}/${esc(e.chid)}"><b>${esc(e.chName)}</b></a>: ` : `<b>${esc(e.chName)}</b>: `) : ''}${body(e)}${['note', 'dev', 'roll'].includes(e.kind) ? ` <span class="muted small">— ${esc(e.byName || '')}</span>` : ''}</span></li>`).join('')}</ol>`;
   }

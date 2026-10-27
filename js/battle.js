@@ -400,8 +400,8 @@
 
   function tokenHtml(t, x, y, o) {
     o = o || {};
-    const sel = App.ui.btSel === t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
     const id = t.kind + ':' + (t.kind === 'h' ? t.o.id : t.o.i);
+    const sel = o.sel === id;
     const mov = canMove(t) ? ' can-move' : '';
     if (t.kind === 'o') {
       const d = info(t.o.t);
@@ -416,11 +416,12 @@
         : `${name}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`;
     const v = vitals(t), down = isDown(t);
     const bars = v.mhp ? `<span class="bt-bars" aria-hidden="true">${v.marm ? `<i class="arm" style="width:${pct(v.arm, v.marm)}%"></i>` : ''}<i class="hp" style="width:${pct(v.hp, v.mhp)}%"></i>${v.mmp ? `<i class="mp" style="width:${pct(v.mp, v.mmp)}%"></i>` : ''}</span>` : '';
-    return `<button type="button" class="bt-tok ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}${mine}${mov}${sel ? ' is-sel' : ''}${o.turn ? ' is-turn' : ''}${down ? ' down' : ''}${o.unseen ? ' unseen' : ''}" data-tok="${esc(id)}"${ring} title="${esc(title + (down ? ' — выбыл' : '') + (o.unseen ? ' — игроки не видят' : ''))}" aria-label="${esc(title)}, клетка ${x + 1}:${y + 1}">
+    const veiled = hid(t);
+    return `<button type="button" class="bt-tok ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}${mine}${mov}${sel ? ' is-sel' : ''}${o.turn ? ' is-turn' : ''}${down ? ' down' : ''}${o.unseen ? ' unseen' : ''}${veiled ? ' hid' : ''}" data-tok="${esc(id)}"${ring} title="${esc(title + (down ? ' — выбыл' : '') + (veiled ? ' — скрыт от игроков' : o.unseen ? ' — игроки не видят' : ''))}" aria-label="${esc(title)}${veiled ? ', скрыт от игроков' : ''}, клетка ${x + 1}:${y + 1}">
       ${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<b>${esc(initials(name))}</b>`}${bars}</button>`;
   }
 
-  function boardHtml(board, at, decor, vis) {
+  function boardHtml(board, at, decor, vis, sid) {
     const fog = fogFor(board) ? vis : null;
     const cur = curTok(board, at);
     let cells = '';
@@ -430,32 +431,51 @@
         let t = at.get(k);
         const dark = fog && !fog.has(k);
         if (t && t.kind === 'f' && dark) t = null;          // противника вне обзора игроки не видят
+        if (t && hid(t) && veil()) t = null;                // скрытого ГМ существа — тоже
         const fill = (t && t.kind === 'o' && info(t.o.t).fill) || (dc && info(dc.t).fill);
-        const tok = t ? tokenHtml(t, x, y, { turn: cur && t.kind !== 'o' && tid(t) === tid(cur), unseen: ctx.gm && !fog && vis && t.kind === 'f' && !vis.has(k) }) : '';
-        cells += `<div class="bt-cell${(x + y) % 2 ? ' alt' : ''}${fill ? ' cell-' + fill : ''}${dark ? ' fog' : ''}" data-act="btCell" data-x="${x}" data-y="${y}">${dc ? `<span class="bt-decor${ctx.gm && !t ? ' can-move' : ''}" data-tok="o:${esc(dc.i)}" title="${esc(cap(info(dc.t).n))} — объект на полу, можно встать">${glyph(dc.t)}</span>` : ''}${tok}</div>`;
+        const tok = t ? tokenHtml(t, x, y, { sel: sid, turn: cur && t.kind !== 'o' && tid(t) === tid(cur), unseen: ctx.gm && !fog && vis && t.kind === 'f' && !vis.has(k) }) : '';
+        cells += `<div class="bt-cell${(x + y) % 2 ? ' alt' : ''}${fill ? ' cell-' + fill : ''}${dark ? ' fog' : ''}" data-act="btCell" data-x="${x}" data-y="${y}">${dc ? `<span class="bt-decor${ctx.gm && !t ? ' can-move' : ''}${sid === 'o:' + dc.i ? ' is-sel' : ''}" data-tok="o:${esc(dc.i)}" title="${esc(cap(info(dc.t).n))} — объект на полу, можно встать">${glyph(dc.t)}</span>` : ''}${tok}</div>`;
       }
     }
     return `<div class="bt-wrap"><div class="bt-grid bt-p-${esc(board.floor || board.preset)}" style="--w:${board.w};--h:${board.h}" data-board="${esc(board.id)}">${cells}</div></div>`;
   }
 
-  function selInfo(board) {
-    const s = App.ui.btSel;
-    if (!s) return '';
+  // что показывает панель фишки: выбранное на поле, иначе — тот, чей ход (если им можно управлять), у игрока — его герой
+  function selId(board, at) {
+    if (App.ui.btSel) return App.ui.btSel;
+    const cur = curTok(board, at);
+    if (cur && (ctx.gm || canMove(cur))) return tid(cur);
+    if (ctx.gm) return null;
+    const mine = [...at.values()].find(t => t.kind === 'h' && t.o.owner === ctx.me);
+    return mine ? tid(mine) : null;
+  }
+  // скрыть можно противника и союзника отряда (у союзника героя есть хозяин — его игрок видит всегда)
+  const canHide = t => t.kind === 'f' || (t.kind === 'a' && !t.owner);
+  function selInfo(board, at, s) {
+    const hint = `<div class="bt-info bt-panel is-empty"><p class="muted small">${ctx.gm ? 'Нажмите на фишку на поле — здесь появятся её броня, ХП, МП и кнопки урона и лечения.' : 'Нажмите на фишку на поле, чтобы посмотреть её.'}</p></div>`;
+    if (!s) return hint;
     const [kind, id] = [s.slice(0, 1), s.slice(2)];
-    const { at } = layout(board, ctx.heroes);
     const t = [...at.values()].find(v => v.kind === kind && (kind === 'h' ? v.o.id === id : v.o.i === id))
       || (kind === 'o' ? (() => { const o = board.objs.find(x => x.i === id); return o ? { kind: 'o', o } : null; })() : null);
-    if (!t) return '';
-    if (t.kind === 'f' && fogFor(board) && !sight(board, layout(board, ctx.heroes).at).has(key(t.o.x, t.o.y))) return '';
+    if (!t) return hint;
+    if (t.kind === 'f' && fogFor(board) && !sight(board, at).has(key(t.o.x, t.o.y))) return hint;
+    if (hid(t) && veil()) return hint;
     const pos = t.kind === 'h' || t.kind === 'a' ? [t.x, t.y] : [t.o.x, t.o.y];
-    let text = '';
-    if (t.kind === 'h') text = `<b>${esc(t.o.name)}</b> — герой${t.o.ownerName ? `, игрок ${esc(t.o.ownerName)}` : ''}`;
-    else if (t.kind === 'a') text = `<b>${esc(t.o.n)}</b> — союзник: ${esc(allyKind(t.o))}${t.owner ? ` героя ${esc(t.owner.name)}` : ' отряда'}${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''} <span class="muted small">— ${esc((ALLY_KINDS[t.o.kind] || ALLY_KINDS.npc)[1])}</span>`;
-    else if (t.kind === 'f') text = `<b>${esc(t.o.n)}</b> — противник${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''}`;
-    else { const d = info(t.o.t); text = `<b>${esc(cap(d.n))}</b>${d.c ? ` — ${COVER[d.c]}` : d.walk ? ' — объект на полу, можно встать' : ' — без укрытия'}${d.drop ? ` · при разрушении: ${esc(d.drop)}` : ''}`; }
-    return `<div class="bt-info"><div class="bt-info-head">${text} <span class="muted small">клетка ${pos[0] + 1}:${pos[1] + 1}</span>
-      ${ctx.gm && (t.kind === 'f' || t.kind === 'o') ? `<button type="button" class="linklike small danger" data-act="btRemove" data-v="${esc(s)}">убрать с поля</button>` : ''}
-      <button type="button" class="linklike small" data-act="btSel" data-v="">закрыть</button></div>
+    let name = '', sub = '';
+    if (t.kind === 'h') { name = t.o.name; sub = `герой${t.o.ownerName ? `, игрок ${esc(t.o.ownerName)}` : ''}`; }
+    else if (t.kind === 'a') { name = t.o.n; sub = `<span title="${esc((ALLY_KINDS[t.o.kind] || ALLY_KINDS.npc)[1])}">союзник: ${esc(allyKind(t.o))}${t.owner ? ` героя ${esc(t.owner.name)}` : ' отряда'}</span>${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''}`; }
+    else if (t.kind === 'f') { name = t.o.n; sub = `противник${t.o.lvl ? `, ур. ${esc(t.o.lvl)}` : ''}`; }
+    else { const d = info(t.o.t); name = cap(d.n); sub = `${d.c ? COVER[d.c] : d.walk ? 'объект на полу, можно встать' : 'без укрытия'}${d.drop ? ` · при разрушении: ${esc(d.drop)}` : ''}`; }
+    const pic = t.kind === 'h' ? heroPic(t.o) : t.kind !== 'o' ? foePic(t.o.src || t.o.n) : '';
+    const face = t.kind === 'o' ? `<span class="bt-face obj">${glyph(t.o.t)}</span>`
+      : `<span class="bt-face ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}"${t.kind === 'h' ? ` style="--hue:${hue(t.o.owner || t.o.id)}"` : ''}>${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async">` : `<b>${esc(initials(name))}</b>`}</span>`;
+    const gmAct = ctx.gm && (canHide(t) || t.kind === 'f' || t.kind === 'o')
+      ? `<div class="bt-info-act">${canHide(t) ? `<button type="button" class="btn small${hid(t) ? ' primary' : ' ghost'}" data-act="btHide" aria-pressed="${hid(t)}">${hid(t) ? 'Показать игрокам' : 'Скрыть от игроков'}</button>` : ''}
+        ${t.kind === 'f' || t.kind === 'o' ? `<button type="button" class="linklike small danger" data-act="btRemove" data-v="${esc(s)}">убрать с поля</button>` : ''}</div>` : '';
+    return `<div class="bt-info bt-panel${hid(t) ? ' is-hid' : ''}"><div class="bt-info-head">${face}
+        <span class="bt-who"><b>${esc(name)}</b><span class="muted small">${sub} · клетка ${pos[0] + 1}:${pos[1] + 1}</span>${hid(t) ? '<span class="tag bad">скрыт от игроков</span>' : ''}</span>
+        ${App.ui.btSel ? '<button type="button" class="bt-x" data-act="btSel" data-v="" title="Снять выбор" aria-label="Снять выбор">×</button>' : ''}</div>
+      ${gmAct}
       ${t.kind !== 'o' ? vitHtml(board, t) : ''}</div>`;
   }
 
@@ -472,6 +492,7 @@
         ${chip('erase', 'Ластик', '<span class="bt-ico">⌫</span>')}
       </div>
       ${tool === 'foe' ? `<div class="dev-row"><input type="text" list="btCreatures" data-ui="btFoeName" data-ui-target="none" value="${esc(App.ui.btFoeName || '')}" placeholder="кто (существо, раса или своё)" aria-label="Противник">
+        <label class="check small" title="Игроки его не увидят, пока вы не покажете (засада, подкрепление)"><input type="checkbox" data-change="btFoeHid" ${App.ui.btFoeHid ? 'checked' : ''}> ставить скрытым</label>
         <span class="muted small">нажмите на свободную клетку</span></div>${creatureList()}` : ''}
       ${tool && tool !== 'foe' ? `<p class="muted small">${tool === 'erase' ? 'Нажмите на предмет или противника, чтобы убрать.' : `Нажмите на свободную клетку, чтобы поставить «${esc(T[tool] ? info(tool).n : tool)}».`}</p>` : ''}`;
   }
@@ -525,29 +546,45 @@
         <span class="muted small">Герои в игре встанут у нижнего края, противники — у верхнего.</span></div></details>`;
   }
 
-  // o: { cid, camp, gm, me, heroes: [{ id, name, owner, ownerName, pos, race }], level, rerender, saveBoard(b), savePos(chid, pos) }
+  // o: { cid, camp, gm, me, heroes: [{ id, name, owner, ownerName, pos, race }], level, rerender, saveBoard(b), savePos(chid, pos),
+  //      side — что ещё положить в боковую панель у карты (бросок и журнал кампании) }
+  // Во время игры всё нужное — рядом с картой: справа закреплена панель с ходом и ОД, выбранной фишкой, броском и журналом;
+  // на узком экране она идёт сразу под картой. Настройки поля, таблица и подсказки — ниже
   function card(o) {
     ctx = o;
     const board = o.camp && o.camp.board;
     if (!board && !o.gm) return '';
-    let html = `<section class="card battle-box" id="battle"><div class="sec-head"><h2>Поле боя</h2>${board ? `<span class="muted small">${esc(preset(board.preset).n)}, ${board.w}×${board.h}</span>` : ''}</div>`;
+    let html = `<section class="card battle-box${o.gm ? ' is-gm' : ''}" id="battle"><div class="sec-head"><h2>Поле боя</h2>${board ? `<span class="muted small">${esc(preset(board.preset).n)}, ${board.w}×${board.h}</span>` : ''}</div>`;
     if (!board) return html + '<p class="muted small">Клетчатое поле для боя: местность с укрытиями, герои и противники. Игроки двигают своих героев, вы — всё остальное.</p>' + genForm(true) + '</section>';
     const { at, decor } = layout(board, o.heroes);
     const vis = fogOn(board) ? sight(board, at) : null;
+    const sid = selId(board, at);
     autoNext(board, at);
     const fz = +board.zor || 0;
-    html += `${o.gm ? toolsHtml(board) : '<p class="muted small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками. Видно то, что в обзоре отряда: 1 клетка за каждые 10 зоркости; стены, деревья и другие полные укрытия закрывают обзор.</p>'}
-      ${board.fx ? `<p class="small bt-fx"><b>Эффект поля:</b> противникам — ${esc(board.fx.foe || 'нет')}; игрокам — ${esc(board.fx.hero || 'нет')}${board.fx.layer ? ` <span class="muted">(уровни мира: ${esc(board.fx.layer)})</span>` : ''}</p>` : ''}
-      ${fz && !o.gm ? `<p class="small bt-fx"><b>Зоркость на поле:</b> ${signed(fz)} всем героям и союзникам</p>` : ''}
-      ${turnHtml(board, at, fogFor(board) ? vis : null)}
-      ${o.gm ? `<div class="row-actions bt-fog"><button type="button" class="linklike small" data-act="btFog">туман войны: ${fogOn(board) ? 'вкл' : 'выкл'}</button>${fogOn(board) ? `<label class="check small"><input type="checkbox" data-change="btAsPlayer" ${App.ui.btAsPlayer ? 'checked' : ''}> показать как видят игроки</label>` : ''}
-        <span class="bt-zor-ctl small" title="Темнота, туман, дым или свет: поправка зоркости всем героям и союзникам на этом поле">зоркость на поле <b>${fz ? signed(fz) : '0'}</b>
-          <button type="button" class="btn ghost small" data-act="btFieldZor" data-v="-${ZOR_PER_CELL}">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btFieldZor" data-v="${ZOR_PER_CELL}">+${ZOR_PER_CELL}</button>${fz ? '<button type="button" class="linklike small" data-act="btFieldZor" data-v="0">сбросить</button>' : ''}</span></div>` : ''}
-      ${boardHtml(board, at, decor, vis)}
-      ${selInfo(board)}
-      ${rosterHtml(board, at)}
-      <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1 · 1 ОД — ${MOVE_PER_OD} клеток движения · обзор — 1 клетка за ${ZOR_PER_CELL} зоркости, полные укрытия (стены, деревья, колонны, валуны…) его закрывают</p>`;
-    if (o.gm) html += `${genForm(false)}<div class="row-actions"><button type="button" class="linklike small danger" data-act="btClear">убрать поле боя</button></div>`;
+    const hidN = ctx.gm ? [...at.values()].filter(hid).length : 0;
+    html += `<div class="bt-arena">
+      <div class="bt-main">
+        ${board.fx ? `<p class="small bt-fx"><b>Эффект поля:</b> противникам — ${esc(board.fx.foe || 'нет')}; игрокам — ${esc(board.fx.hero || 'нет')}${board.fx.layer ? ` <span class="muted">(уровни мира: ${esc(board.fx.layer)})</span>` : ''}</p>` : ''}
+        ${fz && !o.gm ? `<p class="small bt-fx"><b>Зоркость на поле:</b> ${signed(fz)} всем героям и союзникам</p>` : ''}
+        ${o.gm ? toolsHtml(board) : ''}
+        ${boardHtml(board, at, decor, vis, sid)}
+        ${o.gm ? `<div class="row-actions bt-fog"><button type="button" class="linklike small" data-act="btFog">туман войны: ${fogOn(board) ? 'вкл' : 'выкл'}</button>${fogOn(board) || hidN ? `<label class="check small"><input type="checkbox" data-change="btAsPlayer" ${App.ui.btAsPlayer ? 'checked' : ''}> показать как видят игроки</label>` : ''}
+          ${hidN ? `<span class="small muted">скрыто от игроков: ${hidN}</span>` : ''}
+          <span class="bt-zor-ctl small" title="Темнота, туман, дым или свет: поправка зоркости всем героям и союзникам на этом поле">зоркость на поле <b>${fz ? signed(fz) : '0'}</b>
+            <button type="button" class="btn ghost small" data-act="btFieldZor" data-v="-${ZOR_PER_CELL}">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btFieldZor" data-v="${ZOR_PER_CELL}">+${ZOR_PER_CELL}</button>${fz ? '<button type="button" class="linklike small" data-act="btFieldZor" data-v="0">сбросить</button>' : ''}</span></div>` : ''}
+      </div>
+      <aside class="bt-side" data-keep="bt-side" aria-label="Ход, выбранная фишка, бросок и журнал">
+        ${turnHtml(board, at, fogFor(board) ? vis : null)}
+        ${selInfo(board, at, sid)}
+        ${o.side || ''}
+      </aside>
+      <div class="bt-extra">
+        ${rosterHtml(board, at)}
+        <details class="bt-help"><summary>Подсказки и обозначения</summary>
+          ${o.gm ? '' : '<p class="small">Перетащите своего героя (мышью или пальцем) или выберите его и двигайте стрелками. Видно то, что в обзоре отряда: 1 клетка за каждые 10 зоркости; стены, деревья и другие полные укрытия закрывают обзор.</p>'}
+          <p class="small bt-legend"><i class="cv cv2"></i> полное укрытие — 40% что дальняя атака придётся в укрытие <i class="cv cv1"></i> половинное — 20% (складывается с уворотом, не больше 100%) · объекты на полу (трава, останки, лужи, ковёр) укрытия не дают, на них можно стоять · расстояние в клетках, по диагонали тоже 1 · 1 ОД — ${MOVE_PER_OD} клеток движения · обзор — 1 клетка за ${ZOR_PER_CELL} зоркости, полные укрытия (стены, деревья, колонны, валуны…) его закрывают</p></details>
+        ${o.gm ? `${genForm(false)}<div class="row-actions"><button type="button" class="linklike small danger" data-act="btClear">убрать поле боя</button></div>` : ''}
+      </div></div>`;
     return html + '</section>';
   }
 
@@ -584,8 +621,8 @@
         if (steps === null) { App.toast('Туда не пройти'); return false; }
         const sp = spent(board, hit.t), od = odCap(board, hit.t);
         const need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
-        if (need > od && !ctx.gm) { App.toast(`Не хватает ОД: нужно ${need}, в ход ${od} (1 ОД — ${MOVE_PER_OD} клеток)`); return false; }
-        if (need > od) App.toast(`ОД: ${need} из ${od} — больше, чем в ход`);
+        if (need > od && !ctx.gm) { App.toast(`Не хватает ОД: путь ${steps} кл. стоит ${need - odUsed(sp)} ОД, осталось ${od - odUsed(sp)} (1 ОД — ${MOVE_PER_OD} клеток)`); return false; }
+        if (need > od) App.toast(`Перерасход ОД: осталось ${od - need}`);
         patch.mv = sp.mv + steps;
       }
     }
@@ -638,7 +675,7 @@
       const cur = hit && hit.t.kind !== 'o' && turnOn(board) ? curTok(board, layout(board, ctx.heroes).at) : null;
       if (cur && tid(cur) === tid(hit.t) && steps !== null) {
         const sp = spent(board, hit.t), od = odCap(board, hit.t), need = Math.ceil((sp.mv + steps) / MOVE_PER_OD) + sp.od;
-        text += ` · ОД ${need}/${od}`;
+        text += ` · ОД останется ${od - need}`;
         if (need > od && !ctx.gm) ok = false;
       }
       c.classList.toggle('drop-ok', ok); c.classList.toggle('drop-bad', !ok);
@@ -812,7 +849,7 @@
   function sight(b, at) {
     const blk = new Set(), eyes = [];
     at.forEach((t, k) => {
-      if (t.kind === 'o') { if (blocksSight(t.o)) blk.add(k); } else if (t.kind === 'h' || t.kind === 'a') eyes.push([t.x, t.y, radius(vitals(t))]);
+      if (t.kind === 'o') { if (blocksSight(t.o)) blk.add(k); } else if ((t.kind === 'h' || t.kind === 'a') && !hid(t)) eyes.push([t.x, t.y, radius(vitals(t))]);
     });
     const sig = b.w + 'x' + b.h + '|' + [...blk].join(';') + '|' + eyes.join(';');
     if (sig === sightMemo.sig) return sightMemo.vis;
@@ -830,66 +867,93 @@
   // туман войны: у игроков всегда, когда он включён; ГМ видит всё, но может посмотреть «как игроки»
   const fogOn = b => b.fog !== false;
   const fogFor = b => fogOn(b) && (!ctx.gm || !!App.ui.btAsPlayer);
+  // скрытое ГМ существо (противник или союзник отряда): игроки его не видят нигде, в очереди ходов его нет
+  const hid = t => !!(t && t.o && t.o.hid) && (t.kind === 'f' || (t.kind === 'a' && !t.owner));
+  const veil = () => !ctx.gm || !!App.ui.btAsPlayer;          // смотрим глазами игроков
   const pct = (v, m) => Math.max(0, Math.min(100, Math.round(100 * v / m)));
+  // ОД как ХП: сколько осталось из положенных в ход; «+1 ОД» прибавляет к остатку и может пробить потолок
+  const odLeft = (b, t) => odCap(b, t) - odUsed(spent(b, t));
+  function odPips(left, max) {
+    const n = Math.max(left, max);
+    if (n > 12 || n <= 0) return '';
+    return `<span class="bt-pips" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i class="${i < left ? (i >= max ? 'on over' : 'on') : ''}"></i>`).join('')}</span>`;
+  }
 
   function turnHtml(board, at, vis) {
     if (!turnOn(board)) {
-      return ctx.gm ? `<div class="bt-turns"><div class="row-actions"><button type="button" class="btn small primary" data-act="btFight">Начать бой — бросить инициативу</button>
-        <span class="muted small">d100 на каждого на поле; ход переходит по порядку. 1 ОД — ${MOVE_PER_OD} клеток движения.</span></div></div>` : '';
+      return `<div class="bt-turns bt-panel">${ctx.gm ? `<button type="button" class="btn primary bt-big" data-act="btFight">Начать бой — бросить инициативу</button>
+        <p class="muted small">d100 на каждого на поле; ход переходит по порядку. 1 ОД — ${MOVE_PER_OD} клеток движения.</p>`
+        : '<p class="small"><b>Бой не начат</b> <span class="muted">— героя можно двигать свободно.</span></p>'}</div>`;
     }
     const tr = board.turn, cur = curTok(board, at);
-    const hidden = t => !!vis && t.kind === 'f' && !vis.has(key(...tpos(t)));
+    const hidden = t => (hid(t) && veil()) || (!!vis && t.kind === 'f' && !vis.has(key(...tpos(t))));
     const items = tr.order.map((e, i) => {
       const t = tokById(at, e.id);
-      if (!t) return '';
+      if (!t || (hid(t) && veil())) return '';
       const h = hidden(t);
       return `<li class="k-${t.kind}${i === tr.cur ? ' is-cur' : ''}${isDown(t) ? ' down' : ''}"><button type="button" class="linklike" data-act="btSel" data-v="${esc(e.id)}"${h ? ' disabled' : ''}><b>${e.ini}</b> ${esc(h ? '???' : tname(t))}</button></li>`;
     }).join('');
     const sp = cur ? spent(board, cur) : null, v = cur ? vitals(cur) : null;
     const curHidden = cur && hidden(cur);
     const myTurn = !!cur && !ctx.gm && canMove(cur);
-    return `<div class="bt-turns">
-      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${cur && !curHidden ? ` — ОД ${odUsed(sp)} из ${v.od + sp.bon}${sp.bon ? ` <span class="muted small">(${v.od} ${signed(sp.bon)} от ГМ)</span>` : ''}, пройдено ${sp.mv} кл.` : ''}${cur && !curHidden && (ctx.gm || cur.kind !== 'f') && (has(v.rhp) || has(v.rmp)) ? ` <span class="muted small">· реген в ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '?'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '?'}</span>` : ''}${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
-      <ol class="bt-order">${items}</ol>
-      <div class="row-actions">
-        ${ctx.gm ? '<button type="button" class="btn small primary" data-act="btNext">Следующий ход</button>' : ''}
-        ${cur && (ctx.gm || myTurn) && !curHidden ? '<button type="button" class="btn small" data-act="btOd">Действие: −1 ОД</button>' : ''}
-        ${cur && ctx.gm ? '<button type="button" class="btn small" data-act="btOdPlus" title="Добавить ОД тому, чей сейчас ход (навыки, умения) — только на этот ход">+1 ОД</button>' : ''}
-        ${myTurn ? '<button type="button" class="btn small primary" data-act="btEndTurn">Закончить ход</button>' : ''}
-        ${ctx.gm ? '<button type="button" class="btn ghost small" data-act="btFight">Перебросить инициативу</button><button type="button" class="linklike small danger" data-act="btEnd">закончить бой</button>' : ''}
-      </div></div>`;
+    const left = cur ? odLeft(board, cur) : 0;
+    const showOd = cur && !curHidden && (ctx.gm || cur.kind !== 'f');
+    const act = cur && (ctx.gm || myTurn) && !curHidden;
+    return `<div class="bt-turns bt-panel${myTurn ? ' my-turn' : ''}">
+      <p class="bt-turn-head"><b>Раунд ${tr.round}</b> · ход: <b>${esc(curHidden ? 'противник (не виден)' : cur ? tname(cur) : '—')}</b>${myTurn ? ' <span class="tag freq">ваш ход</span>' : ''}</p>
+      ${showOd ? `<div class="bt-od"><span>ОД</span>${odPips(left, v.od)}<b class="${left < 0 ? 'bad' : left > v.od ? 'over' : ''}" title="осталось в этот ход / положено в ход">${left} / ${v.od}</b>
+        <span class="muted small">пройдено ${sp.mv} кл.${has(v.rhp) || has(v.rmp) ? ` · реген ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '?'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '?'}` : ''}</span></div>` : ''}
+      ${act || ctx.gm ? `<div class="bt-turn-act">
+        ${act ? `<button type="button" class="btn" data-act="btOd" title="Атака, заклинание, навык — снять 1 ОД">−1 ОД</button>` : ''}
+        ${act && ctx.gm ? '<button type="button" class="btn" data-act="btOdPlus" title="Прибавить 1 ОД тому, чей сейчас ход (навыки, умения): как лечение ХП, можно и выше положенного">+1 ОД</button>' : ''}
+        ${myTurn ? '<button type="button" class="btn primary" data-act="btEndTurn">Закончить ход</button>' : ''}
+        ${ctx.gm ? '<button type="button" class="btn primary" data-act="btNext">Следующий ход ▸</button>' : ''}
+      </div>` : ''}
+      <ol class="bt-order" aria-label="Очередь ходов">${items}</ol>
+      ${ctx.gm ? '<div class="row-actions bt-turn-gm"><button type="button" class="linklike small" data-act="btFight">перебросить инициативу</button><button type="button" class="linklike small danger" data-act="btEnd">закончить бой</button></div>' : ''}
+    </div>`;
   }
   function vitHtml(board, t) {
     const v = vitals(t);
     const num = ctx.gm || t.kind !== 'f';       // игроки видят у противника только полоску
     const canVit = ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me);
-    const bar = (val, max, cls) => (max ? `<span class="bt-vbar ${cls}"><i style="width:${pct(val, max)}%"></i></span>` : '');
     const ini = turnOn(board) ? (board.turn.order.find(e => e.id === tid(t)) || {}).ini : null;
-    const reg = r => `<span class="bt-reg" title="реген в ход">${has(r) ? `+${fmt(r)}` : '+?'} в ход</span>`;
+    const reg = r => (num ? ` <span class="bt-reg" title="реген в ход">${has(r) ? `+${fmt(r)}` : '+?'}</span>` : '');
+    // строка: название, полоска, числа (у противника игроки видят только полоску)
+    const row = (label, val, max, cls, tail) => `<span class="bt-vl">${label}</span><span class="bt-vbar ${cls}">${max ? `<i style="width:${pct(val, max)}%"></i>` : ''}</span>
+      <span class="bt-vn">${num ? `<b>${has(val) ? val : '?'}</b> / ${has(max) ? max : '?'}` : ''}${tail || ''}</span>`;
     const seer = t.kind === 'h' || t.kind === 'a';
     const canZor = seer && (ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me));
     const zParts = `${v.zb}${v.zm ? ` ${signed(v.zm)} у фишки` : ''}${fieldZor() ? ` ${signed(fieldZor())} на поле` : ''}`;
     let html = `<div class="bt-vit">
-      ${v.marm ? `<span>Броня ${num ? `<b>${v.arm} / ${v.marm}</b>` : ''} ${bar(v.arm, v.marm, 'arm')}${v.arm <= 0 ? ' <span class="tag bad">разрушена</span>' : ''}</span>` : ''}
-      <span>ХП ${num ? `<b>${has(v.hp) ? v.hp : '?'} / ${has(v.mhp) ? v.mhp : '?'}</b>` : ''} ${bar(v.hp, v.mhp, 'hp')}${num ? reg(v.rhp) : ''}</span>
-      <span>МП ${num ? `<b>${has(v.mp) ? v.mp : '?'} / ${has(v.mmp) ? v.mmp : '?'}</b>` : ''} ${bar(v.mp, v.mmp, 'mp')}${num ? reg(v.rmp) : ''}</span>
-      ${t.kind !== 'f' || ctx.gm ? `<span class="muted small">ОД в ход ${v.od}</span>` : ''}
-      ${has(ini) && ctx.gm ? `<label class="small">инициатива <input type="number" class="mini-num" min="1" max="100" step="1" data-change="btIni" data-k="${esc(tid(t))}" value="${esc(ini)}"></label>` : has(ini) ? `<span class="small">инициатива ${ini}</span>` : ''}</div>
-      ${seer ? `<div class="bt-zor small"><span>Обзор <b>${radius(v)} кл.</b> — зоркость ${v.zor}${v.zm || fieldZor() ? ` <span class="muted">(${zParts})</span>` : ''}</span>
-        ${canZor ? `<span class="bt-zor-ctl"><button type="button" class="btn ghost small" data-act="btZor" data-v="-${ZOR_PER_CELL}" title="−${ZOR_PER_CELL} зоркости: на 1 клетку меньше">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btZor" data-v="${ZOR_PER_CELL}" title="+${ZOR_PER_CELL} зоркости: на 1 клетку больше">+${ZOR_PER_CELL}</button>${v.zm ? '<button type="button" class="linklike small" data-act="btZor" data-v="0">сбросить</button>' : ''}</span>` : ''}</div>` : ''}`;
+      ${v.marm ? row('Броня', v.arm, v.marm, 'arm', v.arm <= 0 ? ' <span class="tag bad">разрушена</span>' : '') : ''}
+      ${row('ХП', v.hp, v.mhp, 'hp', reg(v.rhp))}
+      ${row('МП', v.mp, v.mmp, 'mp', reg(v.rmp))}</div>
+      <div class="bt-vit-sub small">${t.kind !== 'f' || ctx.gm ? `<span>ОД в ход <b>${v.od}</b></span>` : ''}
+        ${has(ini) && ctx.gm ? `<label>инициатива <input type="number" class="mini-num" min="1" max="100" step="1" data-change="btIni" data-k="${esc(tid(t))}" value="${esc(ini)}"></label>` : has(ini) ? `<span>инициатива <b>${ini}</b></span>` : ''}
+        ${seer ? `<span title="зоркость ${v.zor}${v.zm || fieldZor() ? ` (${zParts})` : ''}">обзор <b>${radius(v)} кл.</b> <span class="muted">— зоркость ${v.zor}${v.zm || fieldZor() ? ` (${zParts})` : ''}</span></span>
+          ${canZor ? `<span class="bt-zor-ctl"><button type="button" class="btn ghost small" data-act="btZor" data-v="-${ZOR_PER_CELL}" title="−${ZOR_PER_CELL} зоркости: на 1 клетку меньше">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btZor" data-v="${ZOR_PER_CELL}" title="+${ZOR_PER_CELL} зоркости: на 1 клетку больше">+${ZOR_PER_CELL}</button>${v.zm ? '<button type="button" class="linklike small" data-act="btZor" data-v="0">сбросить</button>' : ''}</span>` : ''}` : ''}</div>`;
     if (canVit) {
-      html += `<div class="dev-row bt-vit-ctl"><input type="number" min="1" step="1" class="mini-num" data-ui="btAmt" data-ui-target="none" value="${esc(App.ui.btAmt || '')}" placeholder="сколько" aria-label="Сколько">
-        <button type="button" class="btn small" data-act="btVit" data-v="hp:-1"${v.marm ? ' title="Сначала в броню, остаток — в ХП"' : ''}>Урон</button>${v.marm ? '<button type="button" class="btn ghost small" data-act="btVit" data-v="hp:-1:pierce" title="Урон сквозь броню — сразу в ХП (гравитация, плоть, кость, бронебойные патроны)">Сквозь броню</button>' : ''}<button type="button" class="btn small" data-act="btVit" data-v="hp:1">Лечение</button>
-        <button type="button" class="btn ghost small" data-act="btVit" data-v="mp:-1">−МП</button><button type="button" class="btn ghost small" data-act="btVit" data-v="mp:1">+МП</button>
-        ${has(v.rhp) || has(v.rmp) ? `<button type="button" class="btn ghost small" data-act="btRegen" title="Добавить реген за ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '—'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '—'} (не выше максимума)">+реген</button>` : ''}
-        ${v.marm ? `<button type="button" class="btn ghost small" data-act="btVit" data-v="arm:-1">−броня</button><button type="button" class="btn ghost small" data-act="btVit" data-v="arm:1">+броня</button>${v.arm < v.marm ? '<button type="button" class="linklike small" data-act="btArmFix" title="Вернуть броне полную прочность">починить</button>' : ''}` : ''}
-        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="arm" title="Прочность брони; 0 — убрать броню">задать броню</button><button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button><button type="button" class="linklike small" data-act="btMax" data-v="rhp">реген ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="rmp">реген МП</button>' : ''}</div>`;
+      html += `<div class="bt-vit-ctl">
+        <div class="bt-btns bt-hit">
+          <input type="number" min="1" step="1" class="bt-amt" data-ui="btAmt" data-ui-target="none" value="${esc(App.ui.btAmt || '')}" placeholder="сколько" aria-label="Сколько">
+          <button type="button" class="btn small bt-dmg" data-act="btVit" data-v="hp:-1"${v.marm ? ' title="Сначала в броню, остаток — в ХП"' : ''}>Урон</button><button type="button" class="btn small bt-heal" data-act="btVit" data-v="hp:1">Лечение</button>
+        </div>
+        ${v.marm ? `<div class="bt-btns"><button type="button" class="btn ghost small" data-act="btVit" data-v="hp:-1:pierce" title="Урон сквозь броню — сразу в ХП (гравитация, плоть, кость, бронебойные патроны)">Сквозь броню</button><button type="button" class="btn ghost small" data-act="btVit" data-v="arm:-1" title="Снять прочность брони">−броня</button><button type="button" class="btn ghost small" data-act="btVit" data-v="arm:1" title="Прибавить прочность брони (не выше полной)">+броня</button>${v.arm < v.marm ? '<button type="button" class="linklike small" data-act="btArmFix" title="Вернуть броне полную прочность">починить</button>' : ''}</div>` : ''}
+        <div class="bt-btns">
+          <button type="button" class="btn ghost small" data-act="btVit" data-v="mp:-1">−МП</button><button type="button" class="btn ghost small" data-act="btVit" data-v="mp:1">+МП</button>
+          ${has(v.rhp) || has(v.rmp) ? `<button type="button" class="btn ghost small" data-act="btRegen" title="Добавить реген за ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '—'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '—'} (не выше максимума)">+реген</button>` : ''}
+        </div>
+        ${ctx.gm && t.kind !== 'h' ? `<details class="bt-more"${App.ui.btMore ? ' open' : ''}><summary data-act="btMoreToggle">задать вручную</summary><div class="bt-btns">
+          <button type="button" class="linklike small" data-act="btMax" data-v="arm" title="Прочность брони; 0 — убрать броню">броню</button><button type="button" class="linklike small" data-act="btMax" data-v="hp">макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button><button type="button" class="linklike small" data-act="btMax" data-v="rhp">реген ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="rmp">реген МП</button>
+          </div><p class="muted small">Число берётся из поля «сколько».</p></details>` : ''}
+      </div>`;
     }
     return html;
   }
   // все на поле: ХП, МП, реген в ход, ОД и обзор. Игроки видят героев и союзников, ГМ — ещё и противников
   function rosterHtml(board, at) {
-    const toks = [...at.values()].filter(t => t.kind === 'h' || t.kind === 'a' || (t.kind === 'f' && ctx.gm));
+    const toks = [...at.values()].filter(t => (t.kind === 'h' || t.kind === 'a' || (t.kind === 'f' && ctx.gm)) && !(hid(t) && veil()));
     if (!toks.length) return '';
     const rank = { h: 0, a: 1, f: 2 };
     toks.sort((p, q) => rank[p.kind] - rank[q.kind] || tname(p).localeCompare(tname(q), 'ru'));
@@ -898,7 +962,7 @@
     const r = x => (has(x) ? '+' + fmt(x) : '?');
     const rows = toks.map(t => {
       const v = vitals(t);
-      return `<tr class="k-${t.kind}${isDown(t) ? ' down' : ''}"><th scope="row"><button type="button" class="linklike" data-act="btSel" data-v="${esc(tid(t))}">${esc(tname(t))}</button></th>
+      return `<tr class="k-${t.kind}${isDown(t) ? ' down' : ''}${hid(t) ? ' hid' : ''}"><th scope="row"><button type="button" class="linklike" data-act="btSel" data-v="${esc(tid(t))}">${esc(tname(t))}</button>${hid(t) ? ' <span class="tag bad">скрыт</span>' : ''}</th>
         <td>${v.marm ? n(v.arm, v.marm) : '—'}</td><td>${n(v.hp, v.mhp)}</td><td>${r(v.rhp)}</td><td>${n(v.mp, v.mmp)}</td><td>${r(v.rmp)}</td><td>${v.od}</td><td>${t.kind === 'f' ? '—' : `${radius(v)} кл.`}</td></tr>`;
     }).join('');
     return `<div class="bt-roster"><button type="button" class="linklike small" data-act="btRoster" aria-expanded="${open}">${open ? '▾' : '▸'} Броня, ХП, МП и реген у всех на поле</button>
@@ -1001,8 +1065,8 @@
       if (tool === 'foe') {
         const n = String(App.ui.btFoeName || '').trim() || `Противник ${b.foes.length + 1}`;
         const f = { i: newId('f'), n, lvl: levelOf(n), x, y };
+        if (App.ui.btFoeHid) f.hid = true; else orderAdd(b, 'f:' + f.i);     // скрытый встанет в очередь, когда его покажут
         b.foes.push(f);
-        orderAdd(b, 'f:' + f.i);
       } else if (T[tool]) b.objs.push({ i: newId('o'), t: tool, x, y });
       else return;
       ctx.saveBoard(b);
@@ -1019,7 +1083,8 @@
 
   // бой: инициатива, ходы, ОД, ХП и МП
   const board0 = () => ctx && ctx.camp && ctx.camp.board;
-  const selTok = () => { const b = board0(), s = App.ui.btSel; return b && s ? findTok(b, s) : null; };
+  // фишка в панели: выбранная или та, что показана по умолчанию (чей ход, свой герой)
+  const selTok = () => { const b = board0(); if (!b) return null; const s = selId(b, layout(b, ctx.heroes).at); return s ? findTok(b, s) : null; };
   Object.assign(App.actions, {
     btFight() {
       const b = board0();
@@ -1027,7 +1092,7 @@
       if (turnOn(b) && !confirm('Перебросить инициативу? Очередь ходов начнётся заново.')) return;
       const nb = JSON.parse(JSON.stringify(b));
       const { at } = layout(nb, ctx.heroes);
-      const order = [...at.values()].filter(t => t.kind !== 'o' && !isDown(t)).map(t => ({ id: tid(t), ini: d100() }));
+      const order = [...at.values()].filter(t => t.kind !== 'o' && !isDown(t) && !hid(t)).map(t => ({ id: tid(t), ini: d100() }));
       order.sort((p, q) => q.ini - p.ini || Math.random() - 0.5);
       nb.turn = { on: true, round: 1, cur: 0, n: ((b.turn && b.turn.n) || 0) + 1, order, tk: '', who: '', mv: 0, od: 0 };
       ctx.saveBoard(nb);
@@ -1057,19 +1122,19 @@
       if (!b || !turnOn(b)) return;
       const cur = curTok(b, layout(b, ctx.heroes).at);
       if (!cur || !(ctx.gm || canMove(cur))) return;
-      const sp = spent(b, cur), od = odCap(b, cur);
-      if (odUsed(sp) + 1 > od && !ctx.gm) { App.toast(`ОД кончились: ${odUsed(sp)} из ${od}`); return; }
+      const sp = spent(b, cur), left = odLeft(b, cur);
+      if (left <= 0) { App.toast(`ОД кончились: ${left} / ${vitals(cur).od}${ctx.gm ? ' — прибавьте «+1 ОД», если нужно' : ''}`); return; }
       saveTok(b, findTok(b, tid(cur)), { od: sp.od + 1 });
     },
-    // ГМ добавляет ОД тому, чей сейчас ход (навыки и умения), — только на этот ход
+    // ГМ прибавляет ОД тому, чей сейчас ход (навыки и умения), — к остатку, как лечение к ХП; выше положенного тоже можно
     btOdPlus() {
       const b = board0();
       if (!b || !ctx.gm || !turnOn(b)) return;
       const cur = curTok(b, layout(b, ctx.heroes).at);
       if (!cur) return;
-      const sp = spent(b, cur);
+      const sp = spent(b, cur), left = odLeft(b, cur) + 1, max = vitals(cur).od;
       saveTok(b, findTok(b, tid(cur)), { bon: sp.bon + 1 });
-      App.toast(`${tname(cur)}: +1 ОД в этот ход (всего ${vitals(cur).od + sp.bon + 1})`);
+      App.toast(`${tname(cur)}: +1 ОД — ${left} / ${max}${left > max ? ', больше положенного' : ''}`);
     },
     btEndTurn() {
       const b = board0();
@@ -1169,7 +1234,36 @@
       nb.fog = !fogOn(b);
       ctx.saveBoard(nb);
     },
-    btAsPlayer(t) { App.ui.btAsPlayer = !!t.checked; ctx && ctx.rerender(); }
+    btAsPlayer(t) { App.ui.btAsPlayer = !!t.checked; ctx && ctx.rerender(); },
+    btFoeHid(t) { App.ui.btFoeHid = !!t.checked; },
+    btMoreToggle() { App.ui.btMore = !App.ui.btMore; ctx && ctx.rerender(); },
+    // скрыть существо от игроков или показать снова. Скрытое уходит из очереди ходов, показанное встаёт в неё по броску d100
+    btHide() {
+      const hit = selTok(), b = board0();
+      if (!hit || !b || !ctx.gm || !canHide(hit.t)) return;
+      const t = hit.t, on = !t.o.hid, id = tid(t);
+      const nb = JSON.parse(JSON.stringify(b));
+      if (t.kind === 'f') {
+        const f = nb.foes.find(z => z.i === t.o.i);
+        if (!f) return;
+        if (on) f.hid = true; else delete f.hid;
+      } else {
+        ctx.saveAllies((ctx.allies || []).map(a => {
+          if (a.i !== t.o.i) return a;
+          const c = Object.assign({}, a);
+          if (on) c.hid = true; else delete c.hid;
+          return c;
+        }));
+      }
+      let ini = null;
+      if (turnOn(nb)) {
+        if (on) orderDel(nb, id);
+        else if (!nb.turn.order.some(e => e.id === id) && !isDown(t)) { orderAdd(nb, id); ini = (nb.turn.order.find(e => e.id === id) || {}).ini; }
+      }
+      if (t.kind === 'f' || JSON.stringify(nb.turn || null) !== JSON.stringify(b.turn || null)) ctx.saveBoard(nb);
+      const was = turnOn(b) && b.turn.order.some(e => e.id === id);
+      App.toast(on ? `${tname(t)}: скрыт от игроков${was ? ' и убран из очереди ходов' : ''}` : `${tname(t)}: снова виден игрокам${ini ? ` — в очереди с инициативой ${ini}` : ''}`);
+    }
   });
   function setVit(t, patch) {
     if (t.kind === 'h') { ctx.saveVit(t.o.id, Object.assign({}, t.o.vit || {}, patch)); return; }
@@ -1201,7 +1295,7 @@
   let party = null;
   function alliesBlock(o) {
     party = o;
-    const list = o.allies || [];
+    const list = (o.allies || []).filter(a => o.gm || !(a.hid && !a.of));       // скрытого ГМ союзника игроки не видят и здесь
     if (!list.length && !o.gm) return '';
     const heroName = id => (o.heroes.find(h => h.id === id) || {}).name || '';
     let html = `<div class="party-allies"><div class="sec-head"><h3>Союзники отряда</h3>${list.length ? `<span class="tag">${list.length}</span>` : ''}</div>`;
@@ -1211,6 +1305,7 @@
         <span class="cc-body"><span class="cc-name">${esc(a.n)}</span>
           <span class="small">${esc(cap(allyKind(a)))}${a.of && heroName(a.of) ? ` героя ${esc(heroName(a.of))}` : ' отряда'}${a.lvl ? `, ур. ${R.fmt(a.lvl)}` : ''}</span>
           ${a.src && R.norm(a.src) !== R.norm(a.n) ? `<span class="small muted">${esc(cap(a.src))}</span>` : ''}
+          ${a.hid && !a.of ? '<span class="tag bad">скрыт от игроков</span>' : ''}
           ${o.gm ? `<button type="button" class="linklike small danger" data-act="alDel" data-v="${esc(a.i)}">убрать из отряда</button>` : ''}</span></div></li>`;
     }).join('')}</ul>` : '<p class="muted small">Союзников пока нет: питомцы, призванные существа, фамильяры и НПС появятся здесь и на поле боя.</p>';
     if (o.gm) {

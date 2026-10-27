@@ -804,7 +804,7 @@ textarea { width: 100%; }
 .bt-ico { width: 22px; text-align: center; font-size: 1rem; line-height: 1; }
 .bt-ico.foe { color: #e06464; }
 .bt-wrap { container-type: inline-size; overflow-x: auto; padding: 2px; margin: 6px 0; }
-.bt-grid { --cell: clamp(28px, calc((100cqi - 8px) / var(--w)), 56px); --floor-a: #2f4a2a; --floor-b: #34512e;
+.bt-grid { --cell: clamp(28px, min(calc((100cqi - 8px) / var(--w)), calc((100vh - var(--bt-chrome, 170px)) / var(--h))), 56px); --floor-a: #2f4a2a; --floor-b: #34512e;
   display: grid; grid-template-columns: repeat(var(--w), var(--cell)); grid-auto-rows: var(--cell); width: max-content; margin: 0 auto;
   border: 2px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--floor-a); }
 @supports not (width: 1cqi) { .bt-grid { --cell: 36px; } }
@@ -827,7 +827,7 @@ textarea { width: 100%; }
 .bt-decor { inset: 12%; opacity: .7; }
 .bt-obj.fill-water { inset: 0; }
 .bt-obj.fill-water svg { filter: none; opacity: .8; }
-.bt-obj.is-sel { outline: 2px solid #f3d58f; outline-offset: -2px; border-radius: 4px; }
+.bt-obj.is-sel, .bt-decor.is-sel { outline: 2px solid #f3d58f; outline-offset: -2px; border-radius: 4px; }
 .cv { position: absolute; right: 0; top: 0; width: 9px; height: 9px; border: 1px solid #f3d58f; border-radius: 2px; background: #f3d58f; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
 .cv.cv1 { background: linear-gradient(135deg, #f3d58f 50%, transparent 50%); }
 .bt-legend .cv { position: relative; display: inline-block; vertical-align: -1px; margin: 0 4px 0 2px; }
@@ -848,12 +848,53 @@ textarea { width: 100%; }
 .bt-tok.down { filter: grayscale(1) brightness(.6); }
 .bt-tok.down::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; color: #ff8a8a; font-size: calc(var(--cell) * .55); font-weight: 700; text-shadow: 0 0 4px #000; }
 .bt-tok.unseen { outline: 2px dashed rgba(255, 255, 255, .55); outline-offset: 1px; }
+/* скрыт ГМ от игроков: ГМ видит полупрозрачным, с пунктиром */
+.bt-tok.hid { opacity: .5; outline: 2px dashed #e0675c; outline-offset: 1px; }
+.bt-tok.hid.is-sel { opacity: .8; }
+.bt-roster-t tr.hid th .linklike { opacity: .7; }
+.bt-help { margin: 6px 0; }
+.bt-help summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.bt-help p { margin: 6px 0 0; }
 .bt-cell.fog::after { content: ""; position: absolute; inset: 0; background: rgba(6, 5, 12, .72); pointer-events: none; }
 .bt-cell.fog .bt-obj, .bt-cell.fog .bt-decor { opacity: .55; }
-.bt-turns { margin: 4px 0 8px; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-m); background: var(--ink-2); }
+/* бой во время игры: карта слева, справа закреплена панель — ход и ОД, выбранная фишка, бросок, журнал */
+.page.game.has-arena { max-width: 1500px; }
+/* поле целиком на экране: клетка подстраивается и под высоту окна (у ГМ над картой ещё инструменты) */
+.battle-box.is-gm { --bt-chrome: 250px; }
+.bt-arena { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); grid-template-areas: "main side" "extra side"; gap: 6px 18px; align-items: start; margin-top: 6px; }
+.bt-main { grid-area: main; min-width: 0; }
+.bt-extra { grid-area: extra; min-width: 0; }
+/* панель во всю высоту окна: ход, фишка и бросок — сверху, журнал занимает остаток и прокручивается сам */
+.bt-side { grid-area: side; position: sticky; top: 64px; height: calc(100vh - 76px); min-height: 520px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px; padding: 2px 4px 2px 2px; margin-right: -4px; }
+.bt-side > * { flex: none; }
+.bt-side > .camp-feed { flex: 1 1 auto; min-height: 180px; display: flex; flex-direction: column; }
+.bt-side > .camp-feed.is-shut { flex: none; min-height: 0; }
+.bt-panel { margin: 0; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-m); background: var(--ink-2); }
+.bt-panel.is-empty p { margin: 0; }
+@media (max-width: 1020px) {
+  .bt-arena { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side" "extra"; }
+  .bt-side { position: static; height: auto; min-height: 0; overflow: visible; margin: 4px 0 0; padding: 0; }
+}
+
+/* ход: чей, ОД как ХП (кружки; сверх положенного — другим цветом), кнопки, очередь */
+.bt-turns { margin: 0; }
+.bt-turns.my-turn { border-color: #f3d58f; box-shadow: 0 0 0 1px rgba(243, 213, 143, .35), 0 0 18px rgba(243, 213, 143, .12); }
+.bt-turns p { margin: 0; }
+.bt-turns .bt-big { width: 100%; justify-content: center; margin-bottom: 6px; }
 .bt-turn-head { margin: 0 0 6px; }
-.bt-order { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0 !important; margin: 0 0 6px; max-width: none !important; }
-.bt-order li { margin: 0; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line-soft); font-size: .86rem; }
+.bt-od { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 2px 0 4px; }
+.bt-od > b { font-size: 1.25rem; font-variant-numeric: tabular-nums; color: var(--text); }
+.bt-od > b.over { color: #8fe0a8; }
+.bt-od > b.bad { color: var(--err); }
+.bt-pips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.bt-pips i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(243, 213, 143, .55); background: transparent; }
+.bt-pips i.on { background: #f3d58f; border-color: #f3d58f; }
+.bt-pips i.over { background: #7fd18a; border-color: #7fd18a; }
+.bt-turn-act { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.bt-turn-act .btn { flex: 1 1 auto; justify-content: center; min-height: 36px; padding: 6px 12px; }
+.bt-order { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; padding: 0 !important; margin: 6px 0 0; max-width: none !important; }
+.bt-order li { margin: 0; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-soft); font-size: .84rem; }
 .bt-order li b { color: var(--brass); margin-right: 3px; font-variant-numeric: tabular-nums; }
 .bt-order li.k-h { border-color: rgba(214, 168, 92, .5); }
 .bt-order li.k-a { border-color: rgba(92, 196, 138, .55); }
@@ -861,19 +902,69 @@ textarea { width: 100%; }
 .bt-order li.is-cur { background: rgba(243, 213, 143, .2); border-color: #f3d58f; }
 .bt-order li.down { opacity: .45; text-decoration: line-through; }
 .bt-order .linklike { color: var(--text); text-decoration: none; }
-.bt-fog { margin: 0 0 4px; gap: 12px; }
-.bt-info-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
-.bt-vit { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin-top: 6px; }
-.bt-vbar { display: inline-block; vertical-align: middle; width: 80px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.bt-turn-gm { margin-top: 4px; gap: 14px; }
+.bt-fog { margin: 2px 0 4px; gap: 6px 14px; }
+
+/* выбранная фишка: портрет, имя, броня / ХП / МП строками, кнопки урона и лечения */
+.bt-info { display: flex; flex-direction: column; gap: 6px; }
+.bt-info.is-hid { border-style: dashed; border-color: rgba(224, 103, 92, .6); }
+.bt-info-head { display: flex; gap: 10px; align-items: center; }
+.bt-face { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; border: 3px solid hsl(var(--hue, 40) 70% 60%); background: hsl(var(--hue, 40) 35% 22%); color: #fff; font-weight: 700; }
+.bt-face img { width: 100%; height: 100%; object-fit: cover; }
+.bt-face.foe { border-color: #d34a4a; background: #4a1c1f; }
+.bt-face.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
+.bt-face.obj { border: 1px solid var(--line); background: var(--panel); padding: 5px; }
+.bt-face.obj svg { width: 100%; height: 100%; }
+.bt-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; align-items: flex-start; }
+.bt-who b { font-size: 1.05rem; line-height: 1.2; }
+.bt-x { flex: none; align-self: flex-start; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-soft); background: transparent; color: var(--muted); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.bt-x:hover { color: var(--text); border-color: var(--brass); }
+.bt-info-act { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.bt-vit { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; gap: 5px 8px; align-items: center; }
+.bt-vl { font-size: .86rem; color: var(--muted); }
+.bt-vn { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.bt-vbar { display: block; width: 100%; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
 .bt-vbar i { display: block; height: 100%; background: #3cc46a; }
 .bt-vbar.mp i { background: #4a8fe0; }
 .bt-vbar.arm i { background: #b9c3d1; }
-.bt-vit-ctl { margin-top: 6px; }
-.bt-reg { margin-left: 6px; font-size: .82rem; color: #8fd6a4; font-variant-numeric: tabular-nums; }
-.bt-vbar.mp + .bt-reg { color: #8fb8ee; }
-.bt-zor { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.bt-reg { margin-left: 4px; font-size: .8rem; color: #8fd6a4; }
+.bt-vbar.mp + .bt-vn .bt-reg { color: #8fb8ee; }
+.bt-vit-sub { display: flex; flex-wrap: wrap; gap: 3px 12px; align-items: center; }
+.bt-vit-sub input[type="number"].mini-num { flex: none; width: 4.6em; margin: 0 0 0 4px; padding: 2px 6px; }
 .bt-zor-ctl { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .bt-zor-ctl .btn.small { padding: 2px 9px; min-height: 0; }
+.bt-vit-ctl { display: grid; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
+.bt-hit .bt-amt { flex: 0 0 92px; width: 92px; min-height: 34px; padding: 4px 8px; font-size: 1.05rem; text-align: center; font-variant-numeric: tabular-nums; }
+.bt-hit .btn { min-height: 34px; }
+.bt-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.bt-btns .btn { flex: 1 1 0; justify-content: center; white-space: nowrap; }
+.btn.bt-dmg { border-color: rgba(224, 103, 92, .7); color: #ffb3aa; }
+.btn.bt-dmg:hover { border-color: var(--err); }
+.btn.bt-heal { border-color: rgba(103, 188, 167, .7); color: #a6e6d4; }
+.btn.bt-heal:hover { border-color: var(--ok); }
+.bt-more summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.bt-more .bt-btns { gap: 4px 12px; margin-top: 4px; }
+.bt-more p { margin: 4px 0 0; }
+
+/* бросок и журнал в панели у карты */
+.bt-side .dice-box { margin: 0; padding: 10px 12px; background: var(--ink-2); }
+.page .bt-side .dice-box h2 { font-size: 1rem; margin: 0 0 6px; }
+.bt-side .dice-box .dice-face { width: 52px; height: 52px; font-size: 1.55rem; border-radius: 12px; }
+.page .bt-side .dice-box h2 .dice-ic { width: 1em; height: 1em; }
+.bt-side .dice-row { gap: 10px; }
+.bt-side .dice-ctl { display: flex; flex-wrap: wrap; gap: 6px; }
+.bt-side .dice-ctl input { flex: 1 1 120px; width: auto; min-width: 0; }
+.bt-side .dice-ctl .btn { flex: 1 1 auto; justify-content: center; min-height: 36px; padding: 6px 12px; }
+.bt-side .dice-hist { margin-top: 6px; }
+.bt-side .camp-feed { padding: 8px 12px 10px; border: 1px solid var(--line-soft); border-radius: var(--radius-m); background: var(--ink-2); }
+.page .bt-side .camp-feed h2 { font-size: 1.05rem; margin: 0; }
+.bt-side .camp-feed .sec-head select { max-width: 150px; font-size: .85rem; padding: 3px 6px; }
+.bt-side .camp-feed .dev-row { margin: 6px 0 0; }
+.bt-side .camp-feed .dev-row > input { flex: 1 1 120px; }
+.bt-side .feed { flex: 1 1 0; min-height: 90px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px !important; }
+.bt-side .feed li { padding: 6px 0; font-size: .92rem; }
+.bt-side .camp-feed.is-shut { padding-bottom: 8px; }
+@media (max-width: 1020px) { .bt-side .feed { flex: none; max-height: 50vh; } }
 .bt-roster { margin: 6px 0; }
 .bt-roster .table-wrap { overflow-x: auto; margin-top: 6px; }
 .bt-roster-t { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
@@ -904,7 +995,6 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .bt-dist { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); padding: 1px 7px; border-radius: 9px; background: #1b1712; color: #f3d58f;
   font: 700 12px/1.4 var(--font-body); white-space: nowrap; }
 .bt-dist:empty { display: none; }
-.bt-info { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-s); background: var(--ink-2); }
 .bt-new { margin-top: 12px; }
 .bt-new summary { cursor: pointer; font-weight: 600; color: var(--brass); }
 
