@@ -555,7 +555,7 @@
   function effectsTab(o, v) {
     const perms = o.perms || {};
     const list = (o.record.gm && o.record.gm.effects) || [];
-    const modsText = mods => (mods || []).map(m => `${R.STAT_SHORT[m.stat]} ${m.op === 'mul' ? '×' + fmt(m.v) : signed(m.v)}`).join(', ');
+    const modsText = mods => (mods || []).map(m => `${modLabel(m.stat)} ${m.op === 'mul' ? '×' + fmt(m.v) : signed(m.v)}`).join(', ');
     const start = [];
     const b = v.res0.boon;
     if (b) start.push(`${{ gift: 'тёмный дар', buff: 'благословение', disease: 'болезнь' }[b.kind]} «${b.src.name}»`);
@@ -564,7 +564,8 @@
     let html = `<section class="dev-card"><h2>Состояния и эффекты</h2>
       ${list.length ? `<ul class="fx-cards">${list.map(e => `<li class="fx-${esc(e.kind)}"><div class="sec-head"><b>${esc(e.name)}</b><span class="tag">${esc(K.EFFECT_KINDS[e.kind] || e.kind)}</span></div>
         ${e.text ? `<p class="small">${esc(e.text)}</p>` : ''}
-        ${(e.mods || []).length ? `<p class="small"><b>К статам:</b> ${esc(modsText(e.mods))} <span class="muted">— учтено в характеристиках</span></p>` : ''}
+        ${statMods(e).length ? `<p class="small"><b>К статам:</b> ${esc(modsText(statMods(e)))} <span class="muted">— учтено в характеристиках</span></p>` : ''}
+        ${paramMods(e).length ? `<p class="small"><b>К параметрам:</b> ${esc(modsText(paramMods(e)))} <span class="muted">— учтено на листе</span></p>` : ''}
         ${e.note ? `<p class="small muted">${esc(e.note)}</p>` : ''}
         ${perms.gm ? `<div class="row-actions"><button type="button" class="linklike small" data-act="fxEdit" data-v="${esc(e.id)}">изменить</button><button type="button" class="linklike small danger" data-act="fxDel" data-v="${esc(e.id)}">снять</button></div>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Сейчас на персонаже нет проклятий, болезней и других эффектов от ГМ.</p>'}
       ${start.length ? `<p class="small muted">С создания: ${esc(start.join('; '))} — это часть листа создания.</p>` : ''}
@@ -572,6 +573,14 @@
     if (perms.gm) html += fxForm();
     return html;
   }
+
+  // кроме пяти характеристик эффект меняет параметры (привлекательность, ХП, реген, ОД, таланты…): у старых записей — из описания
+  const modLabel = k => R.STAT_SHORT[k] || (K.PARAMS.find(p => p.k === k) || {}).t || k;
+  const MOD_KEYS = () => R.STATS.concat(K.PARAMS.map(p => p.k));
+  const allMods = e => (e.pm ? (e.mods || []) : (e.mods || []).concat(K.parseParamMods(e.text).filter(m => !(e.mods || []).some(x => x.stat === m.stat))));
+  const statMods = e => allMods(e).filter(m => R.STATS.includes(m.stat));
+  const paramMods = e => allMods(e).filter(m => !R.STATS.includes(m.stat));
+  const parseAll = text => K.parseStatMods(text).concat(K.parseParamMods(text));
 
   function blankFx() { return { kind: 'curse', name: '', text: '', note: '', mods: {} }; }
   function fxForm() {
@@ -588,6 +597,10 @@
       <table class="fx-mods"><thead><tr><th></th><th>прибавка</th><th>множитель</th></tr></thead><tbody>${R.STATS.map(k => `<tr><th>${R.STAT_NAMES[k]}</th>
         <td><input type="number" step="1" data-change="fxField" data-k="mods.${k}.add" value="${esc(((d.mods || {})[k] || {}).add || '')}" aria-label="${R.STAT_NAMES[k]}: прибавка"></td>
         <td><input type="number" step="0.1" min="0" data-change="fxField" data-k="mods.${k}.mul" value="${esc(((d.mods || {})[k] || {}).mul || '')}" aria-label="${R.STAT_NAMES[k]}: множитель"></td></tr>`).join('')}</tbody></table>
+      <details class="fx-params"${K.PARAMS.some(p => (d.mods || {})[p.k]) ? ' open' : ''}><summary>Влияние на параметры и таланты <span class="muted small">— привлекательность, ХП, реген, ОД, уворот…; тоже из описания</span></summary>
+        <table class="fx-mods"><thead><tr><th></th><th>прибавка</th><th>множитель</th></tr></thead><tbody>${K.PARAMS.map(p => `<tr><th>${esc(p.t)}</th>
+          <td><input type="number" step="1" data-change="fxField" data-k="mods.${esc(p.k)}.add" value="${esc(((d.mods || {})[p.k] || {}).add || '')}" aria-label="${esc(p.t)}: прибавка"></td>
+          <td><input type="number" step="0.1" min="0" data-change="fxField" data-k="mods.${esc(p.k)}.mul" value="${esc(((d.mods || {})[p.k] || {}).mul || '')}" aria-label="${esc(p.t)}: множитель"></td></tr>`).join('')}</tbody></table></details>
       <label>Срок и заметка <input type="text" data-change="fxField" data-k="note" value="${esc(d.note)}" placeholder="например: до исцеления, 3 дня, стак 2 из 3"></label>
       <div class="row-actions"><button type="button" class="btn primary" data-act="fxSave">${d.editId ? 'Сохранить' : 'Наложить'}</button>
         ${d.editId ? '<button type="button" class="btn ghost" data-act="fxCancel">Отмена</button>' : ''}</div>
@@ -598,14 +611,14 @@
   function fxFillDom(d) {
     const tx = document.querySelector('[data-change="fxField"][data-k="text"]');
     if (tx && document.activeElement !== tx) tx.value = d.text || '';
-    R.STATS.forEach(k => ['add', 'mul'].forEach(f => {
-      const el = document.querySelector(`[data-k="mods.${k}.${f}"]`);
+    MOD_KEYS().forEach(k => ['add', 'mul'].forEach(f => {
+      const el = document.querySelector(`[data-k="mods.${CSS.escape(k)}.${f}"]`);
       if (el) el.value = ((d.mods || {})[k] || {})[f] || '';
     }));
   }
   const fxModsFromDraft = d => {
     const out = [];
-    R.STATS.forEach(k => {
+    MOD_KEYS().forEach(k => {
       const m = (d.mods || {})[k] || {};
       if (num(m.add)) out.push({ stat: k, op: 'add', v: Math.round(num(m.add)) });
       if (num(m.mul) && num(m.mul) !== 1) out.push({ stat: k, op: 'mul', v: num(m.mul) });
@@ -1003,18 +1016,19 @@
       const d = App.ui.fxDraft || (App.ui.fxDraft = blankFx());
       d.name = t.value;
       const hit = K.effectSources(unlocked()).find(x => x.kind === d.kind && norm(x.name) === norm(t.value));
-      if (hit) { d.text = hit.text; d.mods = fxDraftMods(K.parseStatMods(hit.text)); fxFillDom(d); }
+      if (hit) { d.text = hit.text; d.mods = fxDraftMods(parseAll(hit.text)); fxFillDom(d); }
     },
     fxField(t) {
       const d = App.ui.fxDraft || (App.ui.fxDraft = blankFx());
       setPath(d, t.dataset.k, t.value);
-      if (t.dataset.k === 'text' && !Object.values(d.mods || {}).some(m => num(m.add) || num(m.mul))) { d.mods = fxDraftMods(K.parseStatMods(t.value)); fxFillDom(d); }
+      if (t.dataset.k === 'text' && !Object.values(d.mods || {}).some(m => num(m.add) || num(m.mul))) { d.mods = fxDraftMods(parseAll(t.value)); fxFillDom(d); }
     },
     fxSave() {
       const d = App.ui.fxDraft;
       if (!d || !String(d.name || '').trim()) { App.toast('Впишите название эффекта'); return; }
-      const e = { id: d.editId || newId(), kind: d.kind, name: d.name.trim(), text: d.text || '', note: d.note || '', mods: fxModsFromDraft(d), at: Date.now() };
-      const m = e.mods.map(x => `${R.STAT_SHORT[x.stat]} ${x.op === 'mul' ? '×' + fmt(x.v) : signed(x.v)}`).join(', ');
+      // pm: прибавки к параметрам задал ГМ в форме — описание больше не разбирается
+      const e = { id: d.editId || newId(), kind: d.kind, name: d.name.trim(), text: d.text || '', note: d.note || '', mods: fxModsFromDraft(d), pm: true, at: Date.now() };
+      const m = e.mods.map(x => `${modLabel(x.stat)} ${x.op === 'mul' ? '×' + fmt(x.v) : signed(x.v)}`).join(', ');
       const editing = !!d.editId;
       gmChange(gm => {
         gm.effects = gm.effects || [];
@@ -1026,7 +1040,7 @@
     fxEdit(b) {
       const e = ((ctx().record.gm || {}).effects || []).find(x => x.id === b.dataset.v);
       if (!e) return;
-      App.ui.fxDraft = { kind: e.kind, name: e.name, text: e.text, note: e.note, mods: fxDraftMods(e.mods), editId: e.id };
+      App.ui.fxDraft = { kind: e.kind, name: e.name, text: e.text, note: e.note, mods: fxDraftMods(allMods(e)), editId: e.id };
       rerender();
     },
     fxCancel() { App.ui.fxDraft = blankFx(); rerender(); },

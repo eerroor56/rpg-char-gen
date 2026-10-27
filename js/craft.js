@@ -702,12 +702,77 @@
       if (v > 0) push(words(g), 'mul', m[2] ? 1 / v : v);
     }
     // прибавки: «ловкость +20», «сила/ловкость -20», «+10 тело и сила», «+10 к силе»
-    re = new RegExp('(' + L + ')\\s*([+-])\\s*(\\d+)(?![\\d.,]|\\s*%|\\s*[xх×](?![а-я]))', 'g');
+    // после числа может стоять запятая («сила +5, ловкость +3»), но не дробная часть («1,5»)
+    re = new RegExp('(' + L + ')\\s*([+-])\\s*(\\d+)(?!\\d|[.,]\\d|\\s*%|\\s*[xх×](?![а-я]))', 'g');
     while ((m = re.exec(s))) push(words(m[1]), 'add', (m[2] === '-' ? -1 : 1) * +m[3]);
-    re = new RegExp('([+-])\\s*(\\d+)(?![\\d.,]|\\s*%|\\s*[xх×](?![а-я]))\\s*(?:к\\s+|ед\\.?\\s+)?(' + L + ')', 'g');
+    re = new RegExp('([+-])\\s*(\\d+)(?!\\d|[.,]\\d|\\s*%|\\s*[xх×](?![а-я]))\\s*(?:к\\s+|ед\\.?\\s+)?(' + L + ')', 'g');
     while ((m = re.exec(s))) push(words(m[3]), 'add', (m[1] === '-' ? -1 : 1) * +m[2]);
     if ((m = s.match(/(?:все|ко всем)\s+(?:стат[а-я]*|характеристик[а-я]*)\s*([+-])\s*(\d+)/))) push(R.STATS, 'add', (m[1] === '-' ? -1 : 1) * +m[2]);
     return out.filter(x => x.stat);
+  }
+
+  // параметры, которые меняет состояние от ГМ, кроме пяти характеристик: «+30 к привлекательности», «ХП реген +10», «-1 ОД»,
+  // «+10 к скрытности». Порядок важен: «реген ХП» разбирается раньше «ХП», найденное вырезается из текста
+  const PARAMS = [
+    { k: 'hpRegen', t: 'Реген ХП', re: '(?:реген[а-я]*\\s*хп|хп\\s*реген[а-я]*)' },
+    { k: 'mpRegen', t: 'Реген МП', re: '(?:реген[а-я]*\\s*(?:мп|ман[аыуе])|(?:мп|ман[аыуе])\\s*реген[а-я]*)' },
+    { k: 'attr', t: 'Привлекательность', re: 'привлекательност[ьи]' },
+    { k: 'charisma', t: 'Харизма', re: 'харизм[аыуе]', talent: 'харизма' },
+    { k: 'zor', t: 'Зоркость', re: 'зоркост[ьи]', talent: 'зоркость (базовая 50)' },
+    { k: 'spellSlots', t: 'Ячейки заклинаний', re: 'яч[а-я]*\\s+заклинани[йя]' },
+    { k: 'hp', t: 'ХП', re: '(?:хп|здоровь[яеюи])' },
+    { k: 'mp', t: 'МП', re: '(?:мп|ман[аыуе])' },
+    { k: 'psi', t: 'Пси', re: 'пси' },
+    { k: 'viv', t: 'Живость', re: 'живост[ьи]' },
+    { k: 'dodge', t: 'Уворот', re: 'уворот[ау]?' },
+    { k: 'od', t: 'ОД', re: 'од' },
+    { k: 'prayers', t: 'Молитвы', re: 'молитв[аыу]?' }
+  ].concat(R.TALENTS.filter(t => !['харизма', 'зоркость (базовая 50)'].includes(t.id))
+    .map(t => ({ k: 'tal:' + t.id, t: t.name, re: norm(t.name).slice(0, -2) + '[а-я]*', talent: t.id })));
+  const PARAM_BY = Object.fromEntries(PARAMS.map(p => [p.k, p]));
+  function parseParamMods(text) {
+    let s = ' ' + String(text || '').toLowerCase().replace(/−/g, '-').replace(/ё/g, 'е') + ' ';
+    const out = [];
+    const N = '(\\d+)(?!\\d|[.,]\\d|\\s*%)';
+    PARAMS.forEach(p => {
+      const P = `(?<![а-я])${p.re}(?![а-я])`;
+      [new RegExp(`${P}\\s*([+-])\\s*${N}`, 'g'), new RegExp(`([+-])\\s*${N}\\s*(?:к\\s+|ед\\.?\\s+)?${P}`, 'g')].forEach(re => {
+        s = s.replace(re, (m, a, b) => {
+          if (!out.some(x => x.stat === p.k)) out.push({ stat: p.k, op: 'add', v: (a === '-' ? -1 : 1) * +b });
+          return ' '.repeat(m.length);
+        });
+      });
+    });
+    return out;
+  }
+  // состояния от ГМ: прибавки и множители к параметрам. what: 'talents' — до снаряжения (ремесло нужно кузнице),
+  // 'der' — после (уворот, реген и ячейки снаряжение пересчитывает). Без своих полей (старые записи) — из описания
+  function applyParamMods(res, effects, what) {
+    const d = res.der;
+    (effects || []).forEach(e => {
+      const mods = e.pm ? (e.mods || []) : (e.mods || []).concat(parseParamMods(e.text).filter(m => !(e.mods || []).some(x => x.stat === m.stat)));
+      mods.forEach(m => {
+        const p = PARAM_BY[m.stat], v = +m.v;
+        if (!p || !Number.isFinite(v) || !v || (m.op === 'mul' && v <= 0) || (what === 'talents') !== !!p.talent) return;
+        const src = `${(EFFECT_KINDS[e.kind] || 'эффект').toLowerCase()} «${e.name}» ${m.op === 'mul' ? '×' + fmt(v) : R.signed(v)}`;
+        const apply = x => (m.op === 'mul' ? ri(x * v) : x + v);
+        if (p.talent) {
+          const t = res.talents[p.talent];
+          if (!t) return;
+          t.total = apply(t.total);
+          (t.fx || (t.fx = [])).push(src);
+          if (p.k === 'charisma') d.charisma = t.total;
+          if (p.k === 'zor') d.zor = t.total;
+          return;
+        }
+        if (d[p.k] === null || d[p.k] === undefined) return;
+        if (p.k === 'od') { const b = d.od; d.od = apply(d.od); d.odMod = d.od; d.odTotal = (d.odTotal || 0) + d.od - b; }
+        else d[p.k] = Math.max(p.k === 'attr' ? -C.ATTR_LIMIT : 0, apply(d[p.k]));
+        if (p.k === 'attr') d.attr = Math.min(C.ATTR_LIMIT, d.attr);
+        const arr = d[p.k + 'Src'];
+        if (Array.isArray(arr)) arr.push(src);
+      });
+    });
   }
 
   // ------------------------------------------------------------ каталог: что можно выдать из таблиц
@@ -758,6 +823,6 @@
   window.Craft = {
     KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
-    walletCopper, money, priceCopper, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, catalog, effectSources, isTome, tomeBonus, num
+    walletCopper, money, priceCopper, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
   };
 })();

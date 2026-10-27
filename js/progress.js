@@ -71,6 +71,8 @@
     res.der.karmaGm = dk;
     res.der.karma = Math.max(-C.KARMA_LIMIT, Math.min(C.KARMA_LIMIT, res.der.karma + dk));
     const v = { state, res0, res, lv };
+    // состояния от ГМ меняют и параметры: таланты — сразу (ремесло нужно кузнице), остальное — после снаряжения
+    if (window.Craft) window.Craft.applyParamMods(res, rec.gm.effects, 'talents');
     // инвентарь и экипировка: урон, броня, уворот и слоты считаются по тому, что надето сейчас
     if (window.Craft && res.race) {
       const K = window.Craft;
@@ -92,6 +94,7 @@
         d.spellSlotsSrc = (d.spellSlotsSrc || []).filter(s => !/^гримуар/.test(s)).concat(eq.spellSrc);
       }
     }
+    if (window.Craft) window.Craft.applyParamMods(res, rec.gm.effects, 'der');
     return v;
   }
 

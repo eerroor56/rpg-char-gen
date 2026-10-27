@@ -1387,3 +1387,5 @@ body.modal-open { overflow: hidden; }
 .page-head > .row-actions { align-items: center; }
 @media print { .intro, .modal-back { display: none !important; } }
 .hm-path.hm-reveal.in:hover { transform: translateY(-2px); transition-delay: 0s; }
+.fx-params { margin: 0 0 10px; }
+.fx-params summary { cursor: pointer; font-size: .93rem; margin-bottom: 4px; }
