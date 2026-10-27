@@ -836,6 +836,7 @@ textarea { width: 100%; }
 .bt-bars { position: absolute; left: 6%; right: 6%; bottom: -5px; display: grid; gap: 1px; pointer-events: none; }
 .bt-bars i { display: block; height: 4px; border-radius: 2px; background: #3cc46a; box-shadow: 0 0 0 1px rgba(0, 0, 0, .7); min-width: 1px; }
 .bt-bars i.mp { background: #4a8fe0; height: 3px; }
+.bt-bars i.arm { background: #b9c3d1; height: 3px; }
 .bt-tok.is-turn { box-shadow: 0 0 0 3px #f3d58f, 0 0 16px 4px rgba(243, 213, 143, .65); animation: bt-turn 1.4s ease-in-out infinite alternate; z-index: 2; }
 @keyframes bt-turn { to { box-shadow: 0 0 0 3px #f3d58f, 0 0 6px 1px rgba(243, 213, 143, .35); } }
 .bt-tok.down { filter: grayscale(1) brightness(.6); }
@@ -860,6 +861,7 @@ textarea { width: 100%; }
 .bt-vbar { display: inline-block; vertical-align: middle; width: 80px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
 .bt-vbar i { display: block; height: 100%; background: #3cc46a; }
 .bt-vbar.mp i { background: #4a8fe0; }
+.bt-vbar.arm i { background: #b9c3d1; }
 .bt-vit-ctl { margin-top: 6px; }
 .bt-reg { margin-left: 6px; font-size: .82rem; color: #8fd6a4; font-variant-numeric: tabular-nums; }
 .bt-vbar.mp + .bt-reg { color: #8fb8ee; }

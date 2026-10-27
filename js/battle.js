@@ -415,7 +415,7 @@
       : t.kind === 'a' ? `${name} — ${allyKind(t.o)}${t.owner ? ' ' + t.owner.name : ''}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`
         : `${name}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`;
     const v = vitals(t), down = isDown(t);
-    const bars = v.mhp ? `<span class="bt-bars" aria-hidden="true"><i class="hp" style="width:${pct(v.hp, v.mhp)}%"></i>${v.mmp ? `<i class="mp" style="width:${pct(v.mp, v.mmp)}%"></i>` : ''}</span>` : '';
+    const bars = v.mhp ? `<span class="bt-bars" aria-hidden="true">${v.marm ? `<i class="arm" style="width:${pct(v.arm, v.marm)}%"></i>` : ''}<i class="hp" style="width:${pct(v.hp, v.mhp)}%"></i>${v.mmp ? `<i class="mp" style="width:${pct(v.mp, v.mmp)}%"></i>` : ''}</span>` : '';
     return `<button type="button" class="bt-tok ${t.kind === 'h' ? 'hero' : t.kind === 'a' ? 'ally' : 'foe'}${mine}${mov}${sel ? ' is-sel' : ''}${o.turn ? ' is-turn' : ''}${down ? ' down' : ''}${o.unseen ? ' unseen' : ''}" data-tok="${esc(id)}"${ring} title="${esc(title + (down ? ' — выбыл' : '') + (o.unseen ? ' — игроки не видят' : ''))}" aria-label="${esc(title)}, клетка ${x + 1}:${y + 1}">
       ${pic ? `<img src="${esc(pic)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<b>${esc(initials(name))}</b>`}${bars}</button>`;
   }
@@ -698,21 +698,23 @@
   }
   // ХП и МП: у героя — из расчёта персонажа, у противника и союзника — по бестиарию или расе (тело ×2, дух ×2); ГМ может задать сам.
   // Реген в ход: у героя — из расчёта, у остальных — тело / 5 и дух / 5 (+ реген расы). Зоркость: своя + поправка фишки (zor) + поправка поля
+  // Броня (прочность): у героя — броня надетого снаряжения, у противника и союзника — сколько задал ГМ; урон сначала идёт в неё
+  const armOf = (now, max) => (max ? (has(now) ? Math.max(0, Math.min(+now, max)) : max) : null);
   const BASE_ZOR = () => ((window.GM_CONFIG || {}).BASE_ZOR || 50);
   const fieldZor = () => +((board0() || {}).zor) || 0;
   function vitals(t) {
     if (t.kind === 'h') {
       const d = t.o.der || {}, v = t.o.vit || {};
       const mhp = has(d.hp) ? d.hp : null, mmp = has(d.mp) ? d.mp : null;
-      const zb = has(d.zor) ? d.zor : BASE_ZOR(), zm = +v.zor || 0;
-      return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, od: baseOd() + (+d.od || 0),
+      const zb = has(d.zor) ? d.zor : BASE_ZOR(), zm = +v.zor || 0, marm = +d.armor > 0 ? +d.armor : null;
+      return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, marm, arm: armOf(v.arm, marm), od: baseOd() + (+d.od || 0),
         rhp: has(d.hpRegen) ? d.hpRegen : null, rmp: has(d.mpRegen) ? d.mpRegen : null, zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
     }
     const st = creatureOf(t.o.src || t.o.n) || raceOf(t.o.src || t.o.n);
     const mhp = has(t.o.mhp) ? +t.o.mhp : st ? 2 * st.t : null, mmp = has(t.o.mmp) ? +t.o.mmp : st ? 2 * st.d : null;
     const rfx = k => ((st && st.fx) || []).filter(f => f.k === k && !f.cond).reduce((a, f) => a + (+f.v || 0), 0);
-    const zb = BASE_ZOR(), zm = +t.o.zor || 0;
-    return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, od: baseOd(),
+    const zb = BASE_ZOR(), zm = +t.o.zor || 0, marm = +t.o.marm > 0 ? +t.o.marm : null;
+    return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, marm, arm: armOf(t.o.arm, marm), od: baseOd(),
       rhp: has(t.o.rhp) ? +t.o.rhp : st ? Math.floor(st.t / 5) + rfx('hpRegen') : null,
       rmp: has(t.o.rmp) ? +t.o.rmp : st ? Math.floor(st.d / 5) + rfx('mpRegen') : null,
       zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
@@ -868,6 +870,7 @@
     const canZor = seer && (ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me));
     const zParts = `${v.zb}${v.zm ? ` ${signed(v.zm)} у фишки` : ''}${fieldZor() ? ` ${signed(fieldZor())} на поле` : ''}`;
     let html = `<div class="bt-vit">
+      ${v.marm ? `<span>Броня ${num ? `<b>${v.arm} / ${v.marm}</b>` : ''} ${bar(v.arm, v.marm, 'arm')}${v.arm <= 0 ? ' <span class="tag bad">разрушена</span>' : ''}</span>` : ''}
       <span>ХП ${num ? `<b>${has(v.hp) ? v.hp : '?'} / ${has(v.mhp) ? v.mhp : '?'}</b>` : ''} ${bar(v.hp, v.mhp, 'hp')}${num ? reg(v.rhp) : ''}</span>
       <span>МП ${num ? `<b>${has(v.mp) ? v.mp : '?'} / ${has(v.mmp) ? v.mmp : '?'}</b>` : ''} ${bar(v.mp, v.mmp, 'mp')}${num ? reg(v.rmp) : ''}</span>
       ${t.kind !== 'f' || ctx.gm ? `<span class="muted small">ОД в ход ${v.od}</span>` : ''}
@@ -876,10 +879,11 @@
         ${canZor ? `<span class="bt-zor-ctl"><button type="button" class="btn ghost small" data-act="btZor" data-v="-${ZOR_PER_CELL}" title="−${ZOR_PER_CELL} зоркости: на 1 клетку меньше">−${ZOR_PER_CELL}</button><button type="button" class="btn ghost small" data-act="btZor" data-v="${ZOR_PER_CELL}" title="+${ZOR_PER_CELL} зоркости: на 1 клетку больше">+${ZOR_PER_CELL}</button>${v.zm ? '<button type="button" class="linklike small" data-act="btZor" data-v="0">сбросить</button>' : ''}</span>` : ''}</div>` : ''}`;
     if (canVit) {
       html += `<div class="dev-row bt-vit-ctl"><input type="number" min="1" step="1" class="mini-num" data-ui="btAmt" data-ui-target="none" value="${esc(App.ui.btAmt || '')}" placeholder="сколько" aria-label="Сколько">
-        <button type="button" class="btn small" data-act="btVit" data-v="hp:-1">Урон</button><button type="button" class="btn small" data-act="btVit" data-v="hp:1">Лечение</button>
+        <button type="button" class="btn small" data-act="btVit" data-v="hp:-1"${v.marm ? ' title="Сначала в броню, остаток — в ХП"' : ''}>Урон</button>${v.marm ? '<button type="button" class="btn ghost small" data-act="btVit" data-v="hp:-1:pierce" title="Урон сквозь броню — сразу в ХП (гравитация, плоть, кость, бронебойные патроны)">Сквозь броню</button>' : ''}<button type="button" class="btn small" data-act="btVit" data-v="hp:1">Лечение</button>
         <button type="button" class="btn ghost small" data-act="btVit" data-v="mp:-1">−МП</button><button type="button" class="btn ghost small" data-act="btVit" data-v="mp:1">+МП</button>
         ${has(v.rhp) || has(v.rmp) ? `<button type="button" class="btn ghost small" data-act="btRegen" title="Добавить реген за ход: ХП ${has(v.rhp) ? '+' + fmt(v.rhp) : '—'}, МП ${has(v.rmp) ? '+' + fmt(v.rmp) : '—'} (не выше максимума)">+реген</button>` : ''}
-        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button><button type="button" class="linklike small" data-act="btMax" data-v="rhp">реген ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="rmp">реген МП</button>' : ''}</div>`;
+        ${v.marm ? `<button type="button" class="btn ghost small" data-act="btVit" data-v="arm:-1">−броня</button><button type="button" class="btn ghost small" data-act="btVit" data-v="arm:1">+броня</button>${v.arm < v.marm ? '<button type="button" class="linklike small" data-act="btArmFix" title="Вернуть броне полную прочность">починить</button>' : ''}` : ''}
+        ${ctx.gm && t.kind !== 'h' ? '<button type="button" class="linklike small" data-act="btMax" data-v="arm" title="Прочность брони; 0 — убрать броню">задать броню</button><button type="button" class="linklike small" data-act="btMax" data-v="hp">задать макс. ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="mp">макс. МП</button><button type="button" class="linklike small" data-act="btMax" data-v="rhp">реген ХП</button><button type="button" class="linklike small" data-act="btMax" data-v="rmp">реген МП</button>' : ''}</div>`;
     }
     return html;
   }
@@ -895,11 +899,11 @@
     const rows = toks.map(t => {
       const v = vitals(t);
       return `<tr class="k-${t.kind}${isDown(t) ? ' down' : ''}"><th scope="row"><button type="button" class="linklike" data-act="btSel" data-v="${esc(tid(t))}">${esc(tname(t))}</button></th>
-        <td>${n(v.hp, v.mhp)}</td><td>${r(v.rhp)}</td><td>${n(v.mp, v.mmp)}</td><td>${r(v.rmp)}</td><td>${v.od}</td><td>${t.kind === 'f' ? '—' : `${radius(v)} кл.`}</td></tr>`;
+        <td>${v.marm ? n(v.arm, v.marm) : '—'}</td><td>${n(v.hp, v.mhp)}</td><td>${r(v.rhp)}</td><td>${n(v.mp, v.mmp)}</td><td>${r(v.rmp)}</td><td>${v.od}</td><td>${t.kind === 'f' ? '—' : `${radius(v)} кл.`}</td></tr>`;
     }).join('');
-    return `<div class="bt-roster"><button type="button" class="linklike small" data-act="btRoster" aria-expanded="${open}">${open ? '▾' : '▸'} ХП, МП и реген у всех на поле</button>
-      ${open ? `<div class="table-wrap"><table class="bt-roster-t"><thead><tr><th>Кто</th><th>ХП</th><th>реген ХП</th><th>МП</th><th>реген МП</th><th>ОД</th><th>обзор</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="muted small">Реген — сколько восстанавливается за ход: у героя — из его расчёта, у противника и союзника — тело / 5 и дух / 5 (+ реген расы), ГМ может задать сам.</p>` : ''}</div>`;
+    return `<div class="bt-roster"><button type="button" class="linklike small" data-act="btRoster" aria-expanded="${open}">${open ? '▾' : '▸'} Броня, ХП, МП и реген у всех на поле</button>
+      ${open ? `<div class="table-wrap"><table class="bt-roster-t"><thead><tr><th>Кто</th><th>броня</th><th>ХП</th><th>реген ХП</th><th>МП</th><th>реген МП</th><th>ОД</th><th>обзор</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted small">Реген — сколько восстанавливается за ход: у героя — из его расчёта, у противника и союзника — тело / 5 и дух / 5 (+ реген расы), ГМ может задать сам. Броня — прочность надетой брони героя; противнику и союзнику её задаёт ГМ. Урон сначала идёт в броню, остаток — в ХП.</p>` : ''}</div>`;
   }
   // очередь: новые фишки встают по броску, текущий ход не сбивается
   function orderAdd(b, id) {
@@ -1083,18 +1087,38 @@
       if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
       const amt = Math.round(+App.ui.btAmt || 0);
       if (amt <= 0) { App.toast('Впишите, сколько'); return; }
-      const [what, sign] = btn.dataset.v.split(':');
-      const v = vitals(t), max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
-      const val = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * amt) : (+now || 0) + sign * amt);
-      setVit(t, { [what]: val });
+      const [what, sign, how] = btn.dataset.v.split(':');
+      const v = vitals(t);
+      if (what === 'arm') { if (v.marm) setVit(t, { arm: Math.max(0, Math.min(v.marm, v.arm + sign * amt)) }); return; }
+      const max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
+      // урон сначала снимает прочность брони, остаток — ХП; «сквозь броню» — сразу в ХП
+      let rest = amt, soak = 0;
+      const patch = {};
+      if (what === 'hp' && sign < 0 && how !== 'pierce' && v.arm > 0) {
+        soak = Math.min(v.arm, amt);
+        patch.arm = v.arm - soak;
+        rest = amt - soak;
+      }
+      if (rest) patch[what] = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * rest) : (+now || 0) + sign * rest);
+      setVit(t, patch);
+      if (soak) App.toast(`${tname(t)}: броня −${soak}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}${rest ? `, ХП −${rest}` : ''}`);
+    },
+    // полная прочность брони: у героя — броня надетого снаряжения, у остальных — заданная ГМ
+    btArmFix() {
+      const hit = selTok();
+      if (!hit || hit.t.kind === 'o') return;
+      const t = hit.t;
+      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      setVit(t, { arm: null });
     },
     btMax(btn) {
       const hit = selTok();
       if (!hit || !ctx.gm || hit.t.kind === 'o' || hit.t.kind === 'h') return;
       const amt = Math.round(+App.ui.btAmt || 0);
-      if (amt <= 0) { App.toast('Впишите число в поле «сколько»'); return; }
       const w = btn.dataset.v;
-      setVit(hit.t, w === 'hp' ? { mhp: amt, hp: amt } : w === 'mp' ? { mmp: amt, mp: amt } : { [w]: amt });
+      if (w === 'arm' && amt === 0 && String(App.ui.btAmt || '').trim() === '0') { setVit(hit.t, { marm: null, arm: null }); return; }
+      if (amt <= 0) { App.toast('Впишите число в поле «сколько»'); return; }
+      setVit(hit.t, w === 'hp' ? { mhp: amt, hp: amt } : w === 'mp' ? { mmp: amt, mp: amt } : w === 'arm' ? { marm: amt, arm: amt } : { [w]: amt });
     },
     // реген за ход: +ХП и +МП, не выше максимума
     btRegen() {

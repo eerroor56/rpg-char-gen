@@ -649,7 +649,7 @@
     const bag = v.inv.items.filter(x => !seen.has(x.id));
     const w = v.inv.wallet;
     return `${worn.length ? `<ul class="small">${worn.join('')}</ul>` : '<p class="muted">Ничего не надето.</p>'}
-      <p><b>Броня:</b> ${fmt(v.eq.armor)}${v.eq.magicArmor ? ` (+ маг ${fmt(v.eq.magicArmor)})` : ''}; <b>уворот:</b> ${fmt(v.res.der.dodge)}; <b>слоты:</b> ${fmt(v.res.der.slotsUsed)} / ${fmt(v.res.der.slots)}</p>
+      <p><b>Броня:</b> ${rec && rec.vit && v.eq.armor && rec.vit.arm !== undefined && rec.vit.arm !== null && +rec.vit.arm < v.eq.armor ? `${fmt(Math.max(0, +rec.vit.arm))} / ` : ''}${fmt(v.eq.armor)}${v.eq.magicArmor ? ` (+ маг ${fmt(v.eq.magicArmor)})` : ''}; <b>уворот:</b> ${fmt(v.res.der.dodge)}; <b>слоты:</b> ${fmt(v.res.der.slotsUsed)} / ${fmt(v.res.der.slots)}</p>
       ${bag.length ? `<p><b>Рюкзак:</b> ${bag.map(x => esc(x.name) + ((+x.qty || 1) > 1 ? ' ×' + x.qty : '')).join(', ')}</p>` : ''}
       ${rec && spellsOf(rec).length ? `<p><b>Запомненные заклинания</b> (${fmt(spellsOf(rec).length)} из ${fmt(v.res.der.spellSlots || 0)}): ${spellsOf(rec).map(x => esc(x.name) + (x.formula ? ` <span class="muted">(${esc(x.formula)})</span>` : '')).join(', ')}</p>` : ''}
       <p><b>Кошелёк:</b> ${esc(K.money(K.walletCopper(w)))}${(w.other || []).filter(x => x && x.name && num(x.qty)).map(x => `, ${esc(x.name)}: ${fmt(num(x.qty))}`).join('')}</p>`;

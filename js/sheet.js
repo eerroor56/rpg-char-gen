@@ -60,6 +60,7 @@
           <div><dt>Зоркость</dt><dd>${fmt(d.zor)}${+vit.zor ? ` <span class="muted small">(${signed(+vit.zor)} в бою)</span>` : ''}</dd></div><div><dt>Харизма</dt><dd>${fmt(d.charisma)}</dd></div>
           <div><dt>Привлекат.</dt><dd>${signed(d.attr)}</dd></div><div><dt>Молитвы</dt><dd>${d.prayers}</dd></div>
           <div><dt>Ячейки закл.</dt><dd>${d.spellSlots}</dd></div><div><dt>Опыт</dt><dd>${d.expPct ? signed(d.expPct) + '%' : '±0%'}${d.expMul !== 1 ? ' ×' + d.expMul : ''}</dd></div>
+          ${d.armor !== undefined ? `<div><dt>Броня</dt><dd>${d.armor ? now(vit.arm === undefined || vit.arm === null ? vit.arm : Math.min(+vit.arm, d.armor), d.armor) : ''}${fmt(d.armor)}${d.magicArmor ? ` <span class="muted small">+ маг ${fmt(d.magicArmor)}</span>` : ''}</dd></div>` : ''}
           ${d.magPct ? `<div><dt>Маг. урон</dt><dd>${signed(d.magPct)}%</dd></div>` : ''}
           ${d.sizeIn || d.sizeOut ? `<div><dt>Урон от размера</dt><dd>получ. ${signed(d.sizeIn)}% / исх. ${signed(d.sizeOut)}%</dd></div>` : ''}
           ${d.gold ? `<div><dt>Золото</dt><dd>${d.gold}</dd></div>` : ''}
