@@ -514,8 +514,18 @@
   function inventoryOf(rec, state, res0) {
     const gm = rec.gm || {};
     const start = startInventory(state, res0);
-    const items = gm.invInit ? (gm.items || []).filter(Boolean)
+    const base = gm.invInit ? (gm.items || []).filter(Boolean)
       : start.items.concat((gm.items || []).filter(x => x && x.name).map((x, i) => Object.assign({ id: 'legacy-' + i, kind: 'item', qty: 1 }, x)));
+    // передачи между персонажами (js/inventory.js): принятое (got) лежит у персонажа, пока ГМ не перенёс его в gm.items (got[].in),
+    // отданное (give) вычитается из своего — по id предмета и количеству
+    const got = (Array.isArray(rec.got) ? rec.got : []).filter(g => g && g.item && !g.in).map(g => g.item);
+    const out = {};
+    (Array.isArray(rec.give) ? rec.give : []).forEach(g => { if (g && g.iid && g.item) out[g.iid] = (out[g.iid] || 0) + (+g.item.qty || 1); });
+    const items = base.concat(got).map(x => {
+      if (!out[x.id]) return x;
+      const left = (+x.qty || 1) - out[x.id];
+      return left > 0 ? Object.assign({}, x, { qty: left }) : null;
+    }).filter(Boolean);
     const ids = new Set(items.map(x => x.id));
     const raw = rec.equip && typeof rec.equip === 'object' ? rec.equip : start.equip;
     const equip = {};
@@ -524,7 +534,7 @@
     const issued = gm.wallet ? JSON.parse(JSON.stringify(gm.wallet)) : { з: num((res0.der || {}).gold) + num(gm.gold) };
     if (!Array.isArray(issued.other)) issued.other = [];
     const wallet = withPurse(issued, rec.purse);
-    return { items, equip, wallet, issued, started: !gm.invInit };
+    return { items, base, equip, wallet, issued, started: !gm.invInit };
   }
 
   // ------------------------------------------------------------ экипировка персонажа

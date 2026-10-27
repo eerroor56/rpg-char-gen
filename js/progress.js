@@ -317,7 +317,7 @@
     if (App.ui.devFor === id) return;
     App.ui.devFor = id;
     App.ui.devDraft = newDraft();
-    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ', 'spEdit', 'spName', 'spFormula', 'spNote'].forEach(k => { App.ui[k] = undefined; });
+    ['devXpAmount', 'devXpCreature', 'devLearnName', 'devNotes', 'devGroup', 'gPriv', 'invDraft', 'invSel', 'invAdd', 'invWallet', 'fxDraft', 'fxEdit', 'invQ', 'spEdit', 'spName', 'spFormula', 'spNote', 'invGiveTo', 'invGiveN'].forEach(k => { App.ui[k] = undefined; });
   }
 
   function sumVals(o) { return Object.values(o || {}).reduce((a, x) => a + (+x || 0), 0); }

@@ -310,7 +310,7 @@
           <span class="cc-body"><span class="cc-name">${esc(ch.name || 'Безымянный герой')}</span>
           <span class="small">${race ? esc(cap(race.name)) : 'раса не выбрана'}${race ? `, ур. ${fmt(v.res.level)}` : ''}</span>
           <span class="small muted">игрок: ${esc(ch.ownerName || '—')}${ch.owner === me ? ' (вы)' : ''}</span>
-          <span class="tag st-${esc(ch.status)}">${STATUS[ch.status] || esc(ch.status)}</span></span></a></li>`;
+          <span class="tag st-${esc(ch.status)}">${STATUS[ch.status] || esc(ch.status)}</span>${window.Inv && window.Inv.incoming(ch, ch.id, chars).length ? ` <span class="tag freq" title="Другой персонаж передаёт вещи — принять во вкладке «Снаряжение»">передают вещи: ${window.Inv.incoming(ch, ch.id, chars).length}</span>` : ''}</span></a></li>`;
       }).join('')}</ul>` : '<div class="card empty">Персонажей пока нет.</div>'}
       ${alliesHtml}
       <div class="card new-char"><h3>Новый персонаж в кампанию</h3>
@@ -476,6 +476,7 @@
     setPage('ch:' + cid + '/' + chid, () => {
       sub('camp', (ok, bad) => C.watchCampaign(cid, c => { ok('camp')(c); maybePrivate(cid, chid); }, bad));
       sub('ch', (ok, bad) => C.watchCharacter(cid, chid, ok('ch'), bad));
+      sub('chars', (ok, bad) => C.watchCharacters(cid, ok('chars'), bad));   // кому передать предмет и что передают этому
       sub('events', (ok, bad) => C.watchEvents(cid, ok('events'), bad, { chid }));
     });
     const { camp, ch, events } = G.d;
@@ -488,6 +489,8 @@
     App.devCtx = {
       record: rec,
       perms: { gm, owner },
+      chid,
+      party: G.d.chars ? G.d.chars.filter(x => x.id !== chid) : null,
       save: (patch, text) => {
         const p = JSON.parse(JSON.stringify(patch));
         const lvl = Dev.compute(Object.assign({}, rec, p)).res.level;
@@ -664,7 +667,7 @@
       App.editingId = null; App.save();
       // развитие в игре едет вместе с листом: в мастере лист показывается с ним (меняется только лист создания)
       setTarget({ cid: c.id, chid: ch.id, cname: c.name, status: ch.status,
-        rec: JSON.parse(JSON.stringify({ prog: ch.prog, gm: ch.gm, equip: ch.equip, spells: ch.spells, vit: ch.vit, purse: ch.purse, notes: ch.notes })) });
+        rec: JSON.parse(JSON.stringify({ prog: ch.prog, gm: ch.gm, equip: ch.equip, spells: ch.spells, vit: ch.vit, purse: ch.purse, notes: ch.notes, give: ch.give, got: ch.got })) });
       location.hash = '#create/summary';
     },
     gStatus(b) {

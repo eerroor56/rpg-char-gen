@@ -6,6 +6,7 @@
  *               прибавки и множители к статам из них сразу учитываются в характеристиках.
  * Права: предметы и состояния меняет ГМ (поле gm); надеть и снять может и игрок (поле equip).
  * Кошелёк: валюту выдаёт и забирает ГМ (gm.wallet), тратит и разменивает игрок (purse) — сдача считается сама.
+ * Передача предметов другому персонажу кампании: отдающий пишет в своего персонажа give, получатель, приняв, — got.
  */
 (function () {
   'use strict';
@@ -26,15 +27,61 @@
   function gmChange(mutate, text) {
     const v = view();
     const gm = Dev().gmCopy();
-    if (!gm.invInit) { gm.items = clone(v.inv.items); gm.invInit = true; }
+    if (!gm.invInit) { gm.items = clone(v.inv.base); gm.invInit = true; }
     if (!gm.wallet) gm.wallet = clone(v.inv.issued);   // только выданное ГМ, без трат игрока
     delete gm.gold;
+    // принятое от других персонажей переносится в список ГМ, чтобы его можно было менять (got[].in — уже перенесено)
+    const got = gots(ctx().record), fresh = got.filter(g => g.item && !g.in);
+    if (fresh.length && !Array.isArray(gm.items)) gm.items = [];
+    fresh.forEach(g => gm.items.push(clone(g.item)));
     const equip = clone(v.inv.equip);
     const before = JSON.stringify(equip);
     if (mutate(gm, v, equip) === false) return;
     const patch = { gm };
+    if (fresh.length) patch.got = got.map(g => (g.item && !g.in ? { t: g.t, from: g.from, fromName: g.fromName || '', ms: g.ms || 0, in: true } : g));
     if (JSON.stringify(equip) !== before) patch.equip = equip;
     Dev().commit(patch, typeof text === 'function' ? text() : text);
+  }
+
+  // ------------------------------------------------------------ передача предметов между персонажами кампании
+  // На чужого персонажа и на поле gm у игрока прав нет, поэтому передача в два шага: отдающий записывает её в своего персонажа (give) —
+  // вещь пропадает из его инвентаря; получатель принимает (got) — вещь появляется у него. Пока не приняли, отдавший может отменить
+  const gives = rec => (Array.isArray(rec && rec.give) ? rec.give : []).filter(g => g && g.t && g.item);
+  const gots = rec => (Array.isArray(rec && rec.got) ? rec.got : []).filter(g => g && g.t);
+  const party = () => (ctx() && ctx().party) || null;   // другие персонажи кампании; у героя вне кампании их нет
+  const taken = (ch, t) => gots(ch).some(x => x.t === t);
+  const heroName = ch => (ch && ch.name) || 'Безымянный герой';
+  const giveLabel = g => `«${g.item.name}»${(+g.item.qty || 1) > 1 ? ' ×' + (+g.item.qty) : ''}`;
+  // что передают персонажу chid и он ещё не принял
+  function incoming(rec, chid, chars) {
+    const out = [];
+    (chars || []).forEach(ch => { if (ch.id !== chid) gives(ch).forEach(g => { if (g.to === chid && !taken(rec, g.t)) out.push({ g, from: ch }); }); });
+    return out;
+  }
+  const outgoing = (rec, chars) => gives(rec).map(g => ({ g, to: (chars || []).find(c => c.id === g.to) || null })).filter(x => !x.to || !taken(x.to, x.g.t));
+
+  function transferCard(perms) {
+    const P = party(), c = ctx();
+    if (!P) return '';
+    const can = perms.gm || perms.owner;
+    const inc = incoming(c.record, c.chid, P), outg = outgoing(c.record, P);
+    if (!inc.length && !outg.length) return '';
+    return `<section class="dev-card give-card"><h2>Передача предметов</h2>
+      ${inc.length ? `<h3>Вам передают</h3><ul class="give-list">${inc.map(({ g, from }) => `<li><span>${esc(giveLabel(g))} от <b>${esc(heroName(from))}</b></span>${can ? `<button type="button" class="btn small primary" data-act="invTake" data-v="${esc(g.t)}" data-from="${esc(from.id)}">Принять</button>` : ''}</li>`).join('')}</ul>` : ''}
+      ${outg.length ? `<h3>Ждут, пока примут</h3><ul class="give-list">${outg.map(({ g, to }) => `<li><span>${esc(giveLabel(g))} → <b>${esc(to ? heroName(to) : (g.toName || 'персонаж удалён'))}</b></span>${can ? `<button type="button" class="btn small ghost" data-act="invGiveBack" data-v="${esc(g.t)}">Отменить</button>` : ''}</li>`).join('')}</ul>
+        <p class="muted small">Пока передачу не приняли, вещи нет ни у кого из двоих; отмена возвращает её обратно.</p>` : ''}
+    </section>`;
+  }
+  // «Передать» в карточке предмета: кому (персонажи кампании в игре) и сколько из стопки
+  function giveRow(it, perms) {
+    const P = party();
+    if (!P || !(perms.gm || perms.owner)) return '';
+    const to = P.filter(ch => ch.status === 'active');
+    if (!to.length) return '';
+    const n = +it.qty || 1;
+    return `<div class="dev-row give-row"><label>Передать <select data-ui="invGiveTo" data-ui-target="none" aria-label="Кому передать">${opt('', '— кому —', App.ui.invGiveTo || '')}${to.map(ch => opt(ch.id, heroName(ch) + (ch.ownerName ? ` (игрок ${ch.ownerName})` : ''), App.ui.invGiveTo || '')).join('')}</select></label>
+      ${n > 1 ? `<label>сколько <input type="number" class="mini-num" min="1" max="${n}" step="1" data-ui="invGiveN" data-ui-target="none" value="${esc(App.ui.invGiveN || n)}"></label>` : ''}
+      <button type="button" class="btn" data-act="invGive" data-v="${esc(it.id)}">Передать</button></div>`;
   }
 
   // ------------------------------------------------------------ надеть / снять
@@ -107,7 +154,7 @@
     const selJewel = selCalc && ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(selCalc.cat);
     const weapons = eq.weapons.filter(w => roleKind(w.kind));
 
-    let html = `<section class="dev-card doll-card"><h2>Экипировка</h2>
+    let html = transferCard(perms) + `<section class="dev-card doll-card"><h2>Экипировка</h2>
       ${eq.warnings.length ? `<div class="checks good"><ul>${eq.warnings.map(w => `<li class="warn">${esc(w)}</li>`).join('')}</ul></div>` : ''}
       <div class="doll">
         <div class="doll-col">${group(['head', 'face', 'neck', 'cloak', 'body'])}</div>
@@ -244,7 +291,7 @@
           <button type="button" class="btn ghost" data-act="invQty" data-v="${esc(it.id)}" data-d="-1" ${(+it.qty || 1) > 1 ? '' : 'disabled'}>−1</button>
           <button type="button" class="btn ghost danger" data-act="invDel" data-v="${esc(it.id)}">Убрать</button>` : ''}
         <button type="button" class="linklike small" data-act="invSel" data-v="">закрыть</button>
-      </div></section>`;
+      </div>${giveRow(it, perms)}</section>`;
   }
 
   // ------------------------------------------------------------ кошелёк
@@ -719,6 +766,39 @@
       doEquip(sel.id, b.dataset.v);
     },
     invEquip(b) { doEquip(b.dataset.v); },
+    // отдать предмет (или часть стопки) другому персонажу: у себя он пропадает сразу, у получателя — появится, когда тот примет
+    invGive(b) {
+      const c = ctx(), P = party();
+      const it = view().inv.items.find(x => x.id === b.dataset.v);
+      const to = P && P.find(ch => ch.id === App.ui.invGiveTo && ch.status === 'active');
+      if (!it) return;
+      if (!to) { App.toast('Выберите, кому передать'); return; }
+      const have = +it.qty || 1, n = have > 1 ? Math.floor(num(App.ui.invGiveN) || have) : 1;
+      if (n < 1 || n > have) { App.toast(`Можно передать от 1 до ${have}`); return; }
+      const item = Object.assign(clone(it), { qty: n, src: `от ${heroName(c.record)}` });
+      const g = { t: newId(), iid: it.id, to: to.id, toName: heroName(to), item, ms: Date.now() };
+      if (!confirm(`Передать ${giveLabel(g)} персонажу «${heroName(to)}»? У вас вещь пропадёт сразу, у получателя появится, когда он примет.`)) return;
+      App.ui.invGiveTo = App.ui.invGiveN = undefined;
+      if (n === have) App.ui.invSel = null;
+      Dev().commit({ give: gives(c.record).concat(g) }, `Передаёт ${giveLabel(g)} → «${heroName(to)}»`);
+    },
+    invGiveBack(b) {
+      const c = ctx();
+      const g = gives(c.record).find(x => x.t === b.dataset.v);
+      if (!g) return;
+      const to = (party() || []).find(ch => ch.id === g.to);
+      if (to && taken(to, g.t)) { App.toast('Уже принято — отменить нельзя'); return; }
+      Dev().commit({ give: gives(c.record).filter(x => x.t !== g.t) }, `Отменяет передачу ${giveLabel(g)} → «${to ? heroName(to) : g.toName}»`);
+    },
+    invTake(b) {
+      const c = ctx();
+      const from = (party() || []).find(ch => ch.id === b.dataset.from);
+      const g = from && gives(from).find(x => x.t === b.dataset.v && x.to === c.chid);
+      if (!g) { App.toast('Передачу уже отменили'); return; }
+      if (taken(c.record, g.t)) return;
+      const item = Object.assign(clone(g.item), { id: newId() });
+      Dev().commit({ got: gots(c.record).concat({ t: g.t, from: from.id, fromName: heroName(from), item, ms: Date.now() }) }, `Принимает ${giveLabel(g)} от «${heroName(from)}»`);
+    },
     invUnequip(b) { doUnequip(b.dataset.v); },
     invQty(b) {
       const d = +b.dataset.d;
@@ -1051,5 +1131,5 @@
     }
   });
 
-  window.Inv = { gearTab, effectsTab, sheetGear, sheetExtra, equipInto };
+  window.Inv = { gearTab, effectsTab, sheetGear, sheetExtra, equipInto, incoming };
 })();

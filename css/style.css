@@ -751,6 +751,12 @@ textarea { width: 100%; }
 .bag li .btn { margin-left: auto; }
 .bag-name { font-weight: 700; text-decoration: none; }
 .item-card { border-color: var(--brass); }
+.give-card { border-color: var(--brass); }
+.give-card h3 { margin: 10px 0 4px; font-size: 1rem; }
+.give-list { list-style: none; padding: 0 !important; margin: 0; max-width: none !important; }
+.give-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); margin: 0; }
+.give-list li .btn { margin-left: auto; }
+.give-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-soft); }
 .item-card h2 { margin: 0; }
 .item-kv { margin: 8px 0; }
 .item-warn { margin: 6px 0; padding-left: 18px; }
