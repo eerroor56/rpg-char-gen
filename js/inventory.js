@@ -252,6 +252,21 @@
   // карточка выбранного предмета
   // уровень ремесла, нужный игроку, чтобы изготовить предмет самому (число после дроби в таблице)
   const skillText = c => (c.skill === null || c.skill === undefined ? '' : `<span class="${c.skillOk === false ? 'req-bad' : c.skillOk ? 'req-ok' : ''}">ремесло ур. ${c.skill}</span>${c.craftHave !== null && c.craftHave !== undefined ? ` <span class="muted small">(у персонажа ${fmt(c.craftHave)})</span>` : ''}`);
+  // цена за штуку: записанная при выдаче, иначе — по материалам (изготовленное) или по таблицам (по названию)
+  function priceOf(it) {
+    if (typeof it.price === 'number') return { cu: it.price, own: !!it.priceOwn, mat: !it.priceOwn && K.CRAFTABLE.includes(it.kind) };
+    if (K.CRAFTABLE.includes(it.kind)) { const p = K.craftPrice(it); return p.lines.length && !p.unknown.length ? { cu: p.total, mat: true } : null; }
+    const cu = K.tablePrice(it.name, unlocked());
+    return cu !== null ? { cu } : null;
+  }
+  function priceText(it) {
+    const p = priceOf(it), qty = +it.qty || 1;
+    if (!p) return '';
+    return `<strong>${esc(K.money(p.cu))}</strong>${qty > 1 ? ` за шт. · всего ${esc(K.money(p.cu * qty))}` : ''}${p.own ? ' <span class="muted small">— назначил ГМ</span>' : p.mat ? ' <span class="muted small">— по материалам</span>' : ''}`;
+  }
+  // своя цена, вписанная ГМ: «5(се)», «2 з 50 се», «350»; пусто или непонятно — null
+  const ownPrice = s => (String(s || '').trim() ? K.priceCopper(s) : null);
+
   function itemCard(it, c, perms, isWorn) {
     const canEquip = perms.gm || perms.owner;
     const parts = ((it.craft || {}).parts || []).filter(p => p.mat);
@@ -272,6 +287,7 @@
         ${kv('Гнёзда для камней', K.CRAFTABLE.includes(it.kind) && c.base ? `${c.sockets}${((it.craft || {}).inlays || []).length ? `, занято ${((it.craft || {}).inlays || []).length}` : ''}` : '')}
         ${kv('Размер', K.CRAFTABLE.includes(it.kind) ? esc(c.size.name) : '')}
         ${kv('Заточка', c.sharpen ? `${c.sharpen} из ${C.CRAFT.SHARPEN_MAX}` : '')}
+        ${kv('Цена', priceText(it))}
         ${perms.gm && WEARABLE_ANY.includes(it.kind) ? kv('Где носить', `<select data-change="invCat" data-v="${esc(it.id)}" aria-label="Где носить">${catOptions(it)}</select>`) : kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
       </dl>
@@ -447,8 +463,10 @@
       <label>Название <input type="text" data-change="invField" data-k="name" value="${esc(d.name)}" placeholder="${esc(K.autoName(d))}"></label>
       <label>Количество <input type="number" min="1" step="1" data-change="invField" data-k="qty" value="${esc(d.qty || 1)}"></label>
       <label>Заметка <input type="text" data-change="invField" data-k="note" value="${esc(d.note)}" placeholder="кто выковал, откуда"></label>
+      <label>Своя цена <input type="text" data-change="invField" data-k="priceIn" value="${esc(d.priceIn || '')}" placeholder="по материалам" maxlength="60">
+        <span class="muted small">за штуку: «5(се)», «2 з 50 се», «350» (медные); пусто — по материалам</span></label>
     </div>`;
-    html += `<div id="invPreview">${previewCard(item, c)}</div>`;
+    html += `<div id="invPreview">${previewCard(item, c)}${craftPriceHtml(d, item)}</div>`;
     html += `<div class="row-actions"><button type="button" class="btn primary" data-act="invSave">${d.editId ? 'Сохранить изменения' : 'Выдать'}</button>
       <button type="button" class="btn ghost" data-act="invReset">${d.editId ? 'Отмена' : 'Очистить'}</button></div>`;
     return html;
@@ -509,12 +527,29 @@
     const item = Object.assign({}, d, { name: d.name || K.autoName(d) });
     const c = K.compute(item, v.ctx);
     const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-    set('invPreview', previewCard(item, c));
+    set('invPreview', previewCard(item, c) + craftPriceHtml(d, item));
     ['dmg', 'non', 'all'].forEach(r => set('invSum_' + r, sumText(d, c, r)));
     set('invGlyphHead', glyphHead(c, ['armor', 'shield', 'prosthesis'].includes(d.kind)));
     set('invGunHead', gunHead(c));
     const nm = document.querySelector('[data-k="name"]');
     if (nm) nm.placeholder = K.autoName(d);
+  }
+
+  // цена изготовленного предмета: по материалам с расшифровкой или своя, если ГМ её вписал; за штуку и за всё количество
+  function craftPriceHtml(d, item) {
+    const p = K.craftPrice(item), qty = Math.max(1, Math.floor(num(d.qty) || 1));
+    const typed = String(d.priceIn || '').trim(), own = ownPrice(typed);
+    if (!p.lines.length && !p.unknown.length && own === null) return '';
+    const each = own !== null ? own : p.total;
+    const how = l => (l.how === 'coat' ? `напыление: ${l.name}` : l.how === 'inlay' ? `камень: ${l.name}${l.u > 1 ? ' ×' + fmt(l.u) : ''}` : `${l.name} ${fmt(l.u)} ед.`) + ` × ${K.money(l.each)}`;
+    return `<div class="item-price">
+      <p><b>Цена${own !== null ? '' : ' по материалам'}:</b> <strong>${esc(K.money(each))}</strong>${qty > 1 ? ` за шт. · всего за ${qty} шт. — <strong>${esc(K.money(each * qty))}</strong>` : ''}
+        ${own !== null ? `<span class="muted small">— своя цена; по материалам ${esc(K.money(p.total))}</span>` : ''}</p>
+      ${typed && own === null ? '<p class="bad-text small">Не понял свою цену — впишите числом с монетой: «5(се)», «2 з 50 се» или просто медные.</p>' : ''}
+      ${p.lines.length ? `<p class="muted small">${esc(p.lines.map(how).join(' + '))}</p>` : ''}
+      ${p.unknown.length ? `<p class="muted small">Без цены в таблице: ${esc(p.unknown.join(', '))} — не посчитано.</p>` : ''}
+      ${own === null && p.lines.length ? '<p class="muted small">Только материал: заточка, глифы, модель, усиленное ремесло и существо в предмете в таблице не оценены — добавьте их своей ценой.</p>' : ''}
+    </div>`;
   }
 
   // что дают усиления: материал → каждое усиление со своей прибавкой → итог; у глифов — мощь каждого
@@ -580,9 +615,18 @@
     const c = st.creature ? creatureList().find(x => norm(x.n) === norm(st.creature)) : null;
     return `${creaturesList()}<div class="dev-row"><input type="text" list="invCreatures" data-change="invDropPick" value="${esc(st.creature || '')}" placeholder="существо" aria-label="Существо">
         <label>Разделочный стол <select data-change="invDropMult">${[1, 2, 3, 4].map(m => opt(m, m === 1 ? 'нет' : `×${m}`, st.mult || 1)).join('')}</select></label></div>
-      ${c ? (st.rows || []).length ? `<ul class="dev-list">${st.rows.map((r, i) => `<li><span>${esc(r.name)}</span><input type="number" class="mini-num" min="0" step="1" data-change="invDropQty" data-v="${i}" value="${esc(r.qty)}" aria-label="Количество: ${esc(r.name)}"></li>`).join('')}</ul>
+      ${c ? (st.rows || []).length ? `<ul class="dev-list">${st.rows.map((r, i) => { const cu = K.tablePrice(r.name, true); return `<li><span>${esc(r.name)}${cu !== null ? ` <span class="muted small">— ${esc(K.money(cu))} за шт.</span>` : ''}</span><input type="number" class="mini-num" min="0" step="1" data-change="invDropQty" data-v="${i}" value="${esc(r.qty)}" aria-label="Количество: ${esc(r.name)}"></li>`; }).join('')}</ul>
+        ${dropTotal(st.rows)}
         <div class="dev-row"><button type="button" class="btn small" data-act="invDropTake">Забрать в рюкзак</button></div>` : '<p class="muted small">У этого существа в бестиарии нет добычи.</p>' : st.creature ? '<p class="muted small">Такого существа нет в бестиарии.</p>' : ''}
       <p class="muted small">Опыт за победу начисляется во вкладке «Развитие».</p>`;
+  }
+
+  // добыча: сколько стоит всё по таблицам; что без цены — перечислено
+  function dropTotal(rows) {
+    let total = 0;
+    const none = [];
+    rows.filter(r => r.qty > 0).forEach(r => { const cu = K.tablePrice(r.name, true); if (cu === null) none.push(r.name); else total += cu * r.qty; });
+    return `<p class="item-price"><b>Цена добычи:</b> <strong>${esc(K.money(total))}</strong>${none.length ? ` <span class="muted small">— без цены в таблицах: ${esc(none.join(', '))}</span>` : ''}</p>`;
   }
 
   function customForm() {
@@ -592,6 +636,7 @@
       <label>Название <input type="text" data-ui="invCName" data-ui-target="none" value="${esc(App.ui.invCName || '')}" maxlength="120"></label>
       <label>Где надевать <select data-ui="invCCat" data-ui-target="none"><option value="">— не надевается —</option>${cats.map(([k, t]) => opt(k, t, App.ui.invCCat || '')).join('')}</select></label>
       <label>Количество <input type="number" min="1" step="1" data-ui="invCQty" data-ui-target="none" value="${esc(App.ui.invCQty || 1)}"></label>
+      <label>Цена за штуку <input type="text" data-ui="invCPrice" data-ui-target="none" value="${esc(App.ui.invCPrice || '')}" maxlength="60" placeholder="5(се), 2 з 50 се или медные"></label>
       <label class="wide">Описание и эффект <textarea rows="3" data-ui="invCText" data-ui-target="none" placeholder="что делает предмет">${esc(App.ui.invCText || '')}</textarea></label>
     </div>
     <div class="dev-row"><button type="button" class="btn small" data-act="invCAdd">Выдать</button></div>
@@ -828,7 +873,16 @@
       if (!K.CRAFTABLE.includes(it.kind)) {
         const name = prompt('Название', it.name); if (name === null) return;
         const effect = prompt('Описание и эффект', it.effect || ''); if (effect === null) return;
-        gmChange(gm => { const x = gm.items.find(y => y.id === it.id); x.name = name.trim() || x.name; x.effect = effect; }, `Изменён предмет «${name.trim() || it.name}»`);
+        const was = priceOf(it);
+        const priceIn = prompt('Цена за штуку: «5(се)», «2 з 50 се» или медные; пусто — как в таблице', was ? K.money(was.cu) : ''); if (priceIn === null) return;
+        const cu = ownPrice(priceIn);
+        if (priceIn.trim() && cu === null) { App.toast('Не понял цену — например «5(се)» или «2 з 50 се»'); return; }
+        gmChange(gm => {
+          const x = gm.items.find(y => y.id === it.id);
+          if (!x) return false;
+          x.name = name.trim() || x.name; x.effect = effect;
+          if (cu === null) { delete x.price; delete x.priceOwn; } else if (!was || cu !== was.cu) { x.price = cu; x.priceOwn = true; }
+        }, `Изменён предмет «${name.trim() || it.name}»`);
         return;
       }
       const d = blankDraft(it.kind);
@@ -837,6 +891,7 @@
       if (!d.craft.soul) d.craft.soul = { creature: '', mode: '', abilities: [] };
       if (d.name === K.autoName(it)) d.name = '';
       if (!d.size) d.size = 'н';
+      d.priceIn = it.priceOwn && typeof it.price === 'number' ? K.money(it.price) : '';
       App.ui.invDraft = d; App.ui.invAdd = 'craft';
       rerender();
       setTimeout(() => { const c = document.getElementById('invAdd'); if (c) c.scrollIntoView({ behavior: 'smooth' }); }, 30);
@@ -899,6 +954,10 @@
       if (!cr.parts.length) { App.toast('Укажите материал'); return; }
       const it = { id: d.editId || newId(), kind: d.kind, base: d.base, size: d.size || 'н', qty: Math.max(1, Math.floor(num(d.qty) || 1)), note: d.note || '', craft: cr };
       it.name = (d.name || '').trim() || K.autoName(it);
+      // цена за штуку: своя, если ГМ вписал, иначе — по материалам (если у всех материалов есть цена)
+      const own = ownPrice(d.priceIn), byMat = K.craftPrice(it);
+      if (String(d.priceIn || '').trim() && own === null) { App.toast('Не понял свою цену — например «5(се)» или «2 з 50 се»'); return; }
+      if (own !== null) { it.price = own; it.priceOwn = true; } else if (byMat.lines.length && !byMat.unknown.length) it.price = byMat.total;
       const calc = K.compute(it, view().ctx);
       const sum = [calc.damage !== null && calc.damage !== undefined ? `урон ${calc.damage}` : '', calc.armor ? `броня ${calc.armor}` : ''].filter(Boolean).join(', ');
       const editing = !!d.editId;
@@ -922,6 +981,8 @@
       if (!hit) { App.toast('В таблицах такого нет — выдайте через «Своё»'); return; }
       const qty = Math.max(1, num(App.ui.invTQty) || 1);
       const it = { id: newId(), kind: hit.kind, name: hit.name, effect: hit.effect, qty, src: 'выдал ГМ' };
+      const cu = K.priceCopper(hit.price);
+      if (cu !== null) it.price = cu;
       gmChange(gm => { addStack(gm.items, it); }, `Получено: «${hit.name}»${qty > 1 ? ' ×' + qty : ''}`);
       App.ui.invTName = ''; App.ui.invTQty = 1;
     },
@@ -937,7 +998,7 @@
       st.rows = (st.base || []).map(r => ({ name: r.name, qty: r.qty * st.mult }));
       rerender();
     },
-    invDropQty(t) { const st = App.ui.invDrop; if (st && st.rows[+t.dataset.v]) st.rows[+t.dataset.v].qty = Math.max(0, Math.floor(num(t.value))); },
+    invDropQty(t) { const st = App.ui.invDrop; if (st && st.rows[+t.dataset.v]) { st.rows[+t.dataset.v].qty = Math.max(0, Math.floor(num(t.value))); rerender(); } },
     invDropTake() {
       const st = App.ui.invDrop;
       const rows = st ? st.rows.filter(r => r.qty > 0) : [];
@@ -945,8 +1006,10 @@
       const cat = K.catalog(unlocked());
       gmChange(gm => {
         rows.forEach(r => {
-          const hit = cat.find(x => norm(x.name) === norm(r.name));
-          addStack(gm.items, { id: newId(), kind: hit ? hit.kind : 'item', name: hit ? hit.name : r.name, effect: hit ? hit.effect : '', qty: r.qty, src: `добыча: ${st.creature}` });
+          const hit = cat.find(x => norm(x.name) === norm(r.name)), cu = hit ? K.priceCopper(hit.price) : null;
+          const it = { id: newId(), kind: hit ? hit.kind : 'item', name: hit ? hit.name : r.name, effect: hit ? hit.effect : '', qty: r.qty, src: `добыча: ${st.creature}` };
+          if (cu !== null) it.price = cu;
+          addStack(gm.items, it);
         });
       }, `Добыча с «${st.creature}»: ${rows.map(r => `${r.name}${r.qty > 1 ? ' ' + r.qty : ''}`).join(', ')}`);
       App.ui.invDrop = null;
@@ -987,8 +1050,10 @@
       if (!list.length) return;
       gmChange(gm => {
         list.forEach(x => {
-          const i = window.Brew.ing(x.n);
-          addStack(gm.items, { id: newId(), kind: 'item', name: x.n, effect: i ? i.e.map(e => e[0]).filter(Boolean).join(', ') : '', qty: x.qty, src: 'сбор трав' });
+          const i = window.Brew.ing(x.n), cu = i ? K.priceCopper(i.price) : null;
+          const it = { id: newId(), kind: 'item', name: x.n, effect: i ? i.e.map(e => e[0]).filter(Boolean).join(', ') : '', qty: x.qty, src: 'сбор трав' };
+          if (cu !== null) it.price = cu;
+          addStack(gm.items, it);
         });
       }, `Сбор трав: ${list.map(x => `${x.n}${x.qty > 1 ? ' ×' + x.qty : ''}`).join(', ')}`);
       App.ui.brewHerbs = null;
@@ -1001,6 +1066,7 @@
       const name = String(d.name || '').trim() || r.name;
       const qty = Math.max(1, Math.floor(num(d.qty) || 1));
       const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe, qty, src: 'выдал ГМ' };
+      if (r.cost && !r.cost.unknown.length) it.price = r.cost.total;      // цена ингредиентов за штуку
       gmChange(gm => { addStack(gm.items, it); }, `Получено: «${name}»${qty > 1 ? ' ×' + qty : ''} (${r.summary})`);
       App.ui.brew = window.Brew.blank(d.mode);
     },
@@ -1008,8 +1074,11 @@
       const name = String(App.ui.invCName || '').trim();
       if (!name) { App.toast('Впишите название'); return; }
       const it = { id: newId(), kind: 'custom', name, effect: String(App.ui.invCText || ''), cat: App.ui.invCCat || '', qty: Math.max(1, Math.floor(num(App.ui.invCQty) || 1)), src: 'выдал ГМ' };
+      const cu = ownPrice(App.ui.invCPrice);
+      if (String(App.ui.invCPrice || '').trim() && cu === null) { App.toast('Не понял цену — например «5(се)» или «2 з 50 се»'); return; }
+      if (cu !== null) { it.price = cu; it.priceOwn = true; }
       gmChange(gm => { gm.items.push(it); }, `Получен предмет «${name}»`);
-      ['invCName', 'invCText', 'invCCat', 'invCQty'].forEach(k => { App.ui[k] = undefined; });
+      ['invCName', 'invCText', 'invCCat', 'invCQty', 'invCPrice'].forEach(k => { App.ui[k] = undefined; });
     },
     // ГМ выдаёт (+) или забирает (−); проверка — по тому, что сейчас в кошельке, с учётом трат игрока
     invWallet() {

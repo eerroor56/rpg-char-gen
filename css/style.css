@@ -1007,6 +1007,10 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .part-row select { flex: 1 1 240px; width: auto; min-width: 0; }
 .mod-list { display: grid; gap: 4px; }
 .craft-more { margin: 14px 0; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+/* цена при выдаче предмета: изготовленного (по материалам или своя), блюда и зелья (по ингредиентам), добычи */
+.item-price { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
+.item-price p { margin: 2px 0; }
+.item-price strong { color: #f3d58f; font-variant-numeric: tabular-nums; }
 .craft-more summary { cursor: pointer; font-weight: 700; }
 .craft-preview { margin: 12px 0; padding: 10px 14px; background: var(--ink-2); border-left: 3px solid var(--brass); border-radius: var(--radius-s); }
 .fx-cards { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 10px; max-width: none !important; }

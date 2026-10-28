@@ -668,19 +668,45 @@
     COINS.forEach(c => { const n = Math.floor(x / c.rate); if (n) { parts.push(`${n} ${c.id}`); x -= n * c.rate; } });
     return (neg ? '−' : '') + parts.join(' ');
   }
-  // «1(з),50(се)» → в медных; «5» — медные; «договорная» → null
+  // «1(з),50(се)» → в медных; «5» — медные; «2се», «3 се 50 м» (так пишет money) — тоже; «(с)» — серебро; «договорная» → null
   function priceCopper(p) {
-    const s = String(p || '').trim();
+    const s = String(p || '').trim().toLowerCase();
     if (!s) return null;
     let total = 0, found = false;
-    const re = /(\d+(?:[.,]\d+)?)\s*(?:\(\s*(мд|пл|з|се|м)\s*\))?/g;
+    const re = /(\d+(?:[.,]\d+)?)\s*(?:\(\s*(мд|пл|з|се|с|м)\s*\)|(мд|пл|се|з|м)(?![а-яё]))?/g;
     let m;
     while ((m = re.exec(s))) {
       found = true;
-      const c = COINS.find(x => x.id === (m[2] || 'м'));
+      const id = m[2] || m[3] || 'м';
+      const c = COINS.find(x => x.id === (id === 'с' ? 'се' : id));
       total += parseFloat(m[1].replace(',', '.')) * (c ? c.rate : 1);
     }
     return found ? Math.round(total) : null;
+  }
+
+  // ------------------------------------------------------------ цена предмета
+  // Своего правила цены изделий в таблице нет, поэтому изготовленный предмет оценивается по материалу:
+  // слитки — по единицам (цена в таблице — за слиток), напыление — целый слиток, камень в гнезде — штука.
+  // Работу (заточка, глифы, модель, ремесло, душа) таблица не оценивает — её ГМ учитывает сам, вписав свою цену.
+  // → { total (медные за 1 шт.), lines: [{ name, u, how, each, total }], unknown: ['мрамор («договорная»)'] }
+  function craftPrice(item) {
+    const cr = (item && item.craft) || {};
+    const lines = [], unknown = [];
+    const add = (name, u, how) => {
+      const m = material(name), each = m ? priceCopper(m.price) : null;
+      if (each === null) { unknown.push(m ? `${m.name} («${m.price || 'без цены'}»)` : String(name)); return; }
+      const x = lines.find(l => l.name === m.name && l.how === how);
+      if (x) { x.u = r2(x.u + u); x.total = Math.round(x.each * x.u); } else lines.push({ name: m.name, u, how, each, total: Math.round(each * u) });
+    };
+    (cr.parts || []).filter(p => p && p.mat && num(p.u) > 0).forEach(p => add(p.mat, r2(num(p.u)), 'part'));
+    (cr.coat || []).filter(Boolean).forEach(n => add(n, 1, 'coat'));
+    (cr.inlays || []).filter(Boolean).forEach(n => add(n, 1, 'inlay'));
+    return { total: lines.reduce((a, l) => a + l.total, 0), lines, unknown };
+  }
+  // цена из таблиц по названию (предмет, слиток, камень, еда, ингредиент) — в медных за штуку, или null
+  function tablePrice(name, unlocked) {
+    const hit = name ? catalog(unlocked).find(x => norm(x.name) === norm(name)) : null;
+    return hit ? priceCopper(hit.price) : null;
   }
 
   // ------------------------------------------------------------ дроп и модификаторы статов
@@ -833,6 +859,6 @@
   window.Craft = {
     KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
-    walletCopper, money, priceCopper, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
+    walletCopper, money, priceCopper, craftPrice, tablePrice, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
   };
 })();

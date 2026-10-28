@@ -223,6 +223,16 @@
     }
     if (!ok.length) out.notes.unshift('Добавьте ингредиенты.');
     out.summary = [out.main].concat(out.effects).filter(Boolean).map(x => effStr(x, out.dur)).join(', ') + (out.spoiled ? ' (испорчено)' : '') + (d.canned && d.mode !== 'potion' ? ' (консервы)' : '');
+    // цена: ингредиенты и основа — по таблице, за штуку; вырезки с существ в таблице не оценены
+    const K = window.Craft;
+    if (K && ok.length) {
+      let total = 0;
+      const unknown = [];
+      const take = (i, q) => { const p = K.priceCopper(i.price); if (p === null) unknown.push(`${i.n} («${i.price || 'без цены'}»)`); else total += p * q; };
+      ok.forEach(r => take(r.i, r.qty));
+      if (d.base && ing(d.base)) take(ing(d.base), 1);
+      out.cost = { total: Math.round(total), unknown, cuts: (d.cuts || []).some(c => c.cr) && d.mode === 'cook' };
+    }
     out.recipe = (d.mode === 'potion' ? ok.map(r => `${r.i.n.toLowerCase()} — ${r.eff}-й эффект${r.qty > 1 ? ' ×' + r.qty : ''}`) : names).join(', ')
       + (d.base && ing(d.base) ? `; основа: ${ing(d.base).n.toLowerCase()}` : '')
       + ((d.cuts || []).filter(c => c.cr).length ? `; вырезки: ${(d.cuts || []).filter(c => c.cr).map(c => c.cr + (num(c.qty) > 1 ? ' ×' + num(c.qty) : '')).join(', ')}` : '');
@@ -244,6 +254,7 @@
       <p class="brew-name"><b>${esc(r.name)}</b> <span class="tag">${r.kind === 'potion' ? 'зелье' : r.mode === 'alco' ? 'напиток' : 'блюдо'}</span>${r.spoiled ? ' <span class="tag bad">испорчено</span>' : ''}</p>
       ${r.main ? `<p class="brew-main"><span class="eff ${r.main.mark === '-' ? 'minus' : 'plus'}">${esc(effStr(r.main))}</span></p>` : ''}
       ${r.effects.length ? `<ul class="brew-fx">${r.effects.map(li).join('')}</ul>` : ''}
+      ${r.cost ? `<p class="item-price"><b>Цена ингредиентов:</b> ${esc(window.Craft.money(r.cost.total))}${r.cost.unknown.length ? ` <span class="muted small">— без цены в таблице: ${esc(r.cost.unknown.join(', '))}</span>` : ''}${r.cost.cuts ? ' <span class="muted small">— вырезки с существ не оценены</span>' : ''}</p>` : ''}
       ${r.warnings.length ? `<ul class="small item-warn">${r.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
       ${r.notes.length ? `<ul class="small item-warn">${r.notes.map(w => `<li class="muted">${esc(w)}</li>`).join('')}</ul>` : ''}
     </div>`;
