@@ -482,5 +482,5 @@
     }
   });
 
-  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sheetOpts, hasProgress, sumVals, commit, gmCopy, creatures, zero };
+  window.Dev = { levelsFromXp, normalize, compute, xpFor, panel, page, own, logList, sheetBlock, sheetOpts, hasProgress, sumVals, commit, gmCopy, creatures, zero, learnedPassives };
 })();

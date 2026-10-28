@@ -1011,6 +1011,17 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .item-price { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
 .item-price p { margin: 2px 0; }
 .item-price strong { color: #f3d58f; font-variant-numeric: tabular-nums; }
+/* крафт самим игроком: что нужно (✓ есть / ✗ не хватает), крафтильни персонажа */
+.make-needs { margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-s); background: var(--ink-2); }
+.make-needs h3 { margin: 0 0 4px; font-size: 1rem; font-family: var(--font-body); }
+.make-needs ul { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 2px; max-width: none !important; }
+.make-needs li { margin: 0; font-size: .92rem; }
+.make-needs li.ok span { color: var(--ok); }
+.make-needs li.no { color: #ffb3aa; }
+.make-needs li.no span { color: var(--err); }
+.stations-card summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.stations-card summary h2 { display: inline; margin: 0; }
+.station-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; margin-top: 8px; }
 .craft-more summary { cursor: pointer; font-weight: 700; }
 .craft-preview { margin: 12px 0; padding: 10px 14px; background: var(--ink-2); border-left: 3px solid var(--brass); border-radius: var(--radius-s); }
 .fx-cards { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 10px; max-width: none !important; }

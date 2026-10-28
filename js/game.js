@@ -678,7 +678,7 @@
       App.editingId = null; App.save();
       // развитие в игре едет вместе с листом: в мастере лист показывается с ним (меняется только лист создания)
       setTarget({ cid: c.id, chid: ch.id, cname: c.name, status: ch.status,
-        rec: JSON.parse(JSON.stringify({ prog: ch.prog, gm: ch.gm, equip: ch.equip, spells: ch.spells, vit: ch.vit, purse: ch.purse, notes: ch.notes, give: ch.give, got: ch.got })) });
+        rec: JSON.parse(JSON.stringify({ prog: ch.prog, gm: ch.gm, equip: ch.equip, spells: ch.spells, vit: ch.vit, purse: ch.purse, notes: ch.notes, give: ch.give, got: ch.got, made: ch.made })) });
       location.hash = '#create/summary';
     },
     gStatus(b) {

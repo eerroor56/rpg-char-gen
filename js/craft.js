@@ -521,9 +521,13 @@
     const got = (Array.isArray(rec.got) ? rec.got : []).filter(g => g && g.item && !g.in).map(g => g.item);
     const out = {};
     (Array.isArray(rec.give) ? rec.give : []).forEach(g => { if (g && g.iid && g.item) out[g.iid] = (out[g.iid] || 0) + (+g.item.qty || 1); });
-    const items = base.concat(got).map(x => {
+    // созданное самим игроком (made, js/inventory.js): предмет лежит у персонажа, сырьё (used: id и сколько) вычитается,
+    // пока ГМ не перенёс всё в gm.items (made[].in) — тогда и сырьё там уже списано
+    const made = (Array.isArray(rec.made) ? rec.made : []).filter(m => m && m.item && !m.in);
+    made.forEach(m => (m.used || []).forEach(u => { if (u && u.iid) out[u.iid] = r2((out[u.iid] || 0) + num(u.qty)); }));
+    const items = base.concat(got, made.map(m => m.item)).map(x => {
       if (!out[x.id]) return x;
-      const left = (+x.qty || 1) - out[x.id];
+      const left = r2((+x.qty || 1) - out[x.id]);
       return left > 0 ? Object.assign({}, x, { qty: left }) : null;
     }).filter(Boolean);
     const ids = new Set(items.map(x => x.id));
@@ -703,6 +707,12 @@
     (cr.inlays || []).filter(Boolean).forEach(n => add(n, 1, 'inlay'));
     return { total: lines.reduce((a, l) => a + l.total, 0), lines, unknown };
   }
+  // у торговца и мастера: купить — с наценкой (50%, харизма снимает 0,5% за очко, не ниже 0), продать — +0,5% за очко харизмы
+  function trade(cu, charisma) {
+    const T = C.TRADE || { MARKUP: 50, BUY_STEP: 0.5, SELL_STEP: 0.5 }, ch = num(charisma);
+    const markup = Math.max(0, T.MARKUP - T.BUY_STEP * ch), sellPct = Math.max(0, 100 + T.SELL_STEP * ch);
+    return { markup: r2(markup), buy: Math.round(cu * (1 + markup / 100)), sell: Math.round(cu * sellPct / 100), sellPct: r2(sellPct - 100) };
+  }
   // цена из таблиц по названию (предмет, слиток, камень, еда, ингредиент) — в медных за штуку, или null
   function tablePrice(name, unlocked) {
     const hit = name ? catalog(unlocked).find(x => norm(x.name) === norm(name)) : null;
@@ -859,6 +869,6 @@
   window.Craft = {
     KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
-    walletCopper, money, priceCopper, craftPrice, tablePrice, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
+    walletCopper, money, priceCopper, craftPrice, tablePrice, trade, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
   };
 })();

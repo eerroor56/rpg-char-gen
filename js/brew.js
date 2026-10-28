@@ -43,7 +43,10 @@
 
   // ------------------------------------------------------------ данные
   const unlocked = () => !!(window.GMLock && window.GMLock.unlocked);
-  const ings = () => (D().alchemy || {}).ingredients || [];
+  const MK = C.MAKE;
+  // ингредиенты: из таблицы (у ГМ, после пароля) или, когда игрок готовит сам, — из его рюкзака (src, см. form)
+  let src = null;
+  const ings = () => src || (D().alchemy || {}).ingredients || [];
   let ix = null, ixSrc = null;
   function ing(name) {
     const list = ings();
@@ -148,6 +151,11 @@
       if (st.size) out.notes.push(`Крафтильни: ${[...st].join(', ')}${out.effects.filter(x => !/^основа/.test(x.label)).length > 1 ? ', алхимический смешиватель (объединить разные эффекты)' : ''}${d.conc ? ', концентратор' : ''}.`);
       if (lvl) out.notes.push(`Ингредиенты требуют до ${lvl} ур. навыка.`);
       out.kind = 'potion';
+      // чтобы сварить самому: крафтильни эффектов, смешиватель для разных эффектов, концентратор; алхимия — по виду зелья,
+      // ингредиентам и выделенному эффекту (каждые 25 ур. открывают следующее свойство ингредиента)
+      const maxEff = ok.reduce((a, r) => Math.max(a, r.eff), 1);
+      out.req = { stations: [...st].concat(out.effects.filter(x => !/^основа/.test(x.label)).length > 1 ? [MK.MIX] : [], d.conc ? [MK.CONC] : []),
+        alch: Math.max(t.lvl || 0, lvl, MK.ALCH_PER_EFFECT * (maxEff - 1)) };
       out.dur = true;
       out.name = `${cap(t.id)}${out.effects.length ? ': ' + short(out.effects.filter(x => !/^основа/.test(x.label)).map(x => effStr(x))) : ''}`;
     } else {
@@ -212,6 +220,7 @@
         out.notes.push(`${cap(m.id)} выделяет ${m.eff}-й эффект ингредиента, +${m.drunk} опьянения${BC.ALCO_METHOD_ONCE ? '' : ' за ингредиент'}; каждый ингредиент — ещё +${ALCO_PER}.`);
       }
       out.n = n;
+      out.req = { stations: [isCook ? MK.COOK : MK.ALCO].concat(isCook && (d.cuts || []).some(c => c.cr) ? [MK.CUTS] : []), alch: 0 };
       out.cap = MAX_ING;
       out.effects = combine(list).concat(extra);
       // испорчено: все эффекты негативные; консервы: показатели хуже на 50%
@@ -275,9 +284,16 @@
 
   // opts: { host: 'ref' | 'dev', issueAct: действие кнопки «Выдать», herbsAct: «Забрать в рюкзак» (только у ГМ в инвентаре) }
   let host = 'ref';
+  // opts.ings — свои ингредиенты (игрок готовит из рюкзака), opts.check(d, r) — что нужно и что есть (обновляется вместе с расчётом),
+  // opts.noHerbs / opts.noCuts — без сбора трав и вырезок, opts.autoRoll — бросок готовки сайт делает сам при создании,
+  // opts.issueLabel — надпись на кнопке
+  let checkFn = null;
   function form(opts) {
     opts = opts || {};
     host = opts.host || 'ref';
+    src = opts.ings || null;
+    checkFn = opts.check || null;
+    if (opts.ings && !opts.ings.length) return `<p class="muted small">${esc(opts.empty || 'Ингредиентов нет.')}</p>`;
     if (!ings().length) {
       return `<p class="muted small">Ингредиенты записаны в закрытом разделе «Алхимия и кухня» — откройте его паролем ГМ.</p>${window.GMLock ? window.GMLock.form('Кухня и алхимия: раздел для ГМ', 'Калькулятору нужны ингредиенты из листа «алхимия» — они открываются паролем ГМ.') : ''}`;
     }
@@ -287,7 +303,7 @@
     const m = COOK.find(x => x.id === d.method) || COOK[0];
     const effOpts = (i, sel) => [1, 2, 3, 4].map(k => { const e = i && i.e[k - 1]; return e ? opt(k, `${k}: ${e[0]} — ${STATIONS[k - 1]}`, sel) : ''; }).join('');
     let html = `<div class="brew">
-      ${herbsHtml(opts)}
+      ${opts.noHerbs ? '' : herbsHtml(opts)}
       <div class="seg" role="tablist">${MODES.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === d.mode}" class="${k === d.mode ? 'is-on' : ''}" data-act="brewMode" data-v="${k}">${t}</button>`).join('')}</div>
       <div class="form-grid">`;
     if (isCook) {
@@ -307,7 +323,7 @@
         <input type="number" min="1" step="1" class="mini-num" data-change="brewField" data-k="rows.${i}.qty" value="${esc(x.qty)}" aria-label="Сколько"><span class="muted small">шт.</span>
         <button type="button" class="linklike small" data-act="brewDel" data-k="rows" data-v="${i}">убрать</button></div>`).join('')}
       <button type="button" class="linklike small" data-act="brewAdd" data-k="rows">+ ингредиент</button>`;
-    if (isCook) {
+    if (isCook && !opts.noCuts) {
       const cl = creatures();
       html += `<h3>Вырезки и выжимки <span class="muted small">разделочный стол; живость — 10% тела существа, стихия — 10% духа</span></h3>
         ${cl.length ? (d.cuts || []).map((x, i) => {
@@ -323,6 +339,8 @@
     }
     html += `<div class="form-grid">
       ${isPot ? `<label class="check"><input type="checkbox" data-change="brewField" data-k="conc" ${d.conc ? 'checked' : ''}> Концентратор: эффект зелья 2Х</label>`
+        : opts.autoRoll ? `<p class="muted small">Бросок ${isCook ? 'готовки' : 'варки'} d100 сайт сделает сам, когда вы нажмёте «${esc(opts.issueLabel || 'Выдать')}»: ниже ${SPOIL} — все эффекты негативные.</p>
+          <label class="check"><input type="checkbox" data-change="brewField" data-k="canned" ${d.canned ? 'checked' : ''}> Консервы / долгое хранение: показатели −50%</label>`
         : `<label>Бросок ${isCook ? 'готовки' : 'варки'} <span class="brew-roll"><input type="number" min="1" max="100" step="1" data-change="brewField" data-k="roll" value="${esc(d.roll || '')}" aria-label="Результат броска d100">
             <button type="button" class="btn small" data-act="brewRoll">d100</button></span> <span class="muted small">ниже ${SPOIL} — все эффекты негативные</span></label>
           <label class="check"><input type="checkbox" data-change="brewField" data-k="canned" ${d.canned ? 'checked' : ''}> Консервы / долгое хранение: показатели −50%</label>`}
@@ -335,7 +353,8 @@
           <label>Название <input type="text" data-change="brewField" data-k="name" value="${esc(d.name || '')}" placeholder="${esc(r.name)}" maxlength="120"></label>
           <label>Количество <input type="number" min="1" step="1" data-change="brewField" data-k="qty" value="${esc(d.qty || 1)}"></label>
         </div>
-        <div class="row-actions"><button type="button" class="btn primary" data-act="${esc(opts.issueAct)}">Выдать</button>
+        <div id="brewCheck">${checkFn ? checkFn(d, r) : ''}</div>
+        <div class="row-actions"><button type="button" class="btn primary" data-act="${esc(opts.issueAct)}">${esc(opts.issueLabel || 'Выдать')}</button>
           <button type="button" class="btn ghost" data-act="brewReset">Очистить</button></div>`;
     } else html += `<div class="row-actions"><button type="button" class="btn ghost small" data-act="brewReset">Очистить</button></div>`;
     html += `<details class="brew-help"><summary>Как считается</summary><ul class="small">
@@ -365,6 +384,7 @@
     const set = (id, h) => { const el = document.getElementById(id); if (el) el.innerHTML = h; };
     set('brewOut', outHtml(r));
     set('brewCount', countText(d, r));
+    if (checkFn) set('brewCheck', checkFn(d, r));
     const nm = document.querySelector('[data-change="brewField"][data-k="name"]');
     if (nm) nm.placeholder = r.name;
   }

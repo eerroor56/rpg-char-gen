@@ -34,11 +34,26 @@
     const got = gots(ctx().record), fresh = got.filter(g => g.item && !g.in);
     if (fresh.length && !Array.isArray(gm.items)) gm.items = [];
     fresh.forEach(g => gm.items.push(clone(g.item)));
+    // созданное самим игроком (made) — тоже: сырьё списывается из списка ГМ, предмет добавляется (made[].in — уже перенесено)
+    const made = mades(ctx().record), freshMade = made.filter(m => m.item && !m.in);
+    if (freshMade.length && !Array.isArray(gm.items)) gm.items = [];
+    freshMade.forEach(m => {
+      (m.used || []).forEach(u => {
+        const ix = gm.items.findIndex(y => y && y.id === u.iid);
+        if (ix < 0) return;
+        const left = r2((+gm.items[ix].qty || 1) - num(u.qty));
+        if (left > 0) gm.items[ix].qty = left; else gm.items.splice(ix, 1);
+      });
+      gm.items.push(clone(m.item));
+    });
+    // ингредиенту — его свойства из таблицы: она закрыта паролем, а игроку они нужны, чтобы готовить самому
+    if (unlocked() && Array.isArray(gm.items)) gm.items.forEach(x => { if (x && !x.ing && !K.CRAFTABLE.includes(x.kind)) { const i = ingData(x.name); if (i) x.ing = i; } });
     const equip = clone(v.inv.equip);
     const before = JSON.stringify(equip);
     if (mutate(gm, v, equip) === false) return;
     const patch = { gm };
     if (fresh.length) patch.got = got.map(g => (g.item && !g.in ? { t: g.t, from: g.from, fromName: g.fromName || '', ms: g.ms || 0, in: true } : g));
+    if (freshMade.length) patch.made = made.map(m => (m.item && !m.in ? { t: m.t, ms: m.ms || 0, what: m.what || '', name: m.item.name, in: true } : m));
     if (JSON.stringify(equip) !== before) patch.equip = equip;
     Dev().commit(patch, typeof text === 'function' ? text() : text);
   }
@@ -175,7 +190,7 @@
       ${canEquip ? '<p class="muted small">Выберите предмет в рюкзаке и нажмите «Надеть» или подсвеченный слот. Нажатие на занятый слот показывает предмет.</p>' : ''}
     </section>`;
 
-    if (sel) html += itemCard(sel, selCalc, perms, worn.has(sel.id));
+    if (sel) html += itemCard(sel, selCalc, perms, worn.has(sel.id), num(v.res.der.charisma));
 
     // рюкзак
     const q = norm(App.ui.invQ || '');
@@ -193,8 +208,169 @@
 
     html += spellCard(o.record, v, canEquip);
     html += walletCard(inv.wallet, perms);
-    if (perms.gm) html += addCard(v);
+    if (perms.gm) html += addCard(v) + stationsCard(o.record, v);
+    else if (perms.owner) html += makeCard(v, o.record);
     return html;
+  }
+
+  // ------------------------------------------------------------ крафт самим игроком
+  // Игрок создаёт предмет, блюдо или зелье из сырья в рюкзаке, если хватает навыка и есть крафтильня. Поле gm у игрока закрыто,
+  // поэтому созданное пишется в персонажа (made: [{ t, ms, what, item, used: [{ iid, qty }] }]): предмет появляется сразу,
+  // сырьё сразу вычитается (js/craft.js, inventoryOf); при следующем изменении инвентаря ГМ всё переносится в gm.items.
+  // Крафтильни — отмеченные ГМ (gm.stations) и лежащие в рюкзаке предметом с тем же названием (C.MAKE)
+  const MK = C.MAKE;
+  const r2 = x => Math.round(x * 100) / 100;
+  const mades = rec => (Array.isArray(rec && rec.made) ? rec.made : []).filter(m => m && m.t);
+  const isGear = it => K.CRAFTABLE.includes(it.kind);
+  // свойства ингредиента из таблицы (только у ГМ: таблица закрыта паролем) — записываются в выданный предмет
+  const ingData = name => {
+    const i = ((window.GAME_DATA.alchemy || {}).ingredients || []).find(x => norm(x.n) === norm(name));
+    return i ? clone(i) : null;
+  };
+  function d100() {
+    const cr = window.crypto;
+    if (!cr || !cr.getRandomValues) return Math.floor(Math.random() * 100) + 1;
+    const a = new Uint32Array(1), lim = 4294967200;
+    do { cr.getRandomValues(a); } while (a[0] >= lim);
+    return a[0] % 100 + 1;
+  }
+  function stationsOf(rec, v) {
+    const own = ((rec.gm || {}).stations || []).filter(Boolean);
+    const bag = [...new Set(v.inv.items.filter(it => MK.STATIONS.some(s => norm(s) === norm(it.name))).map(it => it.name))];
+    const all = new Set(own.concat(bag).map(norm));
+    return { own, bag, all: [...new Set(own.concat(bag))], has: name => !name || all.has(norm(name)) };
+  }
+  // сырьё в рюкзаке (не надетое, не снаряжение): слитки и камни — в единицах, ингредиенты — штуками
+  const rawItems = (v, name) => { const worn = new Set(Object.values(v.inv.equip)); return v.inv.items.filter(it => !worn.has(it.id) && !isGear(it) && norm(it.name) === norm(name)); };
+  const bagHave = (v, name) => r2(rawItems(v, name).reduce((a, it) => a + (+it.qty || 1), 0));
+  const addNeed = (m, name, qty) => { const k = norm(name), x = m.get(k); if (x) x.qty = r2(x.qty + qty); else m.set(k, { name, qty: r2(qty) }); };
+  const needText = req => [...req.values()].map(x => `${x.name} ${fmt(x.qty)}`).join(', ');
+  // что списать: по стопкам рюкзака, пока не наберётся нужное → [{ iid, qty }]
+  function takeFromBag(v, req) {
+    const used = [];
+    req.forEach(({ name, qty }) => {
+      let left = qty;
+      rawItems(v, name).forEach(it => {
+        if (left <= 0) return;
+        const n = r2(Math.min(+it.qty || 1, left));
+        used.push({ iid: it.id, qty: n });
+        left = r2(left - n);
+      });
+    });
+    return used;
+  }
+  const needsHtml = list => `<div class="make-needs"><h3>Что нужно</h3><ul>${list.map(x => `<li class="${x.ok ? 'ok' : 'no'}"><span aria-hidden="true">${x.ok ? '✓' : '✗'}</span> ${esc(x.text)}</li>`).join('')}</ul></div>`;
+
+  // кузница: крафтильня по виду предмета (и для заточки, глифов, обогатителя), ремесло, распределённый материал и сырьё в рюкзаке
+  function forgeNeeds(v, d) {
+    const rec = ctx().record, st = stationsOf(rec, v), cr = d.craft, list = [], req = new Map();
+    const need = (ok, text) => list.push({ ok: !!ok, text });
+    if (!d.base) return { list: [{ ok: false, text: 'выберите основу' }], ok: false, req };
+    const c = K.compute(Object.assign({}, d, { name: d.name || K.autoName(d) }), v.ctx);
+    const qty = Math.max(1, Math.floor(num(d.qty) || 1));
+    const isA = ['armor', 'shield', 'prosthesis'].includes(d.kind);
+    const station = s => { if (s) need(st.has(s), `крафтильня «${s}»`); };
+    station(MK.FORGE[d.kind]);
+    if (num(cr.sharpen) > 0) station(isA ? MK.SHARPEN_ARMOR : MK.SHARPEN_WEAPON);
+    const glyphs = (cr.glyphs || []).filter(g => g && g.sym);
+    if (glyphs.length) {
+      station(MK.GLYPH);
+      const known = knownSymbols(rec, v).map(norm);
+      glyphs.forEach(g => need(known.includes(norm(g.sym)), `символ «${g.sym}» изучен`));
+    }
+    if (cr.enrich) station(MK.ENRICH);
+    const craft = num(v.ctx.craft);
+    if (c.skill !== null && c.skill !== undefined) need(craft >= c.skill, `ремесло ${fmt(c.skill)} — у персонажа ${fmt(craft)}`);
+    if (cr.model) need(craft >= MK.MODEL_CRAFT, `модель — ремесло ${MK.MODEL_CRAFT}, у персонажа ${fmt(craft)}`);
+    const parts = (cr.parts || []).filter(p => p && p.mat && num(p.u) > 0);
+    const split = !roleKind(d.kind) || Math.abs((c.haveDmg || 0) - (c.needDmg || 0)) <= 0.01;
+    need(parts.length && Math.abs((c.have || 0) - c.need) <= 0.01 && split, `материал распределён: ${fmt(c.have || 0)} из ${fmt(c.need)} ед.`);
+    parts.forEach(p => addNeed(req, String(p.mat).trim(), num(p.u) * qty));
+    (cr.coat || []).filter(Boolean).forEach(n => addNeed(req, String(n).trim(), qty));
+    (cr.inlays || []).filter(Boolean).forEach(n => addNeed(req, String(n).trim(), qty));
+    req.forEach(({ name, qty: q }) => {
+      if (!K.material(name)) { need(false, `неизвестный материал «${name}»`); return; }
+      const have = bagHave(v, name);
+      need(have >= q, `${name}: нужно ${fmt(q)} ед., в рюкзаке ${fmt(have)}`);
+    });
+    return { list, ok: list.every(x => x.ok), req };
+  }
+  // алхимия — пассивный навык, изучаемый в игре: null — не изучен
+  function alchLevel(rec) {
+    const p = Dev().learnedPassives(rec).find(x => norm(x.name) === 'алхимия');
+    return p ? p.lvl : null;
+  }
+  // кухня, винокурня, алхимический стол: крафтильни, алхимия (для зелий), замечания расчёта и ингредиенты в рюкзаке
+  function brewNeeds(v, d, r) {
+    const rec = ctx().record, st = stationsOf(rec, v), list = [], req = new Map();
+    const need = (ok, text) => list.push({ ok: !!ok, text });
+    if (!r.n) return { list: [{ ok: false, text: 'добавьте ингредиенты' }], ok: false, req };
+    const qty = Math.max(1, Math.floor(num(d.qty) || 1));
+    ((r.req || {}).stations || []).forEach(s => need(st.has(s), `крафтильня «${s}»`));
+    if (d.mode === 'potion') {
+      const al = alchLevel(rec), lv = (r.req || {}).alch || 0;
+      need(al !== null && al >= lv, al === null ? 'навык «алхимия» — ещё не изучен' : `алхимия ${lv} — у персонажа ${al}`);
+    }
+    r.warnings.forEach(w => need(false, w));
+    (d.rows || []).filter(x => x.ing && num(x.qty) > 0).forEach(x => addNeed(req, String(x.ing).trim(), Math.floor(num(x.qty)) * qty));
+    if (d.base && String(d.base).trim()) addNeed(req, String(d.base).trim(), qty);
+    req.forEach(({ name, qty: q }) => { const have = bagHave(v, name); need(have >= q, `${name}: нужно ${fmt(q)}, в рюкзаке ${fmt(have)}`); });
+    return { list, ok: list.every(x => x.ok), req };
+  }
+  // ингредиенты в рюкзаке со своими свойствами (записаны в предмет при выдаче; у ГМ — из таблицы)
+  function bagIngs(v) {
+    const seen = new Set(), out = [];
+    v.inv.items.forEach(it => {
+      const i = it.ing || (unlocked() ? ingData(it.name) : null);
+      if (!i || !i.n || seen.has(norm(i.n))) return;
+      seen.add(norm(i.n));
+      out.push(i);
+    });
+    return out;
+  }
+  // слитки и камни в рюкзаке — подсказки для строк материала
+  function bagMatOptions(v) {
+    const seen = new Set(), list = [];
+    v.inv.items.forEach(it => { const m = !isGear(it) && K.material(it.name); if (m && !seen.has(norm(m.name))) { seen.add(norm(m.name)); list.push(m); } });
+    return `<datalist id="invMats">${list.map(m => `<option value="${esc(m.name)}">в рюкзаке ${fmt(bagHave(v, m.name))} ед. · урон ${m.dmg} · броня ${m.arm}</option>`).join('')}</datalist>`;
+  }
+
+  // ГМ: где персонаж может работать сам (своя мастерская или крафтильня рядом)
+  function stationsCard(rec, v) {
+    const st = stationsOf(rec, v), own = new Set(st.own.map(norm)), bag = new Set(st.bag.map(norm));
+    const names = [...new Set(MK.STATIONS.concat(st.own))];
+    return `<details class="dev-card stations-card"${App.ui.invStations ? ' open' : ''}><summary data-act="invStationsToggle"><h2>Крафтильни персонажа</h2> <span class="muted small">${st.all.length ? esc(st.all.join(', ')) : 'нет ни одной'}</span></summary>
+      <p class="muted small">Отметьте, где персонаж может работать сам — тогда игрок создаёт предметы, блюда и зелья из сырья в рюкзаке (если хватает навыка). Крафтильня, лежащая в рюкзаке предметом с тем же названием, считается сама.</p>
+      <div class="station-list">${names.map(n => `<label class="check"><input type="checkbox" data-change="invStation" data-v="${esc(n)}" ${own.has(norm(n)) || bag.has(norm(n)) ? 'checked' : ''} ${bag.has(norm(n)) && !own.has(norm(n)) ? 'disabled' : ''}> ${esc(n)}${bag.has(norm(n)) ? ' <span class="muted small">(в рюкзаке)</span>' : ''}</label>`).join('')}</div></details>`;
+  }
+  // игрок: создать самому
+  function makeCard(v, rec) {
+    const st = stationsOf(rec, v), al = alchLevel(rec);
+    const mode = App.ui.invMake || 'forge';
+    const tabs = [['forge', 'Кузница'], ['brew', 'Кухня и зелья']];
+    const body = mode === 'forge' ? craftForm(v, 'make')
+      : window.Brew.form({ host: 'dev', issueAct: 'invMakeBrew', issueLabel: 'Приготовить', ings: bagIngs(v), noHerbs: true, noCuts: true, autoRoll: true,
+        check: (d, r) => needsHtml(brewNeeds(v, d, r).list), empty: 'В рюкзаке нет ингредиентов — их выдаёт ГМ: травы, добыча, покупки.' });
+    return `<section class="dev-card add-card make-card" id="invMake"><h2>Создать самому</h2>
+      <p class="small">Крафтильни: ${st.all.length ? st.all.map(n => `<span class="tag">${esc(n)}</span>`).join(' ') : '<span class="muted">пока нет — их отмечает ГМ (своя мастерская или крафтильня рядом)</span>'}
+        · ремесло <b>${fmt(v.ctx.craft)}</b>${al !== null ? ` · алхимия <b>${fmt(al)}</b>` : ''}</p>
+      <p class="muted small">Сырьё берётся из рюкзака и списывается сразу, созданное появляется в рюкзаке; ГМ видит это в журнале.</p>
+      <div class="seg" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === mode}" class="${k === mode ? 'is-on' : ''}" data-act="invMakeMode" data-v="${k}">${t}</button>`).join('')}</div>
+      ${body}</section>`;
+  }
+  // предмет из черновика кузницы (общий для «Выдать» у ГМ и «Создать» у игрока); без материала — null
+  function draftItem(d) {
+    const cr = clone(d.craft);
+    cr.parts = (cr.parts || []).filter(p => p.mat && num(p.u) > 0).map(p => ({ mat: p.mat.trim(), u: num(p.u), role: roleKind(d.kind) ? p.role : (d.kind === 'ammo' ? 'dmg' : 'non') }));
+    if (cr.gun) cr.gun.barrels = (cr.gun.barrels || []).filter(b => b.name && num(b.n) > 0);
+    else delete cr.gun;
+    ['coat', 'inlays'].forEach(k => { cr[k] = (cr[k] || []).map(x => String(x).trim()).filter(Boolean); });
+    cr.glyphs = (cr.glyphs || []).filter(g => g.sym && String(g.sym).trim());
+    if (!cr.soul || !cr.soul.mode || !cr.soul.creature) delete cr.soul;
+    if (!cr.parts.length) return null;
+    const it = { id: d.editId || newId(), kind: d.kind, base: d.base, size: d.size || 'н', qty: Math.max(1, Math.floor(num(d.qty) || 1)), note: d.note || '', craft: cr };
+    it.name = (d.name || '').trim() || K.autoName(it);
+    return it;
   }
 
   // ------------------------------------------------------------ ячейки заклинаний
@@ -264,10 +440,15 @@
     if (!p) return '';
     return `<strong>${esc(K.money(p.cu))}</strong>${qty > 1 ? ` за шт. · всего ${esc(K.money(p.cu * qty))}` : ''}${p.own ? ' <span class="muted small">— назначил ГМ</span>' : p.mat ? ' <span class="muted small">— по материалам</span>' : ''}`;
   }
+  // у торговца: купить — с наценкой, которую снижает харизма; продать — дороже по харизме (C.TRADE)
+  function tradeHtml(cu, cha) {
+    const t = K.trade(cu, cha);
+    return `купить <strong>${esc(K.money(t.buy))}</strong> <span class="muted small">(наценка ${fmt(t.markup)}%)</span> · продать <strong>${esc(K.money(t.sell))}</strong>${t.sellPct ? ` <span class="muted small">(${signed(t.sellPct)}%)</span>` : ''} <span class="muted small">— харизма ${fmt(cha)}</span>`;
+  }
   // своя цена, вписанная ГМ: «5(се)», «2 з 50 се», «350»; пусто или непонятно — null
   const ownPrice = s => (String(s || '').trim() ? K.priceCopper(s) : null);
 
-  function itemCard(it, c, perms, isWorn) {
+  function itemCard(it, c, perms, isWorn, cha) {
     const canEquip = perms.gm || perms.owner;
     const parts = ((it.craft || {}).parts || []).filter(p => p.mat);
     const kv = (t, x) => (x === '' || x === null || x === undefined ? '' : `<div><dt>${t}</dt><dd>${x}</dd></div>`);
@@ -288,6 +469,7 @@
         ${kv('Размер', K.CRAFTABLE.includes(it.kind) ? esc(c.size.name) : '')}
         ${kv('Заточка', c.sharpen ? `${c.sharpen} из ${C.CRAFT.SHARPEN_MAX}` : '')}
         ${kv('Цена', priceText(it))}
+        ${kv('У торговца', priceOf(it) && priceOf(it).cu > 0 ? tradeHtml(priceOf(it).cu, cha || 0) : '')}
         ${perms.gm && WEARABLE_ANY.includes(it.kind) ? kv('Где носить', `<select data-change="invCat" data-v="${esc(it.id)}" aria-label="Где носить">${catOptions(it)}</select>`) : kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
       </dl>
@@ -398,7 +580,12 @@
     return `<datalist id="invMats">${K.allMaterials().map(m => `<option value="${esc(m.name)}">урон ${m.dmg} · броня ${m.arm}${K.isCrystal(m.name) ? ' · камень' : ''}</option>`).join('')}</datalist>`;
   }
 
-  function craftForm(v) {
+  // mode 'make' — игрок создаёт сам из рюкзака: без усиленного ремесла, души и особых свойств (это решает ГМ), без своей цены,
+  // с проверкой «что нужно» и кнопкой «Создать»
+  let craftMode = '';
+  function craftForm(v, mode) {
+    const make = mode === 'make';
+    craftMode = mode || '';
     const d = App.ui.invDraft || (App.ui.invDraft = blankDraft('weapon'));
     const cr = d.craft;
     const kinds = K.CRAFTABLE;
@@ -419,7 +606,7 @@
     </div>`;
     if (!d.base) return html + (isG ? '<p class="muted small">Выберите корпус — он задаёт, сколько стволов поместится. Детали огнестрела — из таблицы «оружие и броня» (колонки «деталь»), дальше пушка собирается из любых слитков по единицам.</p>'
       : '<p class="muted small">Выберите основу — из таблицы «оружие и броня». Дальше можно собрать её из любых слитков по единицам.</p>');
-    html += matOptions();
+    html += make ? bagMatOptions(v) : matOptions();
     if (isG) html += gunForm(d, c);
     if (isW) {
       html += `<h3>Материал на урон${isG ? ' <span class="muted small">(стволы, ресивер, корпус)</span>' : ''} <span class="muted small" id="invSum_dmg">${sumText(d, c, 'dmg')}</span></h3>${partRows('dmg')}
@@ -436,7 +623,7 @@
     html += `<details class="craft-more" ${cr.coat.length || cr.sharpen || cr.modules.length || cr.model || cr.glyphs.length || cr.inlays.length || +cr.quality > 1 || cr.enrich || (cr.soul && cr.soul.mode) || cr.extra ? 'open' : ''}><summary>Улучшения: напыление, заточка, глифы, камни…</summary>
       <div class="form-grid">
         <label>${isA ? 'Улучшение на броневом верстаке' : 'Заточка на точильном станке'} <input type="number" min="0" max="${C.CRAFT.SHARPEN_MAX}" step="1" data-change="invField" data-k="craft.sharpen" value="${esc(cr.sharpen || 0)}"> <span class="muted small">+${C.CRAFT.SHARPEN_STEP}% ${isA ? 'защиты' : 'урона'} за раз, до ${C.CRAFT.SHARPEN_MAX}; шанс поломки — от ${C.CRAFT.SHARPEN_BREAK_FROM}%</span></label>
-        <label>Усиленное ремесло <select data-change="invField" data-k="craft.quality">${C.CRAFT.QUALITY.map(qv => opt(qv, qv === 1 ? 'нет' : `${qv}Х`, cr.quality || 1)).join('')}</select> <span class="muted small">2Х — 40%, 3Х — 20%, если предмет создан с нуля из своего материала</span></label>
+        ${make ? '' : `<label>Усиленное ремесло <select data-change="invField" data-k="craft.quality">${C.CRAFT.QUALITY.map(qv => opt(qv, qv === 1 ? 'нет' : `${qv}Х`, cr.quality || 1)).join('')}</select> <span class="muted small">2Х — 40%, 3Х — 20%, если предмет создан с нуля из своего материала</span></label>`}
         <label>Модель <select data-change="invField" data-k="craft.model"><option value="">— нет —</option>${K.models().map(m => opt(m.id, `${m.name}: ${m.fx}`, cr.model)).join('')}</select> <span class="muted small">с 100 ур. ремесла</span></label>
         <label class="check"><input type="checkbox" data-change="invField" data-k="craft.enrich" ${cr.enrich ? 'checked' : ''}> Обогатитель: эффект материала 2Х</label>
       </div>
@@ -453,20 +640,26 @@
       <h3>Инкрустация и украшение <span class="muted small">камни и металлы дают свой «эффект украшения»</span></h3>
       ${cr.inlays.map((m, i) => `<div class="part-row"><input type="text" list="invMats" data-change="invField" data-k="craft.inlays.${i}" value="${esc(m)}" aria-label="Камень"><button type="button" class="linklike small" data-act="invListDel" data-k="inlays" data-v="${i}">убрать</button></div>`).join('')}
       <button type="button" class="linklike small" data-act="invListAdd" data-k="inlays">+ камень</button>
-      <h3>Существо в предмете</h3>
+      ${make ? '' : `<h3>Существо в предмете</h3>
       <div class="form-grid"><label>Как <select data-change="invField" data-k="craft.soul.mode"><option value="">— нет —</option>${opt('soul', 'заточённая душа (алтарь демонов, камень душ)', cr.soul.mode)}${opt('monster', 'предмет из монстра (алтарь крови)', cr.soul.mode)}</select></label>
         ${cr.soul.mode ? `<label>Существо <input type="text" list="invCreatures" data-change="invField" data-k="craft.soul.creature" value="${esc(cr.soul.creature || '')}" placeholder="из бестиария"></label>` : ''}</div>
       ${cr.soul.mode ? creaturesList() + (unlocked() ? '' : '<p class="muted small">Статы существ — в бестиарии: откройте закрытые разделы паролем ГМ.</p>') + soulAbilities(cr) : ''}
-      <label>Особые свойства <textarea rows="2" data-change="invField" data-k="craft.extra" placeholder="наполнение кровью, маной, силой демона; уникальные свойства">${esc(cr.extra || '')}</textarea></label>
+      <label>Особые свойства <textarea rows="2" data-change="invField" data-k="craft.extra" placeholder="наполнение кровью, маной, силой демона; уникальные свойства">${esc(cr.extra || '')}</textarea></label>`}
     </details>
     <div class="form-grid">
       <label>Название <input type="text" data-change="invField" data-k="name" value="${esc(d.name)}" placeholder="${esc(K.autoName(d))}"></label>
       <label>Количество <input type="number" min="1" step="1" data-change="invField" data-k="qty" value="${esc(d.qty || 1)}"></label>
       <label>Заметка <input type="text" data-change="invField" data-k="note" value="${esc(d.note)}" placeholder="кто выковал, откуда"></label>
-      <label>Своя цена <input type="text" data-change="invField" data-k="priceIn" value="${esc(d.priceIn || '')}" placeholder="по материалам" maxlength="60">
-        <span class="muted small">за штуку: «5(се)», «2 з 50 се», «350» (медные); пусто — по материалам</span></label>
+      ${make ? '' : `<label>Своя цена <input type="text" data-change="invField" data-k="priceIn" value="${esc(d.priceIn || '')}" placeholder="по материалам" maxlength="60">
+        <span class="muted small">за штуку: «5(се)», «2 з 50 се», «350» (медные); пусто — по материалам</span></label>`}
     </div>`;
-    html += `<div id="invPreview">${previewCard(item, c)}${craftPriceHtml(d, item)}</div>`;
+    html += `<div id="invPreview">${previewCard(item, c)}${craftPriceHtml(d, item, v, make)}</div>`;
+    if (make) {
+      html += `<div id="invMakeCheck">${needsHtml(forgeNeeds(v, d).list)}</div>
+        <div class="row-actions"><button type="button" class="btn primary" data-act="invMake">Создать</button>
+        <button type="button" class="btn ghost" data-act="invReset">Очистить</button></div>`;
+      return html;
+    }
     html += `<div class="row-actions"><button type="button" class="btn primary" data-act="invSave">${d.editId ? 'Сохранить изменения' : 'Выдать'}</button>
       <button type="button" class="btn ghost" data-act="invReset">${d.editId ? 'Отмена' : 'Очистить'}</button></div>`;
     return html;
@@ -527,7 +720,8 @@
     const item = Object.assign({}, d, { name: d.name || K.autoName(d) });
     const c = K.compute(item, v.ctx);
     const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-    set('invPreview', previewCard(item, c) + craftPriceHtml(d, item));
+    set('invPreview', previewCard(item, c) + craftPriceHtml(d, item, v, craftMode === 'make'));
+    if (craftMode === 'make') set('invMakeCheck', needsHtml(forgeNeeds(v, d).list));
     ['dmg', 'non', 'all'].forEach(r => set('invSum_' + r, sumText(d, c, r)));
     set('invGlyphHead', glyphHead(c, ['armor', 'shield', 'prosthesis'].includes(d.kind)));
     set('invGunHead', gunHead(c));
@@ -536,9 +730,10 @@
   }
 
   // цена изготовленного предмета: по материалам с расшифровкой или своя, если ГМ её вписал; за штуку и за всё количество
-  function craftPriceHtml(d, item) {
+  function craftPriceHtml(d, item, v, make) {
     const p = K.craftPrice(item), qty = Math.max(1, Math.floor(num(d.qty) || 1));
-    const typed = String(d.priceIn || '').trim(), own = ownPrice(typed);
+    const typed = make ? '' : String(d.priceIn || '').trim(), own = ownPrice(typed);
+    const cha = num(v.res.der.charisma);
     if (!p.lines.length && !p.unknown.length && own === null) return '';
     const each = own !== null ? own : p.total;
     const how = l => (l.how === 'coat' ? `напыление: ${l.name}` : l.how === 'inlay' ? `камень: ${l.name}${l.u > 1 ? ' ×' + fmt(l.u) : ''}` : `${l.name} ${fmt(l.u)} ед.`) + ` × ${K.money(l.each)}`;
@@ -547,8 +742,9 @@
         ${own !== null ? `<span class="muted small">— своя цена; по материалам ${esc(K.money(p.total))}</span>` : ''}</p>
       ${typed && own === null ? '<p class="bad-text small">Не понял свою цену — впишите числом с монетой: «5(се)», «2 з 50 се» или просто медные.</p>' : ''}
       ${p.lines.length ? `<p class="muted small">${esc(p.lines.map(how).join(' + '))}</p>` : ''}
+      ${each > 0 ? `<p class="small">У торговца за штуку: ${tradeHtml(each, cha)}</p>` : ''}
       ${p.unknown.length ? `<p class="muted small">Без цены в таблице: ${esc(p.unknown.join(', '))} — не посчитано.</p>` : ''}
-      ${own === null && p.lines.length ? '<p class="muted small">Только материал: заточка, глифы, модель, усиленное ремесло и существо в предмете в таблице не оценены — добавьте их своей ценой.</p>' : ''}
+      ${own === null && p.lines.length && !make ? '<p class="muted small">Только материал: заточка, глифы, модель, усиленное ремесло и существо в предмете в таблице не оценены — добавьте их своей ценой.</p>' : ''}
     </div>`;
   }
 
@@ -602,11 +798,13 @@
       <div class="dev-row"><input type="text" list="invCatalog" data-change="invTPick" value="${esc(name)}" placeholder="название из таблиц: предмет, слиток, камень, артефакт, еда${unlocked() ? ', ингредиент' : ''}" aria-label="Предмет">
         <input type="number" class="mini-num" min="1" step="1" data-ui="invTQty" data-ui-target="none" value="${esc(App.ui.invTQty || 1)}" aria-label="Количество">
         <button type="button" class="btn small" data-act="invTAdd">Выдать</button></div>
-      <div id="invTHit">${tableHit(hit, name)}</div>`
+      <div id="invTHit">${tableHit(hit, name, num(view().res.der.charisma))}</div>`
       + `<p class="muted small">Слитки и камни выдаются как материал (количество — в единицах); из них потом можно собрать предмет во вкладке «Изготовить».${unlocked() ? '' : ' Алхимические ингредиенты и полный список артефактов — после пароля ГМ.'}</p>`;
   }
-  function tableHit(hit, name) {
-    return `${hit ? `<p class="small"><span class="tag">${esc(K.KIND_NAMES[hit.kind])}</span> ${esc(hit.effect || '')}${hit.price ? ` <span class="muted">цена: ${esc(hit.price)}${K.priceCopper(hit.price) !== null ? ` (${esc(K.money(K.priceCopper(hit.price)))})` : ''}</span>` : ''}</p>` : name ? '<p class="muted small">В таблицах такого нет — выдайте через «Своё».</p>' : ''}`;
+  function tableHit(hit, name, cha) {
+    const cu = hit ? K.priceCopper(hit.price) : null;
+    return `${hit ? `<p class="small"><span class="tag">${esc(K.KIND_NAMES[hit.kind])}</span> ${esc(hit.effect || '')}${hit.price ? ` <span class="muted">цена: ${esc(hit.price)}${cu !== null ? ` (${esc(K.money(cu))})` : ''}</span>` : ''}</p>
+      ${cu ? `<p class="small">У торговца: ${tradeHtml(cu, cha)}</p>` : ''}` : name ? '<p class="muted small">В таблицах такого нет — выдайте через «Своё».</p>' : ''}`;
   }
 
   function dropForm() {
@@ -897,6 +1095,56 @@
       setTimeout(() => { const c = document.getElementById('invAdd'); if (c) c.scrollIntoView({ behavior: 'smooth' }); }, 30);
     },
     invMode(b) { App.ui.invAdd = b.dataset.v; rerender(); },
+    invMakeMode(b) { App.ui.invMake = b.dataset.v; rerender(); },
+    invStationsToggle() { App.ui.invStations = !App.ui.invStations; rerender(); },
+    // ГМ отмечает, где персонаж может работать сам
+    invStation(t) {
+      const name = t.dataset.v, on = t.checked;
+      gmChange(gm => {
+        const list = (gm.stations || []).filter(x => norm(x) !== norm(name));
+        if (on) list.push(name);
+        gm.stations = list;
+      }, `${on ? 'Доступна крафтильня' : 'Больше нет крафтильни'} «${name}»`);
+    },
+    // игрок создаёт предмет в кузнице из сырья в рюкзаке
+    invMake() {
+      const d = App.ui.invDraft, c = ctx();
+      if (!d || !d.base) { App.toast('Выберите основу предмета'); return; }
+      const v = view(), chk = forgeNeeds(v, d);
+      if (!chk.ok) { App.toast('Не хватает: ' + chk.list.filter(x => !x.ok).map(x => x.text).join('; ')); return; }
+      const it = draftItem(Object.assign({}, d, { editId: null }));
+      if (!it) { App.toast('Укажите материал'); return; }
+      delete it.craft.soul; it.craft.extra = ''; it.craft.quality = 1;
+      it.src = 'сделал сам';
+      const byMat = K.craftPrice(it);
+      if (byMat.lines.length && !byMat.unknown.length) it.price = byMat.total;
+      const usedText = needText(chk.req);
+      if (!confirm(`Создать «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''}? Из рюкзака уйдёт: ${usedText}.`)) return;
+      const used = takeFromBag(v, chk.req);
+      App.ui.invDraft = blankDraft(d.kind);
+      App.ui.invSel = it.id;
+      Dev().commit({ made: mades(c.record).concat({ t: newId(), ms: Date.now(), what: 'forge', item: it, used }) }, `Создаёт «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''} из: ${usedText}`);
+    },
+    // игрок готовит блюдо, напиток или зелье из ингредиентов в рюкзаке; бросок готовки сайт делает сам — после подтверждения
+    invMakeBrew() {
+      const c = ctx(), v = view(), B = window.Brew, d = B.draft();
+      const chk = brewNeeds(v, d, B.compute(d));
+      if (!chk.ok) { App.toast('Не хватает: ' + chk.list.filter(x => !x.ok).map(x => x.text).join('; ')); return; }
+      const qty = Math.max(1, Math.floor(num(d.qty) || 1));
+      const usedText = needText(chk.req);
+      const name0 = String(d.name || '').trim();
+      if (!confirm(`Приготовить${name0 ? ` «${name0}»` : ''}${qty > 1 ? ' ×' + qty : ''}? Из рюкзака уйдёт: ${usedText}.${d.mode !== 'potion' ? ' Бросок d100 сделает сайт.' : ''}`)) return;
+      const roll = d.mode === 'potion' ? '' : d100();
+      const r = B.compute(Object.assign({}, d, { roll }));
+      const name = name0 || r.name;
+      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe + (roll ? `; бросок ${roll}` : ''), qty, src: 'приготовил сам' };
+      if (r.cost && !r.cost.unknown.length) it.price = r.cost.total;
+      const used = takeFromBag(v, chk.req);
+      App.ui.brew = B.blank(d.mode);
+      App.ui.invSel = it.id;
+      Dev().commit({ made: mades(c.record).concat({ t: newId(), ms: Date.now(), what: 'brew', item: it, used }) },
+        `Готовит «${name}»${qty > 1 ? ' ×' + qty : ''} из: ${usedText}${roll ? ` — бросок d100: ${roll}${r.spoiled ? ', испорчено' : ''}` : ''}`);
+    },
     invKind(t) { App.ui.invDraft = blankDraft(t.value); rerender(); },
     invField(t) {
       const d = App.ui.invDraft || (App.ui.invDraft = blankDraft('weapon'));
@@ -944,16 +1192,8 @@
     invReset() { App.ui.invDraft = blankDraft(App.ui.invDraft ? App.ui.invDraft.kind : 'weapon'); rerender(); },
     invSave() {
       const d = App.ui.invDraft; if (!d || !d.base) { App.toast('Выберите основу предмета'); return; }
-      const cr = clone(d.craft);
-      cr.parts = (cr.parts || []).filter(p => p.mat && num(p.u) > 0).map(p => ({ mat: p.mat.trim(), u: num(p.u), role: roleKind(d.kind) ? p.role : (d.kind === 'ammo' ? 'dmg' : 'non') }));
-      if (cr.gun) cr.gun.barrels = (cr.gun.barrels || []).filter(b => b.name && num(b.n) > 0);
-      else delete cr.gun;
-      ['coat', 'inlays'].forEach(k => { cr[k] = (cr[k] || []).map(x => String(x).trim()).filter(Boolean); });
-      cr.glyphs = (cr.glyphs || []).filter(g => g.sym && String(g.sym).trim());
-      if (!cr.soul || !cr.soul.mode || !cr.soul.creature) delete cr.soul;
-      if (!cr.parts.length) { App.toast('Укажите материал'); return; }
-      const it = { id: d.editId || newId(), kind: d.kind, base: d.base, size: d.size || 'н', qty: Math.max(1, Math.floor(num(d.qty) || 1)), note: d.note || '', craft: cr };
-      it.name = (d.name || '').trim() || K.autoName(it);
+      const it = draftItem(d);
+      if (!it) { App.toast('Укажите материал'); return; }
       // цена за штуку: своя, если ГМ вписал, иначе — по материалам (если у всех материалов есть цена)
       const own = ownPrice(d.priceIn), byMat = K.craftPrice(it);
       if (String(d.priceIn || '').trim() && own === null) { App.toast('Не понял свою цену — например «5(се)» или «2 з 50 се»'); return; }
@@ -972,7 +1212,7 @@
       App.ui.invTName = t.value;
       const hit = K.catalog(unlocked()).find(x => norm(x.name) === norm(t.value));
       const el = document.getElementById('invTHit');
-      if (el) el.innerHTML = tableHit(hit, t.value);
+      if (el) el.innerHTML = tableHit(hit, t.value, num(view().res.der.charisma));
     },
     invTAdd() {
       const name = String(App.ui.invTName || '').trim();
@@ -981,8 +1221,9 @@
       if (!hit) { App.toast('В таблицах такого нет — выдайте через «Своё»'); return; }
       const qty = Math.max(1, num(App.ui.invTQty) || 1);
       const it = { id: newId(), kind: hit.kind, name: hit.name, effect: hit.effect, qty, src: 'выдал ГМ' };
-      const cu = K.priceCopper(hit.price);
+      const cu = K.priceCopper(hit.price), ing = ingData(hit.name);
       if (cu !== null) it.price = cu;
+      if (ing) it.ing = ing;
       gmChange(gm => { addStack(gm.items, it); }, `Получено: «${hit.name}»${qty > 1 ? ' ×' + qty : ''}`);
       App.ui.invTName = ''; App.ui.invTQty = 1;
     },
@@ -1009,6 +1250,7 @@
           const hit = cat.find(x => norm(x.name) === norm(r.name)), cu = hit ? K.priceCopper(hit.price) : null;
           const it = { id: newId(), kind: hit ? hit.kind : 'item', name: hit ? hit.name : r.name, effect: hit ? hit.effect : '', qty: r.qty, src: `добыча: ${st.creature}` };
           if (cu !== null) it.price = cu;
+          if (ingData(it.name)) it.ing = ingData(it.name);
           addStack(gm.items, it);
         });
       }, `Добыча с «${st.creature}»: ${rows.map(r => `${r.name}${r.qty > 1 ? ' ' + r.qty : ''}`).join(', ')}`);
@@ -1053,6 +1295,7 @@
           const i = window.Brew.ing(x.n), cu = i ? K.priceCopper(i.price) : null;
           const it = { id: newId(), kind: 'item', name: x.n, effect: i ? i.e.map(e => e[0]).filter(Boolean).join(', ') : '', qty: x.qty, src: 'сбор трав' };
           if (cu !== null) it.price = cu;
+          if (ingData(x.n)) it.ing = ingData(x.n);
           addStack(gm.items, it);
         });
       }, `Сбор трав: ${list.map(x => `${x.n}${x.qty > 1 ? ' ×' + x.qty : ''}`).join(', ')}`);
