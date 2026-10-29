@@ -213,7 +213,10 @@
         const uid = (user() || {}).uid;
         const next = Object.assign({}, db.docs);
         const checks = [];
+        // как в Firestore: массив прямо внутри массива сохранить нельзя
+        const nested = (v, inArr) => (Array.isArray(v) ? inArr || v.some(y => nested(y, true)) : !!v && typeof v === 'object' && Object.values(v).some(y => nested(y, false)));
         ops.forEach(x => {
+          if (x.type !== 'delete' && nested(x.data, false)) throw new Error(`Nested arrays are not supported (found in document ${x.path})`);
           const before = next[x.path] || null;
           if (x.type === 'set') { next[x.path] = clean(x.data); checks.push([before ? 'update' : 'create', x.path, before, next[x.path]]); }
           else if (x.type === 'update') { if (!before) { const e = new Error('No document to update: ' + x.path); e.code = 'not-found'; throw e; } next[x.path] = applyUpdate(before, x.data); checks.push(['update', x.path, before, next[x.path]]); }

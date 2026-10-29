@@ -47,7 +47,12 @@
       gm.items.push(clone(m.item));
     });
     // ингредиенту — его свойства из таблицы: она закрыта паролем, а игроку они нужны, чтобы готовить самому
-    if (unlocked() && Array.isArray(gm.items)) gm.items.forEach(x => { if (x && !x.ing && !K.CRAFTABLE.includes(x.kind)) { const i = ingData(x.name); if (i) x.ing = i; } });
+    if (Array.isArray(gm.items)) gm.items.forEach(x => {
+      if (!x || K.CRAFTABLE.includes(x.kind)) return;
+      if (x.ing) { x.ing.e = pairs(x.ing.e); x.ing.x = pairs(x.ing.x); return; }   // записанное раньше массивами — объектами
+      const i = unlocked() ? ingData(x.name) : null;
+      if (i) x.ing = i;
+    });
     const equip = clone(v.inv.equip);
     const before = JSON.stringify(equip);
     if (mutate(gm, v, equip) === false) return;
@@ -222,11 +227,17 @@
   const r2 = x => Math.round(x * 100) / 100;
   const mades = rec => (Array.isArray(rec && rec.made) ? rec.made : []).filter(m => m && m.t);
   const isGear = it => K.CRAFTABLE.includes(it.kind);
-  // свойства ингредиента из таблицы (только у ГМ: таблица закрыта паролем) — записываются в выданный предмет
+  // свойства ингредиента из таблицы (только у ГМ: таблица закрыта паролем) — записываются в выданный предмет.
+  // Firestore не хранит массив внутри массива, поэтому эффекты [[текст, знак], …] и пометки лежат в предмете объектами { t, m }
+  const ingRaw = name => ((window.GAME_DATA.alchemy || {}).ingredients || []).find(x => norm(x.n) === norm(name)) || null;
+  const pairs = list => (Array.isArray(list) ? list.map(p => (Array.isArray(p) ? { t: p[0] === undefined ? '' : p[0], m: p[1] === undefined ? '' : p[1] } : p)) : []);
+  const unpairs = list => (Array.isArray(list) ? list.map(p => (Array.isArray(p) ? p : [p && p.t !== undefined ? p.t : '', p && p.m !== undefined ? p.m : ''])) : []);
   const ingData = name => {
-    const i = ((window.GAME_DATA.alchemy || {}).ingredients || []).find(x => norm(x.n) === norm(name));
-    return i ? clone(i) : null;
+    const i = ingRaw(name);
+    return i ? Object.assign(clone(i), { e: pairs(i.e), x: pairs(i.x) }) : null;
   };
+  // обратно — в виде строки таблицы (так их читает калькулятор кухни и зелий)
+  const ingOf = it => (it.ing ? Object.assign({}, it.ing, { e: unpairs(it.ing.e), x: unpairs(it.ing.x) }) : unlocked() ? ingRaw(it.name) : null);
   function d100() {
     const cr = window.crypto;
     if (!cr || !cr.getRandomValues) return Math.floor(Math.random() * 100) + 1;
@@ -321,7 +332,7 @@
   function bagIngs(v) {
     const seen = new Set(), out = [];
     v.inv.items.forEach(it => {
-      const i = it.ing || (unlocked() ? ingData(it.name) : null);
+      const i = ingOf(it);
       if (!i || !i.n || seen.has(norm(i.n))) return;
       seen.add(norm(i.n));
       out.push(i);
