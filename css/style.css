@@ -484,6 +484,7 @@ table.alloc { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
 .eff { display: inline-block; padding: 0 6px; border-radius: 3px; margin: 1px 2px 1px 0; }
 .eff.plus { background: rgba(127, 199, 155, .14); color: #a8e2bd; }
 .eff.minus { background: rgba(228, 141, 132, .14); color: #f2b2aa; }
+.eff.unknown { background: rgba(168, 159, 194, .14); color: var(--muted); font-style: italic; }
 .ref { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; max-width: 1700px; margin: 0 auto; padding: 24px; }
 .ref-nav { position: sticky; top: 76px; align-self: start; display: grid; gap: 2px; }
 .ref-nav a { position: relative; color: var(--muted); text-decoration: none; padding: 7px 12px; border-left: 2px solid var(--line-soft); }

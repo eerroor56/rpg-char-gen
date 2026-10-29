@@ -47,6 +47,10 @@
   // ингредиенты: из таблицы (у ГМ, после пароля) или, когда игрок готовит сам, — из его рюкзака (src, см. form)
   let src = null;
   const ings = () => src || (D().alchemy || {}).ingredients || [];
+  // сколько свойств ингредиента знает персонаж (игрок готовит сам; null — видно всё, у ГМ и в справочнике).
+  // Варить это не мешает (уточнение ГМ): неизвестное в расчёте — «???», у готового зелья эффект виден весь
+  let known = null;
+  const hidIdx = k => known !== null && k > known;
   let ix = null, ixSrc = null;
   function ing(name) {
     const list = ings();
@@ -94,10 +98,11 @@
   // у стихий («огонь -10е») пометка меняет смысл (резист или урон), поэтому они считаются отдельно
   function combine(list) {
     const map = new Map();
-    list.forEach(({ e, qty, src }) => {
+    list.forEach(({ e, qty, src, hid }) => {
       const key = e.v === null ? `t|${e.name}|${e.mark}` : e.stat ? `s|${e.name}|${e.unit}` : `n|${e.name}|${e.unit}|${e.mark}`;
       let x = map.get(key);
-      if (!x) { x = { name: e.name, label: e.v === null ? e.text : e.name, v: e.v === null ? null : 0, unit: e.unit, sg: e.sg, mark: e.mark, stat: e.stat, n: 0, src: [] }; map.set(key, x); }
+      if (!x) { x = { name: e.name, label: e.v === null ? e.text : e.name, v: e.v === null ? null : 0, unit: e.unit, sg: e.sg, mark: e.mark, stat: e.stat, n: 0, src: [], hid: !!hid }; map.set(key, x); }
+      else x.hid = x.hid && !!hid;      // известно хотя бы из одного ингредиента — видно
       if (e.v !== null) x.v += e.v * qty;
       x.sg = x.sg || e.sg;
       x.n += qty;
@@ -113,7 +118,8 @@
   // строки ингредиентов: { i, qty, name, eff }
   const rowsOf = d => (d.rows || []).map(r => ({ i: ing(r.ing), name: String(r.ing || '').trim(), qty: Math.max(0, Math.floor(num(r.qty))), eff: Math.min(4, Math.max(1, Math.floor(num(r.eff)) || 1)) }))
     .filter(r => r.name && r.qty);
-  const zivIn = i => i.e.reduce((a, [t, s]) => { const e = parseEff(t, s); return a + (/^живост/.test(e.name) && e.v !== null ? e.v : 0); }, 0);
+  // живость во всех свойствах ингредиента; hiddenOnly — только в тех, что персонаж ещё не знает
+  const zivIn = (i, hiddenOnly) => i.e.reduce((a, [t, s], k) => { if (hiddenOnly && !hidIdx(k + 1)) return a; const e = parseEff(t, s); return a + (/^живост/.test(e.name) && e.v !== null ? e.v : 0); }, 0);
 
   // ------------------------------------------------------------ расчёт
   function compute(d) {
@@ -136,7 +142,7 @@
         if (!ex) { out.warnings.push(`У «${r.i.n}» нет ${r.eff}-го эффекта.`); return; }
         st.add(STATIONS[r.eff - 1]);
         lvl = Math.max(lvl, parseInt(r.i.lvl, 10) || 0);
-        list.push({ e: parseEff(ex[0], ex[1]), qty: r.qty, src: r.i.n });
+        list.push({ e: parseEff(ex[0], ex[1]), qty: r.qty, src: r.i.n, hid: hidIdx(r.eff) });
       });
       out.n = ok.reduce((a, r) => a + r.qty, 0);
       const b = ing(d.base);
@@ -160,19 +166,21 @@
         alch: fit.lvl || 0 };
       out.dur = true;
       out.name = `${cap(t.id)}${out.effects.length ? ': ' + short(out.effects.filter(x => !/^основа/.test(x.label)).map(x => effStr(x))) : ''}`;
+      if (out.effects.some(x => x.hid)) out.shownName = `${cap(t.id)}: ${short(out.effects.filter(x => !/^основа/.test(x.label)).map(x => (x.hid ? '???' : effStr(x))))}`;
     } else {
       const isCook = d.mode !== 'alco';
       const m = isCook ? (COOK.find(x => x.id === d.method) || COOK[0]) : (ALCO.find(x => x.id === d.alco) || ALCO[0]);
-      let ziv = 0, n = 0;
+      let ziv = 0, zivHid = 0, n = 0;
+      const h = hidIdx(m.eff);
       ok.forEach(r => {
         n += r.qty;
-        if (isCook) ziv += zivIn(r.i) * r.qty;   // «вся живость, что есть в самих ингредиентах»
+        if (isCook) { ziv += zivIn(r.i) * r.qty; zivHid += zivIn(r.i, true) * r.qty; }   // «вся живость, что есть в самих ингредиентах»
         const ex = r.i.e[m.eff - 1];
         if (!ex) { out.notes.push(`У «${r.i.n}» нет ${m.eff}-го эффекта — ${m.id} ничего из него не выделит.`); return; }
         const e = parseEff(ex[0], ex[1]);
         // «если выделенным эффектом оказывается живость, то она удваивается»
-        if (isCook && /^живост/.test(e.name) && e.v !== null) ziv += e.v * r.qty;
-        else list.push({ e, qty: r.qty, src: r.i.n });
+        if (isCook && /^живост/.test(e.name) && e.v !== null) { ziv += e.v * r.qty; if (h) zivHid += e.v * r.qty; }
+        else list.push({ e, qty: r.qty, src: r.i.n, hid: h });
         if (!isCook && baseText(r.i)) out.notes.push(`${r.i.n} — основа: ${baseText(r.i)}.`);
       });
       const extra = [];
@@ -182,7 +190,7 @@
         if (b) {
           extra.push(fx(`основа «${b.n.toLowerCase()}»: ${baseText(b) || 'без особых свойств'}`, null, '', { stat: false }));
           if (!m.base) out.notes.push(`Основа нужна для варки и запекания; при способе «${m.id}» она не используется.`);
-          else if (!BC.BASE_FREE) { n += 1; ziv += zivIn(b); }
+          else if (!BC.BASE_FREE) { n += 1; ziv += zivIn(b); zivHid += zivIn(b, true); }
         }
         // вырезки и выжимки
         (d.cuts || []).forEach(ct => {
@@ -208,7 +216,7 @@
         });
         n = Math.max(n, 0);
         ziv += n;   // «за каждый ингредиент +1 живости»
-        out.main = fx('живость', ziv, ziv >= 0 ? '+' : '-');
+        out.main = fx('живость', ziv, ziv >= 0 ? '+' : '-', zivHid ? { hid: true } : null);
         out.kind = 'food';
         out.name = `${cap(m.id)}${names.length ? ': ' + short(names) : ''}`;
         if (n > MAX_ING) out.warnings.push(`Ингредиентов ${n}, а можно не больше ${MAX_ING}.`);
@@ -233,6 +241,9 @@
       if (d.canned) [out.main].concat(out.effects).forEach(x => { if (x.v !== null) x.v = ri(x.v * CANNED); });
     }
     if (!ok.length) out.notes.unshift('Добавьте ингредиенты.');
+    if (known !== null && [out.main].concat(out.effects).some(x => x && x.hid)) {
+      out.notes.unshift(`Персонаж знает ${known} из 4 свойств ингредиента (каждые ${MK.ALCH_PER_PROP} ур. алхимии открывают следующее): неизвестное — «???», у готового ${d.mode === 'potion' ? 'зелья' : d.mode === 'alco' ? 'напитка' : 'блюда'} эффект будет виден весь.`);
+    }
     out.summary = [out.main].concat(out.effects).filter(Boolean).map(x => effStr(x, out.dur)).join(', ') + (out.spoiled ? ' (испорчено)' : '') + (d.canned && d.mode !== 'potion' ? ' (консервы)' : '');
     // цена: ингредиенты и основа — по таблице, за штуку; вырезки с существ в таблице не оценены
     const K = window.Craft;
@@ -260,10 +271,12 @@
   const countText = (d, r) => (d.mode === 'potion' ? `слотов занято <b class="${r.n > r.cap ? 'bad-text' : 'good-text'}">${r.n}</b> из ${r.cap}` : `ингредиентов <b class="${r.n > r.cap ? 'bad-text' : 'good-text'}">${r.n}</b> из ${r.cap}`);
 
   function outHtml(r) {
-    const li = x => `<li><span class="eff ${x.mark === '+' ? 'plus' : x.mark === '-' ? 'minus' : ''}">${esc(effStr(x, r.dur))}</span>${x.src.length ? ` <span class="muted">— ${esc(x.src.join(', '))}</span>` : ''}</li>`;
+    // свойство, которое персонаж ещё не знает, — «???» (видно, из какого ингредиента)
+    const li = x => (x.hid ? `<li><span class="eff unknown">???</span> <span class="muted">— неизвестное свойство: ${esc(x.src.join(', '))}</span></li>`
+      : `<li><span class="eff ${x.mark === '+' ? 'plus' : x.mark === '-' ? 'minus' : ''}">${esc(effStr(x, r.dur))}</span>${x.src.length ? ` <span class="muted">— ${esc(x.src.join(', '))}</span>` : ''}</li>`);
     return `<div class="craft-preview brew-out${r.spoiled ? ' spoiled' : ''}">
-      <p class="brew-name"><b>${esc(r.name)}</b> <span class="tag">${r.kind === 'potion' ? 'зелье' : r.mode === 'alco' ? 'напиток' : 'блюдо'}</span>${r.spoiled ? ' <span class="tag bad">испорчено</span>' : ''}</p>
-      ${r.main ? `<p class="brew-main"><span class="eff ${r.main.mark === '-' ? 'minus' : 'plus'}">${esc(effStr(r.main))}</span></p>` : ''}
+      <p class="brew-name"><b>${esc(r.shownName || r.name)}</b> <span class="tag">${r.kind === 'potion' ? 'зелье' : r.mode === 'alco' ? 'напиток' : 'блюдо'}</span>${r.spoiled ? ' <span class="tag bad">испорчено</span>' : ''}</p>
+      ${r.main ? `<p class="brew-main">${r.main.hid ? `<span class="eff unknown">${esc(r.main.label)} ???</span> <span class="muted small">— часть живости — из неизвестных свойств</span>` : `<span class="eff ${r.main.mark === '-' ? 'minus' : 'plus'}">${esc(effStr(r.main))}</span>`}</p>` : ''}
       ${r.effects.length ? `<ul class="brew-fx">${r.effects.map(li).join('')}</ul>` : ''}
       ${r.cost ? `<p class="item-price"><b>Цена ингредиентов:</b> ${esc(window.Craft.money(r.cost.total))}${r.cost.unknown.length ? ` <span class="muted small">— без цены в таблице: ${esc(r.cost.unknown.join(', '))}</span>` : ''}${r.cost.cuts ? ' <span class="muted small">— вырезки с существ не оценены</span>' : ''}</p>` : ''}
       ${r.warnings.length ? `<ul class="small item-warn">${r.warnings.map(w => `<li class="bad-text">${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -295,6 +308,7 @@
     host = opts.host || 'ref';
     src = opts.ings || null;
     checkFn = opts.check || null;
+    known = opts.known === undefined ? null : opts.known;
     if (opts.ings && !opts.ings.length) return `<p class="muted small">${esc(opts.empty || 'Ингредиентов нет.')}</p>`;
     if (!ings().length) {
       return `<p class="muted small">Ингредиенты записаны в закрытом разделе «Алхимия и кухня» — откройте его паролем ГМ.</p>${window.GMLock ? window.GMLock.form('Кухня и алхимия: раздел для ГМ', 'Калькулятору нужны ингредиенты из листа «алхимия» — они открываются паролем ГМ.') : ''}`;
@@ -303,7 +317,7 @@
     const r = compute(d);
     const isCook = d.mode === 'cook', isAlco = d.mode === 'alco', isPot = d.mode === 'potion';
     const m = COOK.find(x => x.id === d.method) || COOK[0];
-    const effOpts = (i, sel) => [1, 2, 3, 4].map(k => { const e = i && i.e[k - 1]; return e ? opt(k, `${k}: ${e[0]} — ${STATIONS[k - 1]}`, sel) : ''; }).join('');
+    const effOpts = (i, sel) => [1, 2, 3, 4].map(k => { const e = i && i.e[k - 1]; return e ? opt(k, `${k}: ${hidIdx(k) ? '???' : e[0]} — ${STATIONS[k - 1]}`, sel) : ''; }).join('');
     let html = `<div class="brew">
       ${opts.noHerbs ? '' : herbsHtml(opts)}
       <div class="seg" role="tablist">${MODES.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === d.mode}" class="${k === d.mode ? 'is-on' : ''}" data-act="brewMode" data-v="${k}">${t}</button>`).join('')}</div>
@@ -347,12 +361,12 @@
             <button type="button" class="btn small" data-act="brewRoll">d100</button></span> <span class="muted small">ниже ${SPOIL} — все эффекты негативные</span></label>
           <label class="check"><input type="checkbox" data-change="brewField" data-k="canned" ${d.canned ? 'checked' : ''}> Консервы / долгое хранение: показатели −50%</label>`}
       </div>
-      <datalist id="brewIngs">${ings().map(i => `<option value="${esc(i.n)}">${esc(i.e.map(e => e[0]).join(', '))}</option>`).join('')}</datalist>
+      <datalist id="brewIngs">${ings().map(i => `<option value="${esc(i.n)}">${esc(i.e.map((e, k) => (hidIdx(k + 1) ? '???' : e[0])).join(', '))}</option>`).join('')}</datalist>
       <datalist id="brewBases">${bases().map(i => `<option value="${esc(i.n)}">${esc(baseText(i))}</option>`).join('')}</datalist>
       <div id="brewOut">${outHtml(r)}</div>`;
     if (opts.issueAct) {
       html += `<div class="form-grid">
-          <label>Название <input type="text" data-change="brewField" data-k="name" value="${esc(d.name || '')}" placeholder="${esc(r.name)}" maxlength="120"></label>
+          <label>Название <input type="text" data-change="brewField" data-k="name" value="${esc(d.name || '')}" placeholder="${esc(r.shownName || r.name)}" maxlength="120"></label>
           <label>Количество <input type="number" min="1" step="1" data-change="brewField" data-k="qty" value="${esc(d.qty || 1)}"></label>
         </div>
         <div id="brewCheck">${checkFn ? checkFn(d, r) : ''}</div>
@@ -388,7 +402,7 @@
     set('brewCount', countText(d, r));
     if (checkFn) set('brewCheck', checkFn(d, r));
     const nm = document.querySelector('[data-change="brewField"][data-k="name"]');
-    if (nm) nm.placeholder = r.name;
+    if (nm) nm.placeholder = r.shownName || r.name;
   }
   const setPath = (o, path, val) => {
     const ps = path.split('.');

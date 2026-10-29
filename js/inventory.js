@@ -311,6 +311,11 @@
     const p = Dev().learnedPassives(rec).find(x => norm(x.name) === 'алхимия');
     return p ? p.lvl : null;
   }
+  // сколько свойств ингредиента видит персонаж: 1-е — всегда, каждые 25 ур. алхимии — следующее (на 75 видны все 4).
+  // Варить это не мешает (уточнение ГМ) — у готового зелья эффект виден весь
+  const knownProps = rec => Math.min(4, 1 + Math.floor(num(alchLevel(rec)) / MK.ALCH_PER_PROP));
+  // свойства ингредиента для карточки: неизвестные персонажу — «???» с уровнем, на котором откроются
+  const ingEffects = (it, n) => unpairs(it.ing.e).map(([t], k) => ({ src: `${k + 1}-е свойство`, text: k < n ? t : `??? — откроется на ${MK.ALCH_PER_PROP * k} ур. алхимии` })).filter(x => x.text);
   // кухня, винокурня, алхимический стол: крафтильни, алхимия (для зелий), замечания расчёта и ингредиенты в рюкзаке
   function brewNeeds(v, d, r) {
     const rec = ctx().record, st = stationsOf(rec, v), list = [], req = new Map();
@@ -360,7 +365,7 @@
     const mode = App.ui.invMake || 'forge';
     const tabs = [['forge', 'Кузница'], ['brew', 'Кухня и зелья']];
     const body = mode === 'forge' ? craftForm(v, 'make')
-      : window.Brew.form({ host: 'dev', issueAct: 'invMakeBrew', issueLabel: 'Приготовить', ings: bagIngs(v), noHerbs: true, noCuts: true, autoRoll: true,
+      : window.Brew.form({ host: 'dev', issueAct: 'invMakeBrew', issueLabel: 'Приготовить', ings: bagIngs(v), noHerbs: true, noCuts: true, autoRoll: true, known: knownProps(rec),
         check: (d, r) => needsHtml(brewNeeds(v, d, r).list), empty: 'В рюкзаке нет ингредиентов — их выдаёт ГМ: травы, добыча, покупки.' });
     return `<section class="dev-card add-card make-card" id="invMake"><h2>Создать самому</h2>
       <p class="small">Крафтильни: ${st.all.length ? st.all.map(n => `<span class="tag">${esc(n)}</span>`).join(' ') : '<span class="muted">пока нет — их отмечает ГМ (своя мастерская или крафтильня рядом)</span>'}
@@ -461,6 +466,8 @@
 
   function itemCard(it, c, perms, isWorn, cha) {
     const canEquip = perms.gm || perms.owner;
+    // ингредиент у игрока: свойства, которых персонаж ещё не знает (по алхимии), — «???»; ГМ видит всё
+    const effs = !perms.gm && it.ing ? ingEffects(it, knownProps(ctx().record)) : c.effects;
     const parts = ((it.craft || {}).parts || []).filter(p => p.mat);
     const kv = (t, x) => (x === '' || x === null || x === undefined ? '' : `<div><dt>${t}</dt><dd>${x}</dd></div>`);
     const reqs = (c.req || []).map(r => `<span class="${r.ok ? 'req-ok' : 'req-bad'}">${R.STAT_SHORT[r.stat]} ${r.need}</span>`).join(', ');
@@ -484,7 +491,7 @@
         ${perms.gm && WEARABLE_ANY.includes(it.kind) ? kv('Где носить', `<select data-change="invCat" data-v="${esc(it.id)}" aria-label="Где носить">${catOptions(it)}</select>`) : kv('Где надевать', c.cat ? K.CATS[c.cat] : '')}
         ${kv('Откуда', it.src ? esc(it.src) : '')}
       </dl>
-      ${c.effects.length ? `<ul class="fx-list">${c.effects.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}${e.applied ? ` <span class="muted small">— учтено в ${e.applied === 'dmg' ? 'уроне' : 'броне'}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${effs.length ? `<ul class="fx-list">${effs.map(e => `<li><b>${esc(e.src)}:</b> ${esc(e.text)}${e.scale && e.scale !== 'за предмет' ? ` <span class="tag sc">${esc(e.scale)}</span>` : ''}${e.applied ? ` <span class="muted small">— учтено в ${e.applied === 'dmg' ? 'уроне' : 'броне'}</span>` : ''}</li>`).join('')}</ul>` : ''}
       ${boostHtml(c)}
       ${it.note ? `<p class="small pre">${esc(it.note)}</p>` : ''}
       ${K.isTome(it) && perms.gm ? `<div class="dev-row tome-row"><label>Прочитать: какой параметр повысить
