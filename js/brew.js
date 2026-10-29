@@ -147,15 +147,17 @@
       out.effects = combine(list);
       if (b) out.effects.push(fx(`основа «${b.n.toLowerCase()}»: ${baseText(b) || 'без особых свойств'}`, null, '', { stat: false }));
       if (d.conc) out.effects.forEach(x => { if (x.v !== null) x.v = ri(x.v * CONC); });
-      out.notes.push(`«${cap(t.id)}»: ${t.slots} ${App.plural(t.slots, 'слот', 'слота', 'слотов')} эффектов, нужен ${t.lvl} ур. алхимии.`);
+      // алхимия — только по числу ингредиентов (уточнение ГМ): уровень самого маленького вида зелья, в который они помещаются.
+      // «ур.» у ингредиента в таблице — уровень выращивания растения, на варку он не влияет
+      const bySlots = types.slice().sort((p, q) => p.slots - q.slots);
+      const fit = bySlots.find(x => x.slots >= out.n) || bySlots[bySlots.length - 1];
+      out.notes.push(`«${cap(t.id)}»: ${t.slots} ${App.plural(t.slots, 'слот', 'слота', 'слотов')} эффектов. Ингредиентов ${out.n} — нужен ${fit.lvl} ур. алхимии (как для вида «${fit.id}»).`);
       if (st.size) out.notes.push(`Крафтильни: ${[...st].join(', ')}${out.effects.filter(x => !/^основа/.test(x.label)).length > 1 ? ', алхимический смешиватель (объединить разные эффекты)' : ''}${d.conc ? ', концентратор' : ''}.`);
-      if (lvl) out.notes.push(`Ингредиенты требуют до ${lvl} ур. навыка.`);
+      if (lvl) out.notes.push(`Уровень выращивания ингредиентов — до ${lvl}; на варку не влияет.`);
       out.kind = 'potion';
-      // чтобы сварить самому: крафтильни эффектов, смешиватель для разных эффектов, концентратор; алхимия — по виду зелья,
-      // ингредиентам и выделенному эффекту (каждые 25 ур. открывают следующее свойство ингредиента)
-      const maxEff = ok.reduce((a, r) => Math.max(a, r.eff), 1);
+      // чтобы сварить самому: крафтильни эффектов, смешиватель для разных эффектов, концентратор; алхимия — по числу ингредиентов
       out.req = { stations: [...st].concat(out.effects.filter(x => !/^основа/.test(x.label)).length > 1 ? [MK.MIX] : [], d.conc ? [MK.CONC] : []),
-        alch: Math.max(t.lvl || 0, lvl, MK.ALCH_PER_EFFECT * (maxEff - 1)) };
+        alch: fit.lvl || 0 };
       out.dur = true;
       out.name = `${cap(t.id)}${out.effects.length ? ': ' + short(out.effects.filter(x => !/^основа/.test(x.label)).map(x => effStr(x))) : ''}`;
     } else {
