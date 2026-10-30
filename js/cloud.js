@@ -157,7 +157,7 @@
         if (kind === 'create') return isMember(cid) && after.owner === uid && (isGM(cid) || (['draft', 'review'].includes(after.status) && !('gm' in after)));
         if (kind === 'delete') return isGM(cid) || (before.owner === uid && ['draft', 'review'].includes(before.status));
         const k = keys();
-        const ownerEdit = !k.some(x => ['gm', 'owner', 'createdMs'].includes(x))
+        const ownerEdit = !k.some(x => ['gm', 'owner', 'createdMs', 'vit'].includes(x))
           && (!k.includes('status') || (['draft', 'review'].includes(before.status) && ['draft', 'review'].includes(after.status)))
           && (!k.includes('state') || ['draft', 'review'].includes(before.status));
         return (isGM(cid) && after.owner === before.owner) || (isMember(cid) && before.owner === uid && ownerEdit);

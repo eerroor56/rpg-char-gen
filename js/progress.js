@@ -36,6 +36,25 @@
     return out;
   }
 
+  // эффект навыка на нынешнем уровне (R.skillAt: в описании — прирост за уровень), если он отличается от текста таблицы
+  // «добавляет шанс …» без числа (ремесло, кулинария) — C.MAKE.CHANCE_PER_LVL % за уровень, как при крафте игроком
+  const chanceNow = (eff, lvl) => {
+    const segs = String(eff || '').split('/').map(x => x.trim()).filter(x => /шанс/i.test(x) && !/%/.test(x));
+    return segs.length ? `${fmt(Math.min(100, lvl * ((C.MAKE || {}).CHANCE_PER_LVL || 1)))}% — ${segs.join('; ')}` : '';
+  };
+  const nowLine = (eff, lvl) => { const t = R.skillAt(eff, lvl), c = chanceNow(eff, lvl); return lvl > 0 && (c || (t && t !== eff)) ? `<br><span class="small skill-now">сейчас (ур. ${fmt(lvl)}): ${esc(c || t)}</span>` : ''; };
+  // таланты персонажа с уровнем больше нуля: что дают сейчас и что откроется на максимальном
+  function talentsNow(res) {
+    const rows = R.TALENTS.map(t => {
+      const tv = res.talents[t.id], info = ((D.skills || {}).talentInfo || []).find(p => norm(p.name) === norm(t.id));
+      if (!tv || !tv.total || !info || !info.effect) return '';
+      const max = info.max || t.max, now = R.skillAt(info.effect, tv.total);
+      return `<li><span><b>${esc(t.name)}</b> <span class="tag">${fmt(tv.total)}${max ? ` / ${fmt(max)}` : ''}</span>
+        <br><span class="small">${esc(now !== info.effect ? now : info.effect)}</span>${chanceNow(info.effect, tv.total) ? `<br><span class="small skill-now">сейчас: ${esc(chanceNow(info.effect, tv.total))}</span>` : ''}${info.top ? `<br><span class="small ${max && tv.total >= max ? '' : 'muted'}">на максимальном уровне: ${esc(info.top)}</span>` : ''}</span></li>`;
+    }).filter(Boolean);
+    return rows.length ? `<h3>Таланты сейчас</h3><ul class="dev-list">${rows.join('')}</ul>` : '';
+  }
+
   // ------------------------------------------------------------ правила
 
   // уровни за накопленный опыт: от уровня L до L+1 нужно 100 × L опыта
@@ -227,8 +246,9 @@
       ${learned.length ? `<ul class="dev-list">${learned.map((x, i) => {
         const ps = x.kind === 'passive' ? learnedPassives(rec).find(y => norm(y.name) === norm(x.name)) : null;
         return `<li><span>${esc(x.name)} <span class="muted small">${esc((LEARN_KINDS[x.kind] || LEARN_KINDS.other).t.toLowerCase())}</span>${ps ? ` <span class="tag">${ps.max ? `ур. ${fmt(ps.lvl)} / ${fmt(ps.max)}` : 'не прокачивается'}</span>` : ''}
-          ${ps && ps.eff ? `<br><span class="small">${esc(ps.eff)}</span>` : ''}${ps && ps.top ? `<br><span class="small ${ps.max && ps.lvl >= ps.max ? '' : 'muted'}">на максимальном уровне: ${esc(ps.top)}</span>` : ''}</span>${perms.gm ? `<button type="button" class="linklike small" data-act="devUnlearn" data-key="${i}">убрать</button>` : ''}</li>`;
+          ${ps && ps.eff ? `<br><span class="small">${esc(ps.eff)}</span>${nowLine(ps.eff, ps.lvl)}` : ''}${ps && ps.top ? `<br><span class="small ${ps.max && ps.lvl >= ps.max ? '' : 'muted'}">на максимальном уровне: ${esc(ps.top)}</span>` : ''}</span>${perms.gm ? `<button type="button" class="linklike small" data-act="devUnlearn" data-key="${i}">убрать</button>` : ''}</li>`;
       }).join('')}</ul>` : '<p class="muted small">Пока ничего не изучено после создания.</p>'}
+      ${talentsNow(res)}
       ${learnedPassives(rec).some(x => x.max) ? '<p class="muted small">Пассивные навыки прокачиваются очками талантов (они даются за каждые 5 уровней) — в разделе «Очки за новые уровни».</p>' : ''}`;
     if (perms.gm) {
       html += `<div class="dev-row"><select data-ui="devLearnKind" data-ui-target="dev" aria-label="Что изучено">${Object.entries(LEARN_KINDS).map(([k, x]) => `<option value="${k}" ${k === lk ? 'selected' : ''}>${x.t}</option>`).join('')}</select>

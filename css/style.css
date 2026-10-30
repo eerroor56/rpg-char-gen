@@ -1022,6 +1022,8 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .make-needs li.no span { color: var(--err); }
 .stations-card summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .stations-card summary h2 { display: inline; margin: 0; }
+.make-luck { margin: 4px 0 10px; color: #8fd6a4; }
+.skill-now { color: #8fd6a4; }
 .station-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; margin-top: 8px; }
 .craft-more summary { cursor: pointer; font-weight: 700; }
 .craft-preview { margin: 12px 0; padding: 10px 14px; background: var(--ink-2); border-left: 3px solid var(--brass); border-radius: var(--radius-s); }

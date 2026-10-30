@@ -70,6 +70,36 @@
     return t.base ? Math.max(0, info.max - t.base) : info.max;
   }
 
+  // Эффект навыка на уровне lvl (уточнение ГМ: в описании — прирост за уровень). По частям через «/»:
+  // «за каждые N уровней» — раз в N уровней («+1 к дропу за каждые 10 уровней» на 35 → +3), «за уровень» — на уровень,
+  // проценты — за уровень («0,5% скидки» на 40 → 20%, «доп 1% урона» → 40%); «за каждую клетку», «за каждый эффект»
+  // и числа без процентов («+10 к духу», «1е брони каждый ход») — как написано. Числа «25уровней», «75ур.» не трогаются
+  function skillAt(text, lvl) {
+    const L = Math.max(0, +lvl || 0);
+    let changed = false;
+    const out = String(text || '').split('/').map(seg => {
+      const every = seg.match(/за\s+кажд\S*\s+(\d+)\s*уровн\S*/i);
+      const per = /за\s+(уровень|лвл)(?![а-яё])/i.test(seg);
+      const other = !every && /за\s+кажд/i.test(seg);          // за каждую клетку, за каждый эффект — не от уровня
+      const k = every ? Math.floor(L / +every[1]) : per ? L : null;
+      let t = seg;
+      if (every) t = t.replace(every[0], '');
+      if (per) t = t.replace(/за\s+(уровень|лвл)(?![а-яё])/i, '');
+      if (!other) {
+        t = t.replace(/(?<![\d.,])(\d+(?:[.,]\d+)?)(?!\d)(\s*)(%|е(?![а-яё])|х(?![а-яё]))?/gi, (m, n, sp, unit, at, str) => {
+          if (/^\s*ур/i.test(str.slice(at + n.length))) return m;
+          const v = parseFloat(n.replace(',', '.'));
+          if (k !== null) return fmt(v * k) + sp + (unit || '');
+          return unit === '%' ? fmt(v * L) + sp + unit : m;
+        });
+      }
+      t = t.replace(/\s{2,}/g, ' ').replace(/\s+([,.;:])/g, '$1').trim();
+      if (t !== seg.trim()) changed = true;
+      return t;
+    }).filter(Boolean).join(' / ');
+    return changed ? out : String(text || '');      // от уровня ничего не зависит — текст таблицы как есть
+  }
+
   // Черты можно брать повторно (эффекты складываются), кроме «состояний», которые не удваиваются
   const NON_REPEAT = ['язык зверей', 'язык монстров', 'шаманизм', 'лидер', 'немота', 'калека', 'обычный', 'несобранный'];
   const traitRepeatable = k => !NON_REPEAT.includes(norm(k));
@@ -1160,7 +1190,7 @@
   }
 
   window.Rules = {
-    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText, talentCap,
+    init, newState, compute, roll, rollView, isLocked, norm, fmt, signed, r1, roundLevel, traitRepeatable, optKey, patronSymbol, patronList, odText, talentCap, skillAt,
     STATS, STAT_NAMES, STAT_SHORT, AGES, SIZES, TALENTS, TRAIT_FX, BOON_FX, ONI_CLANS, ANCESTOR, AMMO, NOT_WEAPON,
     POTION_TYPES, KARMA_TEXT, habitatNames, parseGroupStat,
     sizeUnits, scaledEffect, multiplyEffect, reqCheck, reqText, armorStatEffects, REQ_PENALTY, ri,

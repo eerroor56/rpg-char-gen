@@ -916,14 +916,14 @@
   function vitHtml(board, t) {
     const v = vitals(t);
     const num = ctx.gm || t.kind !== 'f';       // игроки видят у противника только полоску
-    const canVit = ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me);
+    const canVit = ctx.gm;     // показатели меняет только ГМ: игрок видит свои числа, но не правит их
     const ini = turnOn(board) ? (board.turn.order.find(e => e.id === tid(t)) || {}).ini : null;
     const reg = r => (num ? ` <span class="bt-reg" title="реген в ход">${has(r) ? `+${fmt(r)}` : '+?'}</span>` : '');
     // строка: название, полоска, числа (у противника игроки видят только полоску)
     const row = (label, val, max, cls, tail) => `<span class="bt-vl">${label}</span><span class="bt-vbar ${cls}">${max ? `<i style="width:${pct(val, max)}%"></i>` : ''}</span>
       <span class="bt-vn">${num ? `<b>${has(val) ? val : '?'}</b> / ${has(max) ? max : '?'}` : ''}${tail || ''}</span>`;
     const seer = t.kind === 'h' || t.kind === 'a';
-    const canZor = seer && (ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me));
+    const canZor = seer && ctx.gm;
     const zParts = `${v.zb}${v.zm ? ` ${signed(v.zm)} у фишки` : ''}${fieldZor() ? ` ${signed(fieldZor())} на поле` : ''}`;
     let html = `<div class="bt-vit">
       ${v.marm ? row('Броня', v.arm, v.marm, 'arm', v.arm <= 0 ? ' <span class="tag bad">разрушена</span>' : '') : ''}
@@ -1144,12 +1144,12 @@
       saveTok(b, findTok(b, tid(cur)), { done: true });
       App.toast('Ход закончен — ГМ передаст ход дальше');
     },
-    // урон и лечение: герою — в его персонажа (vit), противнику — в поле, союзнику — в список отряда
+    // урон и лечение (только ГМ): герою — в его персонажа (vit), противнику — в поле, союзнику — в список отряда
     btVit(btn) {
       const hit = selTok();
       if (!hit || hit.t.kind === 'o') return;
       const t = hit.t;
-      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      if (!ctx.gm) return;      // ХП, МП, броню, реген и зоркость в бою меняет только ГМ (игроки — нет: уточнение ГМ)
       const amt = Math.round(+App.ui.btAmt || 0);
       if (amt <= 0) { App.toast('Впишите, сколько'); return; }
       const [what, sign, how] = btn.dataset.v.split(':');
@@ -1173,7 +1173,7 @@
       const hit = selTok();
       if (!hit || hit.t.kind === 'o') return;
       const t = hit.t;
-      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      if (!ctx.gm) return;      // ХП, МП, броню, реген и зоркость в бою меняет только ГМ (игроки — нет: уточнение ГМ)
       setVit(t, { arm: null });
     },
     btMax(btn) {
@@ -1190,7 +1190,7 @@
       const hit = selTok();
       if (!hit || hit.t.kind === 'o') return;
       const t = hit.t;
-      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      if (!ctx.gm) return;      // ХП, МП, броню, реген и зоркость в бою меняет только ГМ (игроки — нет: уточнение ГМ)
       const v = vitals(t), patch = {};
       const up = (now, r, max) => { const x = (+now || 0) + r; return has(max) ? Math.min(max, x) : x; };
       if (has(v.rhp) && v.rhp) patch.hp = up(v.hp, v.rhp, v.mhp);
@@ -1203,7 +1203,7 @@
       const hit = selTok();
       if (!hit || (hit.t.kind !== 'h' && hit.t.kind !== 'a')) return;
       const t = hit.t;
-      if (!(ctx.gm || (t.kind === 'h' && t.o.owner === ctx.me))) return;
+      if (!ctx.gm) return;      // ХП, МП, броню, реген и зоркость в бою меняет только ГМ (игроки — нет: уточнение ГМ)
       const d = +btn.dataset.v, now = t.kind === 'h' ? +((t.o.vit || {}).zor) || 0 : +t.o.zor || 0;
       setVit(t, { zor: d ? now + d : 0 });
     },

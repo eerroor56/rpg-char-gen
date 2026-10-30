@@ -333,6 +333,23 @@
     req.forEach(({ name, qty: q }) => { const have = bagHave(v, name); need(have >= q, `${name}: нужно ${fmt(q)}, в рюкзаке ${fmt(have)}`); });
     return { list, ok: list.every(x => x.ok), req };
   }
+  // шансы навыков при крафте (уточнение ГМ: в описании навыка — прирост за уровень; где числа нет, как у ремесла и кулинарии, —
+  // MK.CHANCE_PER_LVL % за уровень). На максимальном уровне — ещё бонус из колонки «на максимальном уровне» (число — оттуда)
+  const tInfo = id => ((window.GAME_DATA.skills || {}).talentInfo || []).find(t => norm(t.name) === norm(id)) || {};
+  const pctIn = text => { const m = String(text || '').match(/(\d+(?:[.,]\d+)?)\s*%/); return m ? num(m[1]) : 0; };
+  function skillChances(v, rec) {
+    const talent = id => num(((v.res.talents || {})[id] || {}).total);
+    const atMax = (lvl, info, dflt) => lvl >= (num(info.max) || dflt || 100);
+    const craft = num(v.ctx.craft), cook = talent('кулинария');
+    const ci = tInfo('ремесло'), al = alchLevel(rec), ap = Dev().learnedPassives(rec).find(x => norm(x.name) === 'алхимия') || {};
+    return {
+      craft: { lvl: craft, half: Math.min(100, craft * MK.CHANCE_PER_LVL), free: atMax(craft, ci) ? pctIn(ci.top || ci.chance) : 0 },
+      cook: { lvl: cook, two: Math.min(100, cook * MK.CHANCE_PER_LVL), ziv2: atMax(cook, tInfo('кулинария')) },
+      alch: { lvl: num(al), three: al !== null && atMax(al, ap) ? pctIn(ap.top) : 0 }
+    };
+  }
+  const chanceHtml = list => (list.length ? `<p class="small make-luck">Шансы навыков (бросает сайт): ${list.map(esc).join(' · ')}</p>` : '');
+
   // ингредиенты в рюкзаке со своими свойствами (записаны в предмет при выдаче; у ГМ — из таблицы)
   function bagIngs(v) {
     const seen = new Set(), out = [];
@@ -361,8 +378,12 @@
   }
   // игрок: создать самому
   function makeCard(v, rec) {
-    const st = stationsOf(rec, v), al = alchLevel(rec);
+    const st = stationsOf(rec, v), al = alchLevel(rec), ch = skillChances(v, rec);
     const mode = App.ui.invMake || 'forge';
+    const luck = mode === 'forge'
+      ? [ch.craft.half ? `ремесло ${fmt(ch.craft.lvl)} — ${fmt(ch.craft.half)}% потратить вдвое меньше материала` : '', ch.craft.free ? `${fmt(ch.craft.free)}% — не потратить вовсе` : ''].filter(Boolean)
+      : [ch.cook.two ? `кулинария ${fmt(ch.cook.lvl)} — ${fmt(ch.cook.two)}% получить 2 блюда вместо 1` : '', ch.cook.ziv2 ? 'все блюда — с удвоенной живостью' : '', ch.alch.three ? `алхимия ${fmt(ch.alch.lvl)} — ${fmt(ch.alch.three)}% получить 3 зелья вместо 1` : ''].filter(Boolean);
+    if (mode !== 'forge') window.Brew.draft().zivX2 = ch.cook.ziv2;      // кулинария на максимуме: в расчёте живость уже удвоена
     const tabs = [['forge', 'Кузница'], ['brew', 'Кухня и зелья']];
     const body = mode === 'forge' ? craftForm(v, 'make')
       : window.Brew.form({ host: 'dev', issueAct: 'invMakeBrew', issueLabel: 'Приготовить', ings: bagIngs(v), noHerbs: true, noCuts: true, autoRoll: true, known: knownProps(rec),
@@ -372,6 +393,7 @@
         · ремесло <b>${fmt(v.ctx.craft)}</b>${al !== null ? ` · алхимия <b>${fmt(al)}</b>` : ''}</p>
       <p class="muted small">Сырьё берётся из рюкзака и списывается сразу, созданное появляется в рюкзаке; ГМ видит это в журнале.</p>
       <div class="seg" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === mode}" class="${k === mode ? 'is-on' : ''}" data-act="invMakeMode" data-v="${k}">${t}</button>`).join('')}</div>
+      ${chanceHtml(luck)}
       ${body}</section>`;
   }
   // предмет из черновика кузницы (общий для «Выдать» у ГМ и «Создать» у игрока); без материала — null
@@ -459,7 +481,8 @@
   // у торговца: купить — с наценкой, которую снижает харизма; продать — дороже по харизме (C.TRADE)
   function tradeHtml(cu, cha) {
     const t = K.trade(cu, cha);
-    return `купить <strong>${esc(K.money(t.buy))}</strong> <span class="muted small">(наценка ${fmt(t.markup)}%)</span> · продать <strong>${esc(K.money(t.sell))}</strong>${t.sellPct ? ` <span class="muted small">(${signed(t.sellPct)}%)</span>` : ''} <span class="muted small">— харизма ${fmt(cha)}</span>`;
+    const top = num(cha) >= (num(tInfo('харизма').max) || 100) ? tInfo('харизма').top : '';
+    return `купить <strong>${esc(K.money(t.buy))}</strong> <span class="muted small">(наценка ${fmt(t.markup)}%)</span> · продать <strong>${esc(K.money(t.sell))}</strong>${t.sellPct ? ` <span class="muted small">(${signed(t.sellPct)}%)</span>` : ''} <span class="muted small">— харизма ${fmt(cha)}${top ? `; ${esc(top)}` : ''}</span>`;
   }
   // своя цена, вписанная ГМ: «5(се)», «2 з 50 се», «350»; пусто или непонятно — null
   const ownPrice = s => (String(s || '').trim() ? K.priceCopper(s) : null);
@@ -834,9 +857,14 @@
       ${c ? (st.rows || []).length ? `<ul class="dev-list">${st.rows.map((r, i) => { const cu = K.tablePrice(r.name, true); return `<li><span>${esc(r.name)}${cu !== null ? ` <span class="muted small">— ${esc(K.money(cu))} за шт.</span>` : ''}</span><input type="number" class="mini-num" min="0" step="1" data-change="invDropQty" data-v="${i}" value="${esc(r.qty)}" aria-label="Количество: ${esc(r.name)}"></li>`; }).join('')}</ul>
         ${dropTotal(st.rows)}
         <div class="dev-row"><button type="button" class="btn small" data-act="invDropTake">Забрать в рюкзак</button></div>` : '<p class="muted small">У этого существа в бестиарии нет добычи.</p>' : st.creature ? '<p class="muted small">Такого существа нет в бестиарии.</p>' : ''}
+      ${skinNote(skinLvl())}
       <p class="muted small">Опыт за победу начисляется во вкладке «Развитие».</p>`;
   }
 
+  // свежевание: «+1 к всему дропу с противника за каждые 10 уровней» (талант персонажа)
+  const skinLvl = () => num(((view().res.talents || {})['свежевание'] || {}).total);
+  const skinBonus = () => Math.floor(skinLvl() / 10);
+  const skinNote = sl => (sl ? `<p class="small">Свежевание ${fmt(sl)}: ${sl >= 10 ? `+${Math.floor(sl / 10)} к каждой добыче — уже прибавлено` : 'прибавка — с 10 ур.'}${sl >= (num(tInfo('свежевание').max) || 100) && tInfo('свежевание').top ? `; на максимуме: ${esc(tInfo('свежевание').top)} — решает ГМ` : ''}.</p>` : '');
   // добыча: сколько стоит всё по таблицам; что без цены — перечислено
   function dropTotal(rows) {
     let total = 0;
@@ -1136,12 +1164,19 @@
       it.src = 'сделал сам';
       const byMat = K.craftPrice(it);
       if (byMat.lines.length && !byMat.unknown.length) it.price = byMat.total;
-      const usedText = needText(chk.req);
-      if (!confirm(`Создать «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''}? Из рюкзака уйдёт: ${usedText}.`)) return;
-      const used = takeFromBag(v, chk.req);
+      const ch = skillChances(v, c.record).craft;
+      if (!confirm(`Создать «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''}? Из рюкзака уйдёт: ${needText(chk.req)}${ch.half || ch.free ? ' — или меньше, если повезёт с ремеслом (бросок сделает сайт)' : ''}.`)) return;
+      // ремесло: на максимуме — шанс, что материал не потратится вовсе; иначе — шанс потратить вдвое меньше
+      let factor = 1, luck = '';
+      if (ch.free) { const r = d100(); if (r <= ch.free) { factor = 0; luck = `ремесло ${fmt(ch.lvl)}: бросок ${r} ≤ ${fmt(ch.free)} — материал не потратился`; } }
+      if (factor === 1 && ch.half) { const r = d100(); if (r <= ch.half) { factor = 0.5; luck = `ремесло ${fmt(ch.lvl)}: бросок ${r} ≤ ${fmt(ch.half)} — материала ушло вдвое меньше`; } else luck = `ремесло ${fmt(ch.lvl)}: бросок ${r} > ${fmt(ch.half)} — материал ушёл весь`; }
+      const req = new Map();
+      chk.req.forEach((x, k) => { const q = r2(x.qty * factor); if (q > 0) req.set(k, { name: x.name, qty: q }); });
+      const used = takeFromBag(v, req);
       App.ui.invDraft = blankDraft(d.kind);
       App.ui.invSel = it.id;
-      Dev().commit({ made: mades(c.record).concat({ t: newId(), ms: Date.now(), what: 'forge', item: it, used }) }, `Создаёт «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''} из: ${usedText}`);
+      Dev().commit({ made: mades(c.record).concat({ t: newId(), ms: Date.now(), what: 'forge', item: it, used }) },
+        `Создаёт «${it.name}»${it.qty > 1 ? ' ×' + it.qty : ''}${req.size ? ` из: ${needText(req)}` : ''}${luck ? ` (${luck})` : ''}`);
     },
     // игрок готовит блюдо, напиток или зелье из ингредиентов в рюкзаке; бросок готовки сайт делает сам — после подтверждения
     invMakeBrew() {
@@ -1152,16 +1187,21 @@
       const usedText = needText(chk.req);
       const name0 = String(d.name || '').trim();
       if (!confirm(`Приготовить${name0 ? ` «${name0}»` : ''}${qty > 1 ? ' ×' + qty : ''}? Из рюкзака уйдёт: ${usedText}.${d.mode !== 'potion' ? ' Бросок d100 сделает сайт.' : ''}`)) return;
+      const ch = skillChances(v, c.record);
       const roll = d.mode === 'potion' ? '' : d100();
-      const r = B.compute(Object.assign({}, d, { roll }));
+      const r = B.compute(Object.assign({}, d, { roll, zivX2: d.mode === 'cook' && ch.cook.ziv2 }));
       const name = name0 || r.name;
-      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe + (roll ? `; бросок ${roll}` : ''), qty, src: 'приготовил сам' };
-      if (r.cost && !r.cost.unknown.length) it.price = r.cost.total;
+      // кулинария — шанс 2 блюда вместо 1; алхимия на максимуме — шанс 3 зелья вместо 1 (бросает сайт)
+      let made = qty, luck = '';
+      if (d.mode === 'cook' && ch.cook.two) { const x = d100(); if (x <= ch.cook.two) { made = qty * 2; luck = `кулинария ${fmt(ch.cook.lvl)}: бросок ${x} ≤ ${fmt(ch.cook.two)} — 2 блюда вместо 1`; } else luck = `кулинария ${fmt(ch.cook.lvl)}: бросок ${x} > ${fmt(ch.cook.two)}`; }
+      if (d.mode === 'potion' && ch.alch.three) { const x = d100(); if (x <= ch.alch.three) { made = qty * 3; luck = `алхимия ${fmt(ch.alch.lvl)}: бросок ${x} ≤ ${fmt(ch.alch.three)} — 3 зелья вместо 1`; } else luck = `алхимия ${fmt(ch.alch.lvl)}: бросок ${x} > ${fmt(ch.alch.three)}`; }
+      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe + (roll ? `; бросок ${roll}` : ''), qty: made, src: 'приготовил сам' };
+      if (r.cost && !r.cost.unknown.length) it.price = Math.round(r.cost.total * qty / made);      // цена ингредиентов за штуку
       const used = takeFromBag(v, chk.req);
       App.ui.brew = B.blank(d.mode);
       App.ui.invSel = it.id;
       Dev().commit({ made: mades(c.record).concat({ t: newId(), ms: Date.now(), what: 'brew', item: it, used }) },
-        `Готовит «${name}»${qty > 1 ? ' ×' + qty : ''} из: ${usedText}${roll ? ` — бросок d100: ${roll}${r.spoiled ? ', испорчено' : ''}` : ''}`);
+        `Готовит «${name}»${made > 1 ? ' ×' + made : ''} из: ${usedText}${roll ? ` — бросок d100: ${roll}${r.spoiled ? ', испорчено' : ''}` : ''}${luck ? ` (${luck})` : ''}`);
     },
     invKind(t) { App.ui.invDraft = blankDraft(t.value); rerender(); },
     invField(t) {
@@ -1247,14 +1287,15 @@
     },
     invDropPick(t) {
       const c = creatureList().find(x => norm(x.n) === norm(t.value));
-      const mult = (App.ui.invDrop || {}).mult || 1;
-      App.ui.invDrop = { creature: t.value, mult, base: c ? K.parseDrop(c.drop) : [], rows: c ? K.parseDrop(c.drop).map(r => ({ name: r.name, qty: r.qty * mult })) : [] };
+      const mult = (App.ui.invDrop || {}).mult || 1, sk = skinBonus();
+      App.ui.invDrop = { creature: t.value, mult, base: c ? K.parseDrop(c.drop) : [], rows: c ? K.parseDrop(c.drop).map(r => ({ name: r.name, qty: r.qty * mult + sk })) : [] };
       rerender();
     },
     invDropMult(t) {
       const st = App.ui.invDrop || (App.ui.invDrop = { rows: [], base: [] });
       st.mult = +t.value || 1;
-      st.rows = (st.base || []).map(r => ({ name: r.name, qty: r.qty * st.mult }));
+      const sk = skinBonus();
+      st.rows = (st.base || []).map(r => ({ name: r.name, qty: r.qty * st.mult + sk }));
       rerender();
     },
     invDropQty(t) { const st = App.ui.invDrop; if (st && st.rows[+t.dataset.v]) { st.rows[+t.dataset.v].qty = Math.max(0, Math.floor(num(t.value))); rerender(); } },

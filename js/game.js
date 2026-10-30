@@ -398,7 +398,7 @@
         repaint();
         return C.updateCharacter(cid, chid, { pos }).catch(e => App.toast(C.errorText(e)));
       },
-      // ХП и МП героя в бою — в его персонаже (vit): меняет игрок или ГМ
+      // ХП, МП, броня и зоркость героя в бою — в его персонаже (vit): меняет только ГМ (правила базы игроку это поле не дают)
       saveVit: (chid, vit) => {
         G.d.chars = (G.d.chars || []).map(x => (x.id === chid ? Object.assign({}, x, { vit }) : x));
         repaint();

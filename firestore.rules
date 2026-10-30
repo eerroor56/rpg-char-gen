@@ -71,10 +71,11 @@ service cloud.firestore {
 
     // ---- персонажи
     match /campaigns/{cid}/characters/{chid} {
-      // игрок не трогает то, что выдаёт ГМ (gm), и не меняет лист создания после утверждения
+      // игрок не трогает то, что выдаёт ГМ (gm), свои ХП, МП, броню и зоркость в бою (vit — меняет ГМ)
+      // и не меняет лист создания после утверждения
       function ownerEdit() {
         let k = changed();
-        return !k.hasAny(['gm', 'owner', 'createdMs'])
+        return !k.hasAny(['gm', 'owner', 'createdMs', 'vit'])
           && (!k.hasAny(['status']) || (resource.data.status in ['draft', 'review'] && request.resource.data.status in ['draft', 'review']))
           && (!k.hasAny(['state']) || resource.data.status in ['draft', 'review']);
       }

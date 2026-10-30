@@ -216,6 +216,7 @@
         });
         n = Math.max(n, 0);
         ziv += n;   // «за каждый ингредиент +1 живости»
+        if (d.zivX2) { ziv *= 2; zivHid *= 2; out.notes.push('Кулинария на максимуме: все блюда получают удвоенную живость.'); }
         out.main = fx('живость', ziv, ziv >= 0 ? '+' : '-', zivHid ? { hid: true } : null);
         out.kind = 'food';
         out.name = `${cap(m.id)}${names.length ? ': ' + short(names) : ''}`;
