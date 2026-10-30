@@ -228,7 +228,7 @@
       let [tab, sub, sub2] = h.split('/');
       // «Мир» раньше был разделом справочника: старые ссылки #ref/world ведут во вкладку
       if (tab === 'ref' && sub === 'world') { tab = 'world'; sub = ''; history.replaceState(null, '', '#world'); }
-      const tabs = ['home', 'create', 'heroes', 'game', 'ref', 'world', 'rules'];
+      const tabs = ['home', 'create', 'heroes', 'game', 'ref', 'world', 'rules', 'support'];
       const first = !this.routed;
       this.routed = true;
       const prevTab = this.tab, prevRef = this.ui.refSection, prevPath = (this.ui.gamePath || []).join('/') + '|' + (this.ui.heroId || '');
@@ -243,7 +243,7 @@
       if (this.tab === 'create' && sub && this.steps.some(s => s.id === sub)) this.step = sub;
       if (this.tab === 'ref') this.ui.refSection = sub || this.ui.refSection;
       document.querySelectorAll('.tab-pane').forEach(p => { p.hidden = p.id !== 'tab-' + this.tab; });
-      document.querySelectorAll('.tabs a, a.brand').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
+      document.querySelectorAll('.tabs a, a.brand, a.support-link').forEach(a => a.setAttribute('aria-current', a.dataset.tab === this.tab ? 'page' : 'false'));
       document.body.dataset.tab = this.tab;
       // на телефоне вкладки — лента с прокруткой: текущая должна быть видна
       const onTab = document.querySelector('.tabs a[aria-current="page"]');
@@ -357,6 +357,7 @@
       if (this.tab === 'ref') window.Reference.render(document.getElementById('tab-ref'));
       if (this.tab === 'world') window.Reference.renderWorld(document.getElementById('tab-world'));
       if (this.tab === 'rules') window.Sheet.renderRules(document.getElementById('tab-rules'));
+      if (this.tab === 'support' && window.Support) window.Support.render(document.getElementById('tab-support'));
     },
 
     renderCreate() {
