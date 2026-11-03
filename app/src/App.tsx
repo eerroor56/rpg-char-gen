@@ -6,6 +6,7 @@ import Heroes from './pages/Heroes';
 import Support from './pages/Support';
 import Moving from './pages/Moving';
 import Create from './pages/Create';
+import HeroPage from './pages/hero/HeroPage';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
 export const SECTIONS: { id: string; title: string; short: string; icon: IconName; old?: boolean; lead: string }[] = [
@@ -22,14 +23,16 @@ const MOBILE_MAIN = ['home', 'create', 'heroes', 'game'];
 
 export default function App() {
   initLegacy();
-  const { tab } = useRoute();
+  const { tab, rest } = useRoute();
   const auth = useAuth();
   const [more, setMore] = useState(false);
   const cur = SECTIONS.find(s => s.id === tab) || SECTIONS[0];
-  useEffect(() => { setMore(false); window.scrollTo({ top: 0 }); document.title = cur.id === 'home' ? 'Мастерская героя' : `${cur.title} — Мастерская героя`; }, [cur.id, cur.title]);
+  const heroId = cur.id === 'heroes' && rest[0] ? decodeURIComponent(rest[0]) : '';
+  useEffect(() => { setMore(false); window.scrollTo({ top: 0 }); if (!heroId) document.title = cur.id === 'home' ? 'Мастерская героя' : `${cur.title} — Мастерская героя`; }, [cur.id, cur.title, heroId]);
 
   let page: ReactNode;
   if (cur.id === 'home') page = <Home auth={auth} />;
+  else if (heroId) page = <HeroPage id={heroId} />;
   else if (cur.id === 'heroes') page = <Heroes auth={auth} />;
   else if (cur.id === 'support') page = <Support />;
   else if (cur.id === 'create') page = <Create />;
@@ -38,7 +41,7 @@ export default function App() {
   return (
     <div className="shell">
       <aside className="side" aria-label="Разделы">
-        <a className="brand" href="#home"><Mark /><span>Мастерская героя</span></a>
+        <a className="app-brand" href="#home"><Mark /><span>Мастерская героя</span></a>
         <nav className="side-nav">
           {SECTIONS.map(s => (
             <a key={s.id} href={'#' + s.id} className={`side-link${s.id === cur.id ? ' is-on' : ''}${s.id === 'support' ? ' is-love' : ''}`} aria-current={s.id === cur.id ? 'page' : undefined}>
@@ -51,7 +54,7 @@ export default function App() {
       </aside>
 
       <header className="mtop">
-        <a className="brand" href="#home"><Mark /><span>Мастерская героя</span></a>
+        <a className="app-brand" href="#home"><Mark /><span>Мастерская героя</span></a>
         <a className="mtop-acc" href="#heroes" aria-label="Аккаунт и мои герои"><Icon name="user" />{auth.user ? <span>{auth.user.name}</span> : <span>Войти</span>}</a>
       </header>
 

@@ -8,7 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 type Any = any;
 declare global {
   interface Window {
-    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any;
+    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any;
     GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>;
   }
 }
@@ -107,9 +107,43 @@ function readHeroes() {
 function subscribeHeroes(cb: () => void) {
   const t = window.setInterval(cb, 1200);
   window.addEventListener('storage', cb);
-  return () => { window.clearInterval(t); window.removeEventListener('storage', cb); };
+  window.addEventListener('mh-heroes', cb);
+  return () => { window.clearInterval(t); window.removeEventListener('storage', cb); window.removeEventListener('mh-heroes', cb); };
 }
 export const useHeroes = () => useSyncExternalStore(subscribeHeroes, readHeroes);
+
+/** список героев из браузера (копия — можно менять) */
+export const heroList = (): Hero[] => JSON.parse(JSON.stringify(window.App.store.get(HEROES_KEY, []) || []));
+/** записать список героев: HeroSync отправит изменения в облако, страницы обновятся сразу */
+export function writeHeroes(list: Hero[]) {
+  const ok = window.App.store.set(HEROES_KEY, list);
+  if (!ok) toast('Не удалось сохранить: хранилище браузера недоступно');
+  window.dispatchEvent(new Event('mh-heroes'));
+  return ok;
+}
+/** открыть сохранённого героя в мастере создания (правка листа создания) */
+export function openInWizard(h: Hero, step = 'summary') {
+  const App = window.App;
+  App.state = App.migrate(JSON.parse(JSON.stringify(h.state)));
+  App.editingId = h.id;
+  App.prevState = null;
+  App.save();
+  App.recompute();
+  location.hash = '#create/' + step;
+}
+export const newHeroId = () => 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/** стили прежнего сайта — пока на экране его разметка (лист персонажа, инвентарь) */
+export function useLegacyCss(on = true) {
+  useEffect(() => {
+    if (!on) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet'; link.href = 'legacy/css/style.css'; link.dataset.legacy = '1';
+    document.head.appendChild(link);
+    document.body.classList.add('sheet-on');
+    return () => { link.remove(); document.body.classList.remove('sheet-on'); };
+  }, [on]);
+}
 
 export type SyncStatus = { configured: boolean; signedIn: boolean; on: boolean; loading: boolean; err: string; n: number; name: string };
 let syncJson = '';

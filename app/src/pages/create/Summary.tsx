@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLegacyCss } from '../../lib/legacy';
 import { act, type StepProps } from './kit';
 import { Icon } from '../../ui/Icon';
 
@@ -9,13 +9,7 @@ import { Icon } from '../../ui/Icon';
 const PARTS: [string, string][] = [['race', 'Раса'], ['age', 'Возраст'], ['boon', 'Дар'], ['traits', 'Черты'], ['stats', 'Характеристики'], ['talents', 'Таланты'], ['gear', 'Снаряжение'], ['story', 'Имя и история']];
 
 export default function Summary({ st, res }: StepProps) {
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet'; link.href = 'legacy/css/style.css'; link.dataset.legacy = '1';
-    document.head.appendChild(link);
-    document.body.classList.add('sheet-on');
-    return () => { link.remove(); document.body.classList.remove('sheet-on'); };
-  }, []);
+  useLegacyCss();
   const step = window.App.steps.find((s: { id: string }) => s.id === 'summary');
   // панель переброса прежнего листа заменена своей (ниже), остальное — как было
   const html = step ? step.render(st, res).replace(/^<div class="random-bar[\s\S]*?<\/div>\s*<\/div>/, '') : '';

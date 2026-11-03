@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { cloudCall, heroView, OLD_SITE, useHeroes, useSync, type useAuth } from '../lib/legacy';
+import { cloudCall, heroView, openInWizard, useHeroes, useSync, type useAuth } from '../lib/legacy';
 import { Icon } from '../ui/Icon';
 
 export default function Heroes({ auth }: { auth: ReturnType<typeof useAuth> }) {
@@ -28,15 +28,16 @@ export default function Heroes({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <ul className="hero-grid">
           {rows.map(({ h, v }) => (
             <li key={h.id} className="hero-card">
-              <div className={`hero-pic${v.custom ? ' custom' : ''}`}>{v.pic ? <img src={v.pic} alt="" loading="lazy" /> : <Icon name="user" />}</div>
+              <a className={`hero-pic${v.custom ? ' custom' : ''}`} href={'#heroes/' + encodeURIComponent(h.id)} aria-hidden="true" tabIndex={-1}>{v.pic ? <img src={v.pic} alt="" loading="lazy" /> : <Icon name="user" />}</a>
               <div className="hero-body">
-                <h2>{v.name}</h2>
+                <h2><a href={'#heroes/' + encodeURIComponent(h.id)}>{v.name}</a></h2>
                 <p>{v.race} · ур. {v.level}{v.age ? ` · ${v.age}` : ''}</p>
                 <p className={`chip ${v.ok ? 'ok' : 'bad'}`}><Icon name={v.ok ? 'check' : 'alert'} />{v.ok ? 'собран по правилам' : `ошибок в листе: ${v.errors}`}</p>
                 {v.xp > 0 && <p className="muted small">опыт: {v.xp.toLocaleString('ru-RU')}</p>}
               </div>
               <div className="hero-act">
-                <a className="btn small" href={`${OLD_SITE}#heroes/${encodeURIComponent(h.id)}`} target="_blank" rel="noopener">Развитие <Icon name="external" /></a>
+                <a className="btn small primary" href={'#heroes/' + encodeURIComponent(h.id)}>Открыть</a>
+                <button type="button" className="btn small ghost" onClick={() => openInWizard(h)}>В мастере</button>
               </div>
             </li>
           ))}
@@ -48,7 +49,6 @@ export default function Heroes({ auth }: { auth: ReturnType<typeof useAuth> }) {
           {!heroes.length && <a className="btn primary" href="#create">Собрать первого персонажа</a>}
         </div>
       )}
-      <p className="muted small">Развитие, снаряжение и лист героя пока открываются в прежней версии — герои там те же, если вы вошли в тот же аккаунт.</p>
     </div>
   );
 }
