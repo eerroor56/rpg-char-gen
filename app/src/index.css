@@ -697,3 +697,12 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
   filter: drop-shadow(0 6px 22px rgba(214, 168, 92, .22)); }
 @media (max-width: 720px) { .sigil { width: 380px; height: 380px; margin-left: -190px; } .has-sigil { padding-top: 44px; } }
 @media (prefers-reduced-motion: reduce) { .sigil { animation: none; } }
+
+/* ---------- приложение: кнопка «Установить» и подсказка для iPhone */
+.side-install { margin-top: auto; border: 1px dashed var(--line); background: none; font: inherit; cursor: pointer; text-align: left; width: 100%; }
+.side-install + .side-acc { margin-top: 8px; }
+.msheet-install { border: 0; background: none; font: inherit; cursor: pointer; text-align: left; width: 100%; color: var(--brass-2); }
+.install-dlg { max-width: min(440px, calc(100vw - 32px)); padding: 22px; border-radius: var(--r-l); border: 1px solid var(--line); background: var(--bg-2); color: var(--text); }
+.install-dlg::backdrop { background: rgba(8, 6, 18, .7); }
+.install-dlg h2 { color: var(--brass-2); font-size: 1.5rem; margin-bottom: 10px; }
+.install-dlg ol { padding-left: 20px; display: grid; gap: 8px; margin: 0 0 12px; }

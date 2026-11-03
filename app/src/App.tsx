@@ -10,6 +10,7 @@ import Game from './pages/game/Game';
 import { Reference, World } from './pages/ref/Reference';
 import Rules from './pages/ref/Rules';
 import { Guard } from './ui/Guard';
+import { InstallButton } from './ui/Install';
 import HeroPage from './pages/hero/HeroPage';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
@@ -67,6 +68,7 @@ export default function App() {
             </a>
           ))}
         </nav>
+        <InstallButton className="side-link side-install" />
         <Account auth={auth} />
       </aside>
 
@@ -89,6 +91,7 @@ export default function App() {
             {SECTIONS.filter(s => !MOBILE_MAIN.includes(s.id)).map(s => (
               <a key={s.id} href={'#' + s.id} className="msheet-link"><Icon name={s.icon} /><span><b>{s.title}</b><small>{s.lead}</small></span></a>
             ))}
+            <InstallButton className="msheet-link msheet-install" />
           </div>
         </div>
       )}

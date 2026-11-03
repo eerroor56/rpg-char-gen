@@ -12,5 +12,8 @@ const copy = (from, to) => {
 copy('data/', 'data/');
 copy('img/', 'img/');
 copy('js/', 'legacy/js/');
-copy('css/', 'legacy/css/');   // стили шагов мастера создания (пока шаги из прежнего сайта)
-console.log('sync-legacy: data, img, js, css → public/');
+copy('css/', 'legacy/css/');   // стили встроенных частей прежнего сайта (лист, инвентарь, кампания, бой)
+// приложение (PWA): манифест и service worker — общие с прежним сайтом
+cpSync(new URL('manifest.webmanifest', root), new URL('manifest.webmanifest', pub));
+cpSync(new URL('sw.js', root), new URL('sw.js', pub));
+console.log('sync-legacy: data, img, js, css, manifest, sw.js → public/');
