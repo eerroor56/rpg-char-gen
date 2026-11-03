@@ -1578,3 +1578,20 @@ body.modal-open { overflow: hidden; }
 .moved-bar a:not(.btn) { color: #f3d58f; font-weight: 700; }
 .moved-bar a.btn { text-decoration: none; }
 @media (max-width: 720px) { .moved-bar { top: 50px; padding: 8px 16px; font-size: .92rem; } }
+/* приложение: кнопка «Установить» в шапке и подсказка для iPhone (js/pwa.js) */
+.install-link { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px 7px 11px; border-radius: 999px;
+  border: 1px solid rgba(143, 211, 255, .5); background: rgba(143, 211, 255, .1); color: #bfe6ff; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.install-link svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.install-link:hover { border-color: #8fd3ff; color: #fff; }
+.install-link:not([hidden]) + .support-link { margin-left: 0; }
+@media (max-width: 720px) {
+  .install-link { padding: 7px; gap: 0; }
+  .install-link span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+.install-help { max-width: min(420px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); padding: 20px 22px; }
+.install-help::backdrop { background: rgba(8, 6, 18, .7); }
+.install-help h2 { margin: 0 0 10px; font-size: 1.3rem; }
+.install-help ol { margin: 0 0 10px; padding-left: 20px; }
+.install-help li { margin-bottom: 6px; }
+/* установленное приложение: под «чёлкой» телефона шапка не прячется */
+@media (display-mode: standalone) { .topbar { padding-top: max(10px, env(safe-area-inset-top)); } }

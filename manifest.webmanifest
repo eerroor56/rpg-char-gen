@@ -1,0 +1,22 @@
+{
+  "name": "Мастерская героя",
+  "short_name": "Мастерская",
+  "description": "Конструктор персонажа, справочник по таблицам игры и онлайн-кампании с ГМ",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#17142a",
+  "theme_color": "#17142a",
+  "icons": [
+    { "src": "img/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Мои герои", "url": "./#heroes", "icons": [{ "src": "img/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Игра", "url": "./#game", "icons": [{ "src": "img/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Справочник", "url": "./#ref", "icons": [{ "src": "img/app/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
