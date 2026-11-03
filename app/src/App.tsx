@@ -7,6 +7,9 @@ import Support from './pages/Support';
 import Moving from './pages/Moving';
 import Create from './pages/Create';
 import Game from './pages/game/Game';
+import { Reference, World } from './pages/ref/Reference';
+import Rules from './pages/ref/Rules';
+import { Guard } from './ui/Guard';
 import HeroPage from './pages/hero/HeroPage';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
@@ -15,9 +18,9 @@ export const SECTIONS: { id: string; title: string; short: string; icon: IconNam
   { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
   { id: 'heroes', title: 'Мои герои', short: 'Герои', icon: 'users', lead: 'Ваши персонажи — в облаке, на любом устройстве' },
   { id: 'game', title: 'Игра', short: 'Игра', icon: 'dice', lead: 'Кампании с ГМ: сессии, журнал, поле боя' },
-  { id: 'world', title: 'Мир', short: 'Мир', icon: 'globe', old: true, lead: 'Карта, уровни мира, места' },
-  { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', old: true, lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
-  { id: 'rules', title: 'Как считается', short: 'Правила', icon: 'scale', old: true, lead: 'Формулы и решения по спорным местам' },
+  { id: 'world', title: 'Мир', short: 'Мир', icon: 'globe', lead: 'Карта, уровни мира, места' },
+  { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
+  { id: 'rules', title: 'Как считается', short: 'Правила', icon: 'scale', lead: 'Формулы и решения по спорным местам' },
   { id: 'support', title: 'Поддержать', short: 'Поддержать', icon: 'heart', lead: 'СБП, USDT и TON, Telegram' },
 ];
 const MOBILE_MAIN = ['home', 'create', 'heroes', 'game'];
@@ -30,7 +33,7 @@ export default function App() {
   const cur = SECTIONS.find(s => s.id === tab) || SECTIONS[0];
   window.App.tab = cur.id;   // прежний сайт перерисовывает «Игру», только пока открыта она
   const heroId = cur.id === 'heroes' && rest[0] ? decodeURIComponent(rest[0]) : '';
-  const gameAt = cur.id === 'game' ? rest.slice(0, 2).join('/') : '';
+  const gameAt = cur.id === 'game' || cur.id === 'ref' ? rest.slice(0, 2).join('/') : '';
   useEffect(() => { setMore(false); window.scrollTo({ top: 0 }); if (!heroId) document.title = cur.id === 'home' ? 'Мастерская героя' : `${cur.title} — Мастерская героя`; }, [cur.id, cur.title, heroId, gameAt]);
 
   let page: ReactNode;
@@ -40,6 +43,9 @@ export default function App() {
   else if (cur.id === 'support') page = <Support />;
   else if (cur.id === 'create') page = <Create />;
   else if (cur.id === 'game') page = <Game auth={auth} path={rest.map(decodeURIComponent)} />;
+  else if (cur.id === 'ref') page = <Reference section={rest[0] || ''} />;
+  else if (cur.id === 'world') page = <World />;
+  else if (cur.id === 'rules') page = <Rules />;
   else page = <Moving section={cur} />;
 
   return (
@@ -62,7 +68,7 @@ export default function App() {
         <a className="mtop-acc" href="#heroes" aria-label="Аккаунт и мои герои"><Icon name="user" />{auth.user ? <span>{auth.user.name}</span> : <span>Войти</span>}</a>
       </header>
 
-      <main className="main" id="main">{page}</main>
+      <main className="main" id="main"><Guard at={location.hash}>{page}</Guard></main>
 
       <nav className="mbar" aria-label="Разделы">
         {SECTIONS.filter(s => MOBILE_MAIN.includes(s.id)).map(s => (
@@ -84,7 +90,7 @@ export default function App() {
 }
 
 function Mark() {
-  return <svg className="mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 59,24 49,58 15,58 5,24" /><polygon className="inner" points="32,16 47,27 41,48 23,48 17,27" /></svg>;
+  return <svg className="app-mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 59,24 49,58 15,58 5,24" /><polygon className="inner" points="32,16 47,27 41,48 23,48 17,27" /></svg>;
 }
 
 function Account({ auth }: { auth: ReturnType<typeof useAuth> }) {

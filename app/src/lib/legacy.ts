@@ -8,7 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 type Any = any;
 declare global {
   interface Window {
-    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any; Game: Any;
+    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any; Game: Any; Reference: Any; WorldMap: Any;
     GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>;
   }
 }
@@ -43,7 +43,10 @@ export function initLegacy() {
     this.recompute();
     window.scrollTo({ top: 0 });
   };
-  if (window.GMLock) window.GMLock.auto().then((ok: boolean) => { if (ok) App.recompute(); });
+  // прежний сайт просит перерисовать всё (открыты разделы ГМ) или справочник (калькулятор зелий) — сообщить разделам
+  App.render = function () { this.recompute(); window.dispatchEvent(new Event('mh-gm')); };
+  if (window.Reference) window.Reference.refresh = window.Reference.refreshWorld = () => window.dispatchEvent(new Event('mh-ref'));
+  if (window.GMLock) window.GMLock.auto().then((ok: boolean) => { if (ok) App.render(); });
 }
 const DRAFT_KEY = 'hero-workshop:draft';
 
