@@ -625,7 +625,7 @@ input[type="number"].mini-num { flex: 0 0 96px; width: 96px; display: inline-blo
 .dev-list { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 4px; }
 .dev-list li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line-soft); margin: 0; }
 .dev-list li:last-child { border-bottom: 0; }
-.dev-log, .feed { list-style: none; padding: 0 !important; margin: 8px 0 0; display: grid; gap: 0; }
+.dev-log, .feed { list-style: none; padding: 0 !important; margin: 8px 0 0; display: grid; gap: 0; align-content: start; }
 .dev-log li, .feed li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); margin: 0; }
 .feed li.ev-session { border-left: 3px solid var(--brass); padding-left: 10px; }
 .feed li.ev-create { border-left: 3px solid var(--ok); padding-left: 10px; }

@@ -36,6 +36,9 @@ export default function Create() {
   const want = rest[0] && steps.some(s => s.id === rest[0]) ? rest[0] : step || 'race';
 
   useLayoutEffect(() => { App.step = want; }, [want, App]);
+  // героя могли подменить снаружи (кампания: «Новый персонаж», «Изменить лист») — пересчитать при входе в мастер
+  useLayoutEffect(() => { App.recompute(); }, [App]);
+  const camp = window.Game ? window.Game.target() : null;
   // текущий шаг — в видимой части ленты шагов (на телефоне она прокручивается)
   useEffect(() => { document.querySelector('.wiz-step.is-on')?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [want]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [want]);
@@ -67,6 +70,15 @@ export default function Create() {
           );
         })}
       </nav>
+
+      {camp && (
+        <div className="wiz-camp">
+          <Icon name="dice" />
+          <span>Персонаж для кампании <b>«{camp.cname}»</b>{camp.chid ? ' — правка листа' : ''}. Когда закончите, на шаге «Итог» {camp.chid && !['draft', 'review'].includes(camp.status) ? 'сохраните лист в кампании' : 'отправьте его ГМ на проверку'}.</span>
+          <a className="btn ghost small" href={`#game/${camp.cid}${camp.chid ? '/' + camp.chid : ''}`}>К кампании</a>
+          <button type="button" className="link small" onClick={() => act('gDetach')}>отвязать</button>
+        </div>
+      )}
 
       <div className="wiz-grid">
         <section className="wiz-main">
@@ -112,7 +124,7 @@ export default function Create() {
             </div>
           ) : race ? <p className="chip ok"><Icon name="check" />Собран по правилам</p> : null}
           <div className="wiz-sum-act">
-            <button type="button" className="btn primary" onClick={() => act('saveHero')}>{App.editingId ? 'Сохранить изменения' : 'Сохранить в «Мои герои»'}</button>
+            {camp ? <CampSave camp={camp} /> : <button type="button" className="btn primary" onClick={() => act('saveHero')}>{App.editingId ? 'Сохранить изменения' : 'Сохранить в «Мои герои»'}</button>}
             <button type="button" className="btn ghost small" onClick={fresh}>Начать заново</button>
           </div>
         </aside>
@@ -121,8 +133,18 @@ export default function Create() {
       <div className="wiz-nav">
         {prev ? <a className="btn ghost" href={'#create/' + prev.id}><span aria-hidden="true">←</span> {prev.short || prev.title}</a> : <span />}
         {next ? <a className="btn primary" href={'#create/' + next.id}>Далее: {next.short || next.title} <span aria-hidden="true">→</span></a>
-          : <button type="button" className="btn primary" onClick={() => act('saveHero')}>Сохранить героя</button>}
+          : camp ? <CampSave camp={camp} short /> : <button type="button" className="btn primary" onClick={() => act('saveHero')}>Сохранить героя</button>}
       </div>
     </div>
   );
+}
+
+/** герой собирается для кампании: отправить ГМ на проверку, сохранить черновик или (уже в игре) сохранить лист */
+function CampSave({ camp, short }: { camp: { chid?: string; status?: string }; short?: boolean }) {
+  const keep = camp.chid && !['draft', 'review'].includes(camp.status || '');
+  if (keep) return <button type="button" className="btn primary" onClick={() => act('gSaveWizard', { status: 'keep' })}>Сохранить лист в кампании</button>;
+  return <>
+    <button type="button" className="btn primary" onClick={() => act('gSaveWizard', { status: 'review' })}>Отправить ГМ на проверку</button>
+    {!short && <button type="button" className="btn" onClick={() => act('gSaveWizard', { status: 'draft' })}>Сохранить черновик в кампании</button>}
+  </>;
 }

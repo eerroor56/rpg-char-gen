@@ -1,6 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { cloudCall, heroView, openInWizard, useHeroes, useSync, type useAuth } from '../lib/legacy';
 import { Icon } from '../ui/Icon';
+import { SignIn } from '../ui/SignIn';
 
 export default function Heroes({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const heroes = useHeroes();
@@ -55,8 +56,6 @@ export default function Heroes({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
 // вход и где хранятся герои: Google, почта; без входа — только в этом браузере
 function AccountCard({ auth, sync, count }: { auth: ReturnType<typeof useAuth>; sync: ReturnType<typeof useSync>; count: number }) {
-  const [mode, setMode] = useState<'' | 'in' | 'up'>('');
-  const [f, setF] = useState({ name: '', email: '', pw: '' });
   const C = window.Cloud;
   if (!auth.configured) return null;
   if (auth.user) {
@@ -71,34 +70,13 @@ function AccountCard({ auth, sync, count }: { auth: ReturnType<typeof useAuth>; 
       </section>
     );
   }
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (mode === 'up') cloudCall(() => C.signUp(f.name.trim() || 'Игрок', f.email.trim(), f.pw), 'Аккаунт создан');
-    else cloudCall(() => C.signIn(f.email.trim(), f.pw));
-  };
   return (
     <section className="acc card">
       <span className="acc-ic"><Icon name="cloud" /></span>
       <div className="acc-body">
         <b>Войдите, чтобы герои были в облаке</b>
         <span>Сейчас они хранятся только в этом браузере{count ? ` (${count})` : ''}. После входа перенесутся сами и появятся на любом устройстве.</span>
-        {mode ? (
-          <form className="acc-form" onSubmit={submit}>
-            {mode === 'up' && <input required placeholder="Имя в игре" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} autoComplete="nickname" />}
-            <input required type="email" placeholder="Почта" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} autoComplete="email" />
-            <input required type="password" minLength={6} placeholder="Пароль" value={f.pw} onChange={e => setF({ ...f, pw: e.target.value })} autoComplete={mode === 'up' ? 'new-password' : 'current-password'} />
-            <div className="row">
-              <button className="btn primary" type="submit">{mode === 'up' ? 'Создать аккаунт' : 'Войти'}</button>
-              <button className="btn ghost" type="button" onClick={() => setMode(mode === 'up' ? 'in' : 'up')}>{mode === 'up' ? 'У меня есть аккаунт' : 'Создать аккаунт'}</button>
-              {mode === 'in' && <button className="link" type="button" onClick={() => f.email ? cloudCall(() => C.reset(f.email.trim()), 'Письмо для смены пароля отправлено') : window.App.toast('Впишите почту')}>забыли пароль?</button>}
-            </div>
-          </form>
-        ) : (
-          <div className="row">
-            <button className="btn primary" type="button" onClick={() => cloudCall(() => C.google())}>Войти через Google</button>
-            <button className="btn" type="button" onClick={() => setMode('in')}>Войти по почте</button>
-          </div>
-        )}
+        <SignIn />
       </div>
     </section>
   );

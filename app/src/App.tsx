@@ -6,6 +6,7 @@ import Heroes from './pages/Heroes';
 import Support from './pages/Support';
 import Moving from './pages/Moving';
 import Create from './pages/Create';
+import Game from './pages/game/Game';
 import HeroPage from './pages/hero/HeroPage';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
@@ -13,7 +14,7 @@ export const SECTIONS: { id: string; title: string; short: string; icon: IconNam
   { id: 'home', title: 'Главная', short: 'Главная', icon: 'home', lead: 'С чего начать' },
   { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
   { id: 'heroes', title: 'Мои герои', short: 'Герои', icon: 'users', lead: 'Ваши персонажи — в облаке, на любом устройстве' },
-  { id: 'game', title: 'Игра', short: 'Игра', icon: 'dice', old: true, lead: 'Кампании с ГМ: сессии, журнал, поле боя' },
+  { id: 'game', title: 'Игра', short: 'Игра', icon: 'dice', lead: 'Кампании с ГМ: сессии, журнал, поле боя' },
   { id: 'world', title: 'Мир', short: 'Мир', icon: 'globe', old: true, lead: 'Карта, уровни мира, места' },
   { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', old: true, lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
   { id: 'rules', title: 'Как считается', short: 'Правила', icon: 'scale', old: true, lead: 'Формулы и решения по спорным местам' },
@@ -27,8 +28,10 @@ export default function App() {
   const auth = useAuth();
   const [more, setMore] = useState(false);
   const cur = SECTIONS.find(s => s.id === tab) || SECTIONS[0];
+  window.App.tab = cur.id;   // прежний сайт перерисовывает «Игру», только пока открыта она
   const heroId = cur.id === 'heroes' && rest[0] ? decodeURIComponent(rest[0]) : '';
-  useEffect(() => { setMore(false); window.scrollTo({ top: 0 }); if (!heroId) document.title = cur.id === 'home' ? 'Мастерская героя' : `${cur.title} — Мастерская героя`; }, [cur.id, cur.title, heroId]);
+  const gameAt = cur.id === 'game' ? rest.slice(0, 2).join('/') : '';
+  useEffect(() => { setMore(false); window.scrollTo({ top: 0 }); if (!heroId) document.title = cur.id === 'home' ? 'Мастерская героя' : `${cur.title} — Мастерская героя`; }, [cur.id, cur.title, heroId, gameAt]);
 
   let page: ReactNode;
   if (cur.id === 'home') page = <Home auth={auth} />;
@@ -36,6 +39,7 @@ export default function App() {
   else if (cur.id === 'heroes') page = <Heroes auth={auth} />;
   else if (cur.id === 'support') page = <Support />;
   else if (cur.id === 'create') page = <Create />;
+  else if (cur.id === 'game') page = <Game auth={auth} path={rest.map(decodeURIComponent)} />;
   else page = <Moving section={cur} />;
 
   return (
