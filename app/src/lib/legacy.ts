@@ -13,6 +13,9 @@ declare global {
   }
 }
 
+/** метка сборки (vite.config.ts): к файлам прежнего сайта — чтобы после выкладки не брались старые из кэша */
+declare const __LEGACY_V__: string;
+
 export const HEROES_KEY = 'hero-workshop:heroes';
 /** Адрес прежней версии — для разделов, которые ещё не перенесены */
 export const OLD_SITE = 'https://rpg-char-gen.web.app/';
@@ -138,7 +141,7 @@ export function useLegacyCss(on = true) {
   useEffect(() => {
     if (!on) return;
     const link = document.createElement('link');
-    link.rel = 'stylesheet'; link.href = 'legacy/css/style.css'; link.dataset.legacy = '1';
+    link.rel = 'stylesheet'; link.href = 'legacy/css/style.css?v=' + __LEGACY_V__; link.dataset.legacy = '1';
     document.head.appendChild(link);
     document.body.classList.add('sheet-on');
     return () => { link.remove(); document.body.classList.remove('sheet-on'); };
