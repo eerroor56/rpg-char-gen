@@ -28,10 +28,18 @@ export function initLegacy() {
   App.editingId = App.store.get(DRAFT_KEY + ':id', null);
   App.step = App.step || 'race';
   App.recompute();
-  App.bind();                 // нажатия и ввод в шагах мастера (data-act, data-bind) — на document.body
+  App.bind();                 // кнопки прежнего листа персонажа (data-act) — на document.body
   // мастер пересчитал героя — сообщить новой оболочке (шаги, сводка)
   const recompute = App.recompute;
   App.recompute = function (...a: unknown[]) { const r = recompute.apply(this, a); window.dispatchEvent(new Event('mh-create')); return r; };
+  // шаги рисует React: прежнему мастеру остаётся только пересчитать героя; переход к шагу — через адрес
+  App.renderCreate = function () { this.recompute(); };
+  App.go = function (id: string) {
+    this.step = id;
+    if (location.hash !== '#create/' + id) location.hash = '#create/' + id;
+    this.recompute();
+    window.scrollTo({ top: 0 });
+  };
   if (window.GMLock) window.GMLock.auto().then((ok: boolean) => { if (ok) App.recompute(); });
 }
 const DRAFT_KEY = 'hero-workshop:draft';

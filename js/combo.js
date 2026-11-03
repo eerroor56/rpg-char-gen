@@ -122,7 +122,8 @@
   function choose(i) {
     const o = items[i], el = input;
     if (!o || !el) return;
-    el.value = o.v;
+    // значение — через исходный сеттер: поля новой версии (React) иначе не заметят ввода
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, o.v);
     close();
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
