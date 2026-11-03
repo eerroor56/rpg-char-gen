@@ -682,3 +682,18 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
 .rf-arrow:active { transform: scale(.94); }
 .rf-arrow.l { left: 8px; }
 .rf-arrow.r { right: 8px; }
+
+/* ---------- фон шапки (главная, «Игра»): вращающийся знак и свечение, как на прежнем сайте */
+.has-sigil { position: relative; isolation: isolate; overflow-x: clip; padding-top: 72px; padding-bottom: 30px; }
+.has-sigil::before { content: ""; position: absolute; left: 50%; top: 40px; width: min(760px, 100%); height: 520px; transform: translateX(-50%); z-index: -2; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(214, 168, 92, .16), rgba(91, 71, 170, .12) 45%, transparent 70%); }
+.sigil { position: absolute; left: 50%; top: -10px; width: 540px; height: 540px; margin-left: -270px; z-index: -1; opacity: .16; pointer-events: none; animation: sigil-spin 120s linear infinite; }
+.sigil svg { width: 100%; height: 100%; display: block; }
+.sigil svg * { fill: none; stroke: var(--brass); stroke-width: .8; }
+.sigil .ring.thin { stroke-dasharray: 2 6; }
+.sigil .inner { stroke-width: .5; }
+@keyframes sigil-spin { to { transform: rotate(360deg); } }
+.has-sigil h1 { background: linear-gradient(180deg, #fff3d6 10%, #e3b86c 55%, #9c7334 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 22px rgba(214, 168, 92, .22)); }
+@media (max-width: 720px) { .sigil { width: 380px; height: 380px; margin-left: -190px; } .has-sigil { padding-top: 44px; } }
+@media (prefers-reduced-motion: reduce) { .sigil { animation: none; } }

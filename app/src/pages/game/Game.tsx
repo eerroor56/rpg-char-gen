@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import { cloudCall, toast, useLegacyCss, type useAuth } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { SignIn } from '../../ui/SignIn';
+import { Sigil } from '../../ui/Sigil';
 
 /*
  * «Игра»: #game — вход, мои кампании, новая кампания, вход по коду, бросок d100 (новое);
@@ -37,7 +38,7 @@ function GameHome({ auth }: { auth: Auth }) {
   const asGm = (camps || []).filter(c => c.gm === uid).length;
   return (
     <div className="page g-page">
-      <header className="g-hero">
+      <header className="g-hero has-sigil"><Sigil />
         <p className="eyebrow">кампании · сессии · бросок d100</p>
         <h1>Игра</h1>
         <p className="lead">{auth.user
@@ -168,7 +169,7 @@ function Join({ auth, code }: { auth: Auth; code: string }) {
   if (auth.user) return <div className="page"><div className="card empty"><Icon name="dice" /><p>Присоединяюсь к кампании…</p></div></div>;
   return (
     <div className="page g-page">
-      <header className="g-hero"><p className="eyebrow">приглашение</p><h1>Вход в кампанию</h1>
+      <header className="g-hero has-sigil"><Sigil /><p className="eyebrow">приглашение</p><h1>Вход в кампанию</h1>
         <p className="lead">Войдите — и вы сразу окажетесь в кампании по коду <b>{C.normCode ? C.normCode(code) : code}</b>.</p></header>
       <section className="card acc g-signin"><span className="acc-ic"><Icon name="user" /></span>
         <div className="acc-body"><b>Войдите, чтобы присоединиться</b><SignIn big /></div></section>

@@ -1,5 +1,6 @@
 import { heroView, useHeroes, useSync, type useAuth } from '../lib/legacy';
 import { Icon } from '../ui/Icon';
+import { Sigil } from '../ui/Sigil';
 import { SECTIONS } from '../App';
 
 export default function Home({ auth }: { auth: ReturnType<typeof useAuth> }) {
@@ -9,7 +10,8 @@ export default function Home({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const lv = last ? heroView(last) : null;
   return (
     <div className="page home">
-      <section className="hello">
+      <section className="hello has-sigil">
+        <Sigil />
         <p className="eyebrow">Конструктор · справочник · онлайн-игра</p>
         <h1>{auth.user ? `Здравствуйте, ${auth.user.name}` : 'Мастерская героя'}</h1>
         <p className="lead">Соберите персонажа по правилам игры, держите его в облаке и играйте с ГМ — на компьютере и на телефоне.</p>
