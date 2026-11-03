@@ -706,3 +706,68 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
 .install-dlg::backdrop { background: rgba(8, 6, 18, .7); }
 .install-dlg h2 { color: var(--brass-2); font-size: 1.5rem; margin-bottom: 10px; }
 .install-dlg ol { padding-left: 20px; display: grid; gap: 8px; margin: 0 0 12px; }
+
+/* ---------- лист персонажа: «бумажный» — для игры, печати и картинки */
+.cs-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-checks { padding: 14px 18px; border-radius: var(--r-l); }
+.cs-checks.good { background: rgba(111, 194, 171, .08); border: 1px solid rgba(111, 194, 171, .45); }
+.cs-checks.bad { background: rgba(227, 111, 100, .08); border: 1px solid rgba(227, 111, 100, .45); }
+.cs-checks h2 { display: flex; align-items: center; gap: 8px; font-size: 1.35rem; }
+.cs-checks.good h2 { color: var(--ok); }
+.cs-checks.bad h2 { color: #ffb3ab; }
+.cs-checks h3 { font-family: var(--font-body); font-weight: 700; font-size: .9rem; color: var(--muted); margin: 10px 0 4px; }
+.cs-checks ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.cs-checks li.err::marker { color: var(--err); }
+.cs-checks li.warn::marker { color: #f3d58f; }
+.cs-checks .link { color: var(--brass-2); }
+.cs-sheet { --ink: #2a2236; --ink-2: #4e4360; --ink-3: #6f6380; --rule: #c8bb9d;
+  background: #f3ead7; color: var(--ink); border-radius: var(--r-l); padding: 26px 28px; box-shadow: 0 18px 40px rgba(0, 0, 0, .35); line-height: 1.45; }
+.cs-sheet p { margin: 0 0 6px; }
+.cs-sheet b, .cs-sheet strong { color: var(--ink); }
+.cs-sheet .cs-muted, .cs-sheet .muted { color: var(--ink-3); }
+.cs-small, .cs-sheet .small { font-size: .88rem; }
+.cs-pre { white-space: pre-wrap; }
+.cs-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 20px; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 2px solid var(--ink); }
+.cs-pic { flex: 0 0 170px; height: 220px; }
+.cs-pic img { border: 3px solid var(--ink); background: var(--ink); box-shadow: 0 2px 0 #c9b48a; border-radius: var(--r-s); }
+.cs-pic.two { flex-basis: 240px; }
+span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+.cs-title { flex: 1 1 220px; min-width: 0; }
+.cs-title h2 { font-size: 2.2rem; color: var(--ink); overflow-wrap: anywhere; }
+.cs-title p { color: var(--ink-2); margin: 4px 0 0; }
+.cs-badges { display: flex; gap: 18px; margin: 0; }
+.cs-badges dt { font-size: .8rem; color: var(--ink-3); }
+.cs-badges dd { margin: 0; font-family: var(--font-display); font-size: 1.9rem; line-height: 1; }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 22px; }
+.cs-block { break-inside: avoid; min-width: 0; }
+.cs-block.wide { grid-column: 1 / -1; }
+.cs-block h3 { font-size: 1.2rem; color: var(--ink); border-bottom: 1px solid #b9ab8d; padding-bottom: 3px; margin-bottom: 8px; }
+.cs-block ul { margin: 2px 0 8px; padding-left: 18px; }
+.cs-stats { width: 100%; border-collapse: collapse; }
+.cs-stats th, .cs-stats td { text-align: left; padding: 3px 4px; border-bottom: 1px dotted var(--rule); }
+.cs-stats thead th { font-weight: 400; font-size: .8rem; color: var(--ink-3); }
+.cs-stats td strong { font-size: 1.15rem; }
+.cs-der { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 14px; margin: 0; }
+.cs-der div { display: flex; justify-content: space-between; gap: 6px; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+.cs-der dt { color: var(--ink-2); }
+.cs-der dd { margin: 0; font-weight: 700; text-align: right; }
+.cs-list { list-style: none; margin: 0; padding: 0 !important; }
+.cs-list li { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dotted var(--rule); }
+.cs-anc { float: right; width: 110px; height: 140px; margin: 0 0 6px 12px; }
+.cs-anc img { object-fit: contain; }
+.cs-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #b9ab8d; }
+@media (max-width: 720px) {
+  .cs-sheet { padding: 18px 16px; }
+  .cs-pic, .cs-pic.two { flex: 1 1 100%; max-width: 260px; height: 300px; margin: 0 auto; }
+  .cs-der { grid-template-columns: minmax(0, 1fr); }
+}
+/* печать: только лист, на белом */
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden; }
+  .cs-sheet, .cs-sheet * { visibility: visible; }
+  .cs-sheet { position: absolute; left: 0; top: 0; width: 100%; background: #fff; color: #000; padding: 0; border-radius: 0; box-shadow: none; }
+  .cs-grid { grid-template-columns: 1fr 1fr; }
+  .app-side, .mtop, .mbar, .wiz-nav, .toast { display: none !important; }
+  .main { margin: 0 !important; padding: 0 !important; }
+}

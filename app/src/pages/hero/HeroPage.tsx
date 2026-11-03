@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { cap, heroList, newHeroId, openInWizard, toast, useHeroes, useLegacyCss, useSync, writeHeroes, type Hero } from '../../lib/legacy';
+import { act, cap, heroList, newHeroId, openInWizard, toast, useHeroes, useLegacyCss, useSync, writeHeroes, type Hero } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt, signed, type Any } from '../create/kit';
 import DevTab from './DevTab';
+import { Sheet } from '../sheet/Sheet';
+import { sheetOpts } from '../create/Summary';
 
 /*
  * Страница сохранённого героя (#heroes/<id>): картинка, главное о герое, вкладки «Развитие · Снаряжение · Состояния ·
@@ -54,7 +56,7 @@ function HeroView({ id }: { id: string }) {
     };
   });
   useEffect(() => () => { if (App.devCtx && App.devCtx.record && App.devCtx.record.id === id) App.devCtx = null; }, [App, id]);
-  useLegacyCss(tab === 'gear' || tab === 'fx' || tab === 'sheet');
+  useLegacyCss(tab === 'gear' || tab === 'fx');
   useEffect(() => { document.title = `${h.state?.name || 'Безымянный герой'} — Мастерская героя`; }, [h.state?.name]);
 
   const nfx = (rec.gm.effects || []).length;
@@ -91,11 +93,17 @@ function HeroView({ id }: { id: string }) {
   let body;
   if (tab === 'dev') body = <DevTab key={id} rec={rec} v={v} />;
   else if (tab === 'log') body = <Journal log={log} />;
+  else if (tab === 'sheet') body = <div className="wstack">
+    <div className="cs-tools no-print">
+      <button type="button" className="btn small" onClick={() => window.print()}>Печать / PDF</button>
+      <button type="button" className="btn small" onClick={() => act('exportImage')}>Скачать картинку</button>
+    </div>
+    <Sheet st={v.state} res={v.res0} opts={sheetOpts(rec, v)} />
+  </div>;
   else {
     const o = { record: rec, perms: { gm: true, owner: true } };
     const I = window.Inv;
-    const html = tab === 'sheet' ? window.Sheet.render(v.state, v.res, false, Dev.sheetOpts(rec, v))
-      : !I ? '<div class="card empty">Раздел не загрузился.</div>' : tab === 'gear' ? I.gearTab(o, v) : I.effectsTab(o, v);
+    const html = !I ? '<div class="card empty">Раздел не загрузился.</div>' : tab === 'gear' ? I.gearTab(o, v) : I.effectsTab(o, v);
     body = <LegacyPane html={html} />;
   }
 

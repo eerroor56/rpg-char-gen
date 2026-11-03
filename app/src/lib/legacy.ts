@@ -45,6 +45,27 @@ export function initLegacy() {
   };
   // прежний сайт просит перерисовать всё (открыты разделы ГМ) или справочник (калькулятор зелий) — сообщить разделам
   App.render = function () { this.recompute(); window.dispatchEvent(new Event('mh-gm')); };
+  // «Ссылка для ГМ»: герой целиком в адресе (#hero=…) — открыть его в мастере на листе
+  const openShared = () => {
+    const m = location.hash.match(/^#hero=([A-Za-z0-9_-]+)/);
+    if (!m) return;
+    try {
+      App.state = App.migrate(App.decode(m[1]));
+      App.editingId = null;
+      App.prevState = null;
+      App.save();
+      App.recompute();
+      history.replaceState(null, '', '#create/summary');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      setTimeout(() => App.toast('Персонаж загружен из ссылки'), 0);
+    } catch {
+      history.replaceState(null, '', '#create');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      setTimeout(() => App.toast('Ссылка повреждена — персонаж не загружен'), 0);
+    }
+  };
+  openShared();
+  window.addEventListener('hashchange', openShared);
   if (window.Reference) window.Reference.refresh = window.Reference.refreshWorld = () => window.dispatchEvent(new Event('mh-ref'));
   if (window.GMLock) window.GMLock.auto().then((ok: boolean) => { if (ok) App.render(); });
 }
