@@ -312,7 +312,7 @@
     const charsHtml = `<section class="camp-chars"><div class="sec-head"><h2>Персонажи</h2>${gm && review ? `<span class="tag freq">на проверке: ${review}</span>` : ''}</div>
       ${!chars ? '<div class="card empty loading">Загружаю…</div>' : list.length ? `<ul class="char-grid">${list.map(ch => {
         const v = charView(ch), race = v.res.race;
-        const pic = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'mini', true) : '';
+        const pic = App.heroPortrait(ch.pic, race, 'mini', true);
         return `<li><a class="char-card card ${ch.owner === me ? 'mine' : ''}" href="#game/${esc(cid)}/${esc(ch.id)}">${pic}
           <span class="cc-body"><span class="cc-name">${esc(ch.name || 'Безымянный герой')}</span>
           <span class="small">${race ? esc(cap(race.name)) : 'раса не выбрана'}${race ? `, ур. ${fmt(v.res.level)}` : ''}</span>
@@ -385,7 +385,7 @@
     const sideHtml = arena ? diceBox(myHero ? { cid, chid: myHero.id, chName: myHero.name || 'Безымянный герой', compact: true, side: true } : { cid, compact: true, side: true }) + feedHtml : '';
     const battleHtml = window.Battle ? window.Battle.card({
       cid, camp, gm, me, level: partyLevel, rerender: repaint, side: sideHtml,
-      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race }; }),
+      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '' }; }),
       saveAllies,
       allies: camp.allies || [],
       saveBoard: board => {
@@ -665,7 +665,7 @@
       const res = R.compute(App.migrate(JSON.parse(JSON.stringify(h.state))));
       const cid = cur().cid;
       run(async () => {
-        const chid = await C.createCharacter(cid, App.migrate(h.state), res.ok ? 'review' : 'draft');
+        const chid = await C.createCharacter(cid, App.migrate(h.state), res.ok ? 'review' : 'draft', h.pic ? { pic: h.pic } : null);
         App.ui.gLocalHero = '';
         location.hash = `#game/${cid}/${chid}`;
       }, res.ok ? 'Персонаж отправлен ГМ на проверку' : 'Добавлен как черновик: в листе есть ошибки');
@@ -712,7 +712,7 @@
     gCopyLocal() {
       const ch = G.d.ch, c = G.d.camp;
       const l = App.store.get('hero-workshop:heroes', []);
-      const copy = { id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), savedAt: Date.now(), state: JSON.parse(JSON.stringify(ch.state)), prog: ch.prog, gm: ch.gm, notes: ch.notes || '',
+      const copy = { id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), savedAt: Date.now(), state: JSON.parse(JSON.stringify(ch.state)), prog: ch.prog, gm: ch.gm, notes: ch.notes || '', pic: ch.pic || '',
         log: [{ at: Date.now(), text: `Копия из кампании «${c.name}»` }].concat((G.d.events || []).map(e => ({ at: e.ms, text: e.text, byName: e.byName, session: e.session }))) };
       l.push(JSON.parse(JSON.stringify(copy)));
       if (App.store.set('hero-workshop:heroes', l)) App.toast('Копия сохранена в «Мои герои»'); else App.toast('Не удалось сохранить в браузере');

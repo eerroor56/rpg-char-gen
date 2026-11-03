@@ -376,6 +376,7 @@
 
   // ------------------------------------------------------------ отрисовка
   function heroPic(h) {
+    if (h.pic) return h.pic;          // своя картинка игрока
     const race = h.race;
     const base = race ? (race.isHalf && race.parents ? race.parents[0] : race.base) : null;
     const im = base && (window.RACE_IMAGES || {})[base.id];

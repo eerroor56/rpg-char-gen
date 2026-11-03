@@ -107,6 +107,34 @@
     }).join('')}</${tag}>`;
   }
 
+  // портрет персонажа: своя картинка игрока (pic — уменьшенная картинка data:, хранится в записи персонажа) или портрет расы
+  function heroPortrait(pic, race, cls, plain) {
+    if (pic && /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(pic)) {
+      const img = `<img src="${pic}" alt="" decoding="async">`;
+      return plain ? `<span class="portrait custom ${cls || ''}"><span class="pic">${img}</span></span>` : `<figure class="portrait custom ${cls || ''}">${img}</figure>`;
+    }
+    return race ? portrait(race.isHalf && race.parents ? race.parents : [race.base], cls, plain) : '';
+  }
+  // своя картинка: файл → не больше 400 точек по большей стороне, webp (или jpeg), до ~150 КБ — влезает в документ персонажа
+  async function shrinkPic(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      for (const q of [0.85, 0.72, 0.6, 0.45]) {
+        let d = c.toDataURL('image/webp', q);
+        if (!/^data:image\/webp/.test(d)) d = c.toDataURL('image/jpeg', q);
+        if (d.length < 200000) return d;
+      }
+      throw new Error('картинка слишком большая');
+    } finally { URL.revokeObjectURL(url); }
+  }
+
   // заглавная первая видимая буква в готовом HTML (теги, пробелы, кавычки и скобки пропускаются)
   const capHtml = html => String(html === undefined || html === null ? '' : html)
     .replace(/^((?:\s|<[^>]*>|&[a-z]+;|&#\d+;|[«"(])*)([a-zа-яё])/, (m, pre, ch) => pre + ch.toUpperCase());
@@ -173,7 +201,7 @@
   }
 
   const App = {
-    esc, cap, capHtml, capDom, sentCap, store, DICE, portrait, picKey, pics, entityPic, thumb,
+    esc, cap, capHtml, capDom, sentCap, store, DICE, portrait, heroPortrait, shrinkPic, picKey, pics, entityPic, thumb,
     state: null,
     res: null,
     step: 'race',
@@ -449,7 +477,7 @@
       const race = res.race;
       const title = st.name ? esc(st.name) : '<span class="muted">Безымянный герой</span>';
       const sub = [race ? esc(race.isHalf && race.parents && race.parents[0] && race.parents[1] ? `полукровка (${race.parents[0].name} и ${race.parents[1].name})` : race.name) : null,
-        res.age ? esc(res.age.title.toLowerCase()) + (res.agePct ? ` ${R.signed(res.agePct)}%` : '') : null].filter(Boolean).join(', ');
+        res.ageStart ? esc(res.ageStart.title.toLowerCase()) + (res.agePct ? ` ${R.signed(res.agePct)}%` : '') : null].filter(Boolean).join(', ');
       const stats = R.STATS.map(k => {
         const b = res.baseStats[k], f = res.stats[k];
         const diff = f - b;
@@ -467,8 +495,8 @@
           <div><dt>ОД в ход</dt><dd>${race ? R.odText(d) : '—'}</dd></div>
           <div><dt>ХП</dt><dd>${race ? R.fmt(d.hp) : '—'}</dd></div>
           <div><dt>МП / Пси</dt><dd>${race ? `${R.fmt(d.mp)} / ${R.fmt(d.psi)}` : '—'}</dd></div>
-          <div><dt>Очки характеристик</dt><dd class="${pointsLeft ? 'attn' : ''}">${race && res.age ? (pointsLeft ? `ещё ${R.signed(pointsLeft)}` : 'распределены') : '—'}</dd></div>
-          <div><dt>Очки талантов</dt><dd class="${talentLeft ? 'attn' : ''}">${race && res.age ? `${res.talentSpent} из ${res.talentPoints}` : '—'}</dd></div>
+          <div><dt>Очки характеристик</dt><dd class="${pointsLeft ? 'attn' : ''}">${race && res.ageStart ? (pointsLeft ? `ещё ${R.signed(pointsLeft)}` : 'распределены') : '—'}</dd></div>
+          <div><dt>Очки талантов</dt><dd class="${talentLeft ? 'attn' : ''}">${race && res.ageStart ? `${res.talentSpent} из ${res.talentPoints}` : '—'}</dd></div>
         </dl>
         <div class="lg-check ${nErr ? 'bad' : nWarn ? 'meh' : 'good'}">
           ${nErr ? `<strong>Не готово: ${nErr} ${this.plural(nErr, 'ошибка', 'ошибки', 'ошибок')}</strong>` : '<strong>Персонаж собран по правилам</strong>'}

@@ -1558,3 +1558,9 @@ body.modal-open { overflow: hidden; }
 .sup-thanks { text-align: center; margin-top: 18px; }
 @media (max-width: 560px) { .sup-tg { flex-wrap: wrap; } .sup-tg .btn { width: 100%; justify-content: center; } }
 .support a.btn { text-decoration: none; }
+/* своя картинка персонажа (вместо портрета расы) */
+.portrait.custom img { aspect-ratio: 3 / 4; object-fit: cover; }
+.portrait.custom.doll-pic img { max-height: 260px; }
+.dev-pic-ctl { margin: 4px 0 0; }
+.dev-pic-ctl label { color: var(--brass); cursor: pointer; }
+.dev-age { margin: 10px 0 0; }

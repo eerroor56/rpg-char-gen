@@ -167,7 +167,7 @@
     const by = cat => eq.slots.filter(s => s.cat === cat);
     const group = cats => cats.map(c => by(c).map(slotHtml).join('')).join('');
     const race = v.res.race;
-    const pic = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'doll-pic') : '';
+    const pic = App.heroPortrait(o.record.pic, race, 'doll-pic');
     const jewelWorn = eq.slots.some(s => ['ring', 'bracelet', 'earring', 'nose', 'brow'].includes(s.cat) && inv.equip[s.id]);
     const prWorn = by('prosth').some(s => inv.equip[s.id]);
     const artWorn = by('artifact').some(s => inv.equip[s.id]);

@@ -36,6 +36,13 @@
     return out;
   }
 
+  // возраст в игре: меняется с уровнем (процент от среднего уровня расы, как при создании) — что сейчас и когда следующий
+  function ageLine(res) {
+    const changed = res.ageStart && res.ageStart !== res.age;
+    return `<p class="dev-age small"><b>Возраст: ${esc(res.age.title.toLowerCase())}</b> <span class="muted">(${signed(res.agePctNow)}% от среднего уровня расы ${fmt(res.lvl0)})</span>${changed ? ` — с ур. ${fmt(res.ageAtLevel)}, при создании ${esc(res.ageStart.title.toLowerCase())}` : ''}
+      <br><span class="muted">${esc(res.age.buff)}</span>${res.ageNext ? `<br><span class="muted">Следующий — ${esc(res.ageNext.age.title.toLowerCase())}: с ур. ${fmt(res.ageNext.level)}.</span>` : ''}</p>`;
+  }
+
   // эффект навыка на нынешнем уровне (R.skillAt: в описании — прирост за уровень), если он отличается от текста таблицы
   // «добавляет шанс …» без числа (ремесло, кулинария) — C.MAKE.CHANCE_PER_LVL % за уровень, как при крафте игроком
   const chanceNow = (eff, lvl) => {
@@ -158,6 +165,7 @@
         <div class="dev-xp"><span class="muted small">Опыт до уровня ${fmt(lv.level + 1)}: ${fmt(lv.xpInto)} / ${fmt(lv.need)}</span>
           <div class="bar"><span style="width:${pct}%"></span></div>
           <span class="muted small">Всего набрано: ${fmt(rec.gm.xp || 0)}${res.der.expPct || res.der.expMul !== 1 ? ` · бонус к опыту: ${res.der.expPct ? signed(res.der.expPct) + '%' : ''}${res.der.expMul !== 1 ? ' ×' + res.der.expMul : ''}` : ''}</span></div></div>`;
+    if (res.age) html += ageLine(res);
     if (perms.gm) {
       const cr = creatures();
       html += `<div class="dev-row">
@@ -283,7 +291,7 @@
   function sheetOpts(rec, v) {
     const I = window.Inv;
     return { extra: sheetBlock(rec, v), gearHtml: I ? I.sheetGear(v, rec) : '', vit: rec.vit || {},
-      symbols: ((rec.gm || {}).learned || []).filter(x => x.kind === 'symbol').map(x => x.name) };
+      symbols: ((rec.gm || {}).learned || []).filter(x => x.kind === 'symbol').map(x => x.name), pic: rec.pic || '' };
   }
   // в записи есть что-то из игры: опыт, очки, общины, изученное, снаряжение, состояния, заклинания
   function hasProgress(rec) {
@@ -309,7 +317,7 @@
     const v = compute(o.record);
     const tab = ['dev', 'gear', 'fx', 'sheet', 'log'].includes(App.ui.devTab) ? App.ui.devTab : 'dev';
     const race = v.res.race;
-    const pics = race ? App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'dev-portrait') : '';
+    const pics = App.heroPortrait(o.record.pic, race, 'dev-portrait');
     let body;
     const I = window.Inv;
     if (tab === 'sheet') body = window.Sheet.render(v.state, v.res, false, sheetOpts(o.record, v));
@@ -323,7 +331,8 @@
     return `<div class="page dev-page">
       ${o.crumbs ? `<p class="crumbs">${o.crumbs}</p>` : ''}
       <header class="dev-head">${pics}<div><h1>${esc(o.record.state.name || 'Безымянный герой')}</h1>
-        <p class="muted">${o.sub || ''}</p></div></header>
+        <p class="muted">${o.sub || ''}</p>
+        ${(o.perms || {}).owner || (o.perms || {}).gm ? `<p class="dev-pic-ctl"><label class="linklike small">${o.record.pic ? 'сменить картинку' : 'своя картинка персонажа'}<input type="file" accept="image/png,image/jpeg,image/webp" data-change="devPic" hidden></label>${o.record.pic ? ' · <button type="button" class="linklike small" data-act="devPicDel">вернуть портрет расы</button>' : ''}</p>` : ''}</div></header>
       ${o.notice || ''}
       ${o.actions ? `<div class="row-actions dev-actions">${o.actions}</div>` : ''}
       <div class="seg dev-tabs" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${k === tab}" class="${k === tab ? 'is-on' : ''}" data-act="devTab" data-v="${k}">${t}${k === 'log' && o.log && o.log.length ? ` <small>${o.log.length}</small>` : ''}</button>`).join('')}</div>
@@ -331,6 +340,18 @@
       ${tab === 'dev' && o.privateBox ? o.privateBox : ''}
     </div>`;
   }
+
+  // своя картинка персонажа (вместо портрета расы): уменьшается в браузере и хранится в записи персонажа (pic)
+  Object.assign(App.actions, {
+    async devPic(t) {
+      const f = t.files && t.files[0];
+      t.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { App.toast('Нужна картинка: png, jpg или webp'); return; }
+      try { commit({ pic: await App.shrinkPic(f) }, 'Новая картинка персонажа'); } catch (e) { App.toast('Не получилось: ' + (e && e.message ? e.message : e)); }
+    },
+    devPicDel() { if (confirm('Убрать свою картинку и вернуть портрет расы?')) commit({ pic: '' }, 'Картинка персонажа — снова портрет расы'); }
+  });
 
   // черновик распределения очков и поля ввода принадлежат одному персонажу
   function own(id) {

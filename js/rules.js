@@ -35,6 +35,17 @@
       buff: 'навыки и магия получают +100% эффективности / −40% сопротивления болезням / −1 ОД', limit: '5 черт' }
   ];
 
+  // тип возраста по проценту уровня от среднего уровня расы и уровень, с которого он начинается
+  const ageAt = pct => (pct <= -50 ? AGES[0] : pct < 0 ? AGES[1] : pct < 50 ? AGES[2] : pct < 100 ? AGES[3] : AGES[4]);
+  const AGE_FROM = { 'ребёнок': -100, 'юный': -50, 'взрослый': 0, 'пожилой': 50, 'старец': 100 };
+  const agePctOf = (lvl, lvl0) => Math.round((lvl / lvl0 - 1) * 100);
+  // наименьший уровень, с которого персонаж — уже этого возраста (или старше)
+  function ageLevel(a, lvl0) {
+    let L = Math.max(1, Math.floor(lvl0 * (1 + AGE_FROM[a.id] / 100)) - 2);
+    while (AGES.indexOf(ageAt(agePctOf(L, lvl0))) < AGES.indexOf(a)) L++;
+    return L;
+  }
+
   // Размеры (лист «механики», «размеры»)
   const SIZES = [
     { id: 'см', name: 'Совсем малый', k: 0.2, mat: 'на 80% меньше', od: 2, inc: 10, out: -5, fx: '+10% получаемого / −5% исходящего / +2 ОД' },
@@ -773,6 +784,17 @@
     out.levelStart = level; out.levelsUp = levelsUp;
     out.talentPointsStart = out.talentPoints;
     if (levelsUp) { out.level = level + levelsUp; out.talentPoints = Math.floor(out.level / 5 + 1e-9); }
+    // возраст в игре (уточнение ГМ): тип возраста меняется вместе с уровнем — по проценту от среднего уровня расы, как при создании:
+    // −50% и ниже — ребёнок, до среднего — юный, от среднего — взрослый, +50% — пожилой, +100% — старец. Моложе выбранного
+    // при создании персонаж не становится. От нынешнего возраста — ОД и реген; черты и очки создания — от возраста при создании
+    out.ageStart = age;
+    out.agePctNow = lvl0 ? agePctOf(out.level, lvl0) : 0;
+    if (age && lvl0 > 0 && levelsUp) {
+      const now = ageAt(out.agePctNow);
+      if (AGES.indexOf(now) > AGES.indexOf(age)) { out.age = now; out.ageAtLevel = ageLevel(now, lvl0); }
+    }
+    const ai = age ? AGES.indexOf(out.age) : -1;
+    if (ai >= 0 && ai < AGES.length - 1 && lvl0 > 0) out.ageNext = { age: AGES[ai + 1], level: ageLevel(AGES[ai + 1], lvl0) };
     // призрак-помощник Калаштара — не выше уровня хозяина
     if (race && race.ancestor && race.ancestor.companion && roundLevel(race.ancestor.creature.lvl) > level) {
       errors.push({ step: 'race', msg: `Призрак-помощник «${race.ancestor.name}» (ур. ${roundLevel(race.ancestor.creature.lvl)}) сильнее хозяина (ур. ${level}) — выберите существо не выше вашего уровня.` });
@@ -1035,7 +1057,7 @@
     if (ancFx.hpRegen) { hpReg += ancFx.hpRegen; hpRegSrc.push(`${ancSrc} +${ancFx.hpRegen}`); }
     let hpPct = 0;
     traitFx.forEach(([k, fx]) => { if (fx && fx.hpRegenPct) { hpPct += fx.hpRegenPct; hpRegSrc.push(`«${k}» ${signed(fx.hpRegenPct)}%`); } });
-    if (age && age.regenMul) { hpPct += 20; hpRegSrc.push('ребёнок +20%'); }
+    if (out.age && out.age.regenMul) { hpPct += 20; hpRegSrc.push('ребёнок +20%'); }
     hpReg = hpReg * (1 + hpPct / 100);
     // «200% регенерация» предка — отдельный множитель поверх остальных процентов
     if (ancFx.hpRegenPct) { hpReg = hpReg * (1 + ancFx.hpRegenPct / 100); hpRegSrc.push(`${ancSrc}: регенерация +${ancFx.hpRegenPct}%`); }
@@ -1049,7 +1071,7 @@
     if (ancFx.mpRegen) { mpReg += ancFx.mpRegen; mpRegSrc.push(`${ancSrc} +${ancFx.mpRegen}`); }
     let mpPct = 0;
     traitFx.forEach(([k, fx]) => { if (fx && fx.mpRegenPct) { mpPct += fx.mpRegenPct; mpRegSrc.push(`«${k}» ${signed(fx.mpRegenPct)}%`); } });
-    if (age && age.regenMul) { mpPct += 20; mpRegSrc.push('ребёнок +20%'); }
+    if (out.age && out.age.regenMul) { mpPct += 20; mpRegSrc.push('ребёнок +20%'); }
     mpReg = mpReg * (1 + mpPct / 100);
     (race ? race.fx : []).forEach(f => { if (f.k === 'mpRegenMul' && !f.cond) { mpReg *= f.v; mpRegSrc.push(`раса ×${f.v}`); } });
     if (boon && boon.fx.mpRegenMul) { mpReg *= boon.fx.mpRegenMul; mpRegSrc.push(`«${boon.src.name}» ×${boon.fx.mpRegenMul}`); }
@@ -1060,7 +1082,7 @@
     // ОД
     const odSrc = [];
     let od = 0;
-    if (age && age.od) { od += age.od; odSrc.push(`возраст ${signed(age.od)}`); }
+    if (out.age && out.age.od) { od += out.age.od; odSrc.push(`возраст ${signed(out.age.od)}`); }
     if (size && size.od) { od += size.od; odSrc.push(`размер ${signed(size.od)}`); }
     (race ? race.fx.concat(race.pfx) : []).forEach(f => { if (f.k === 'od' && !f.cond) { od += f.v; odSrc.push(`раса ${signed(f.v)}${f.half ? ' (½)' : ''}`); } });
     traitFx.forEach(([k, fx]) => { if (fx && fx.od) { od += fx.od; odSrc.push(`«${k}» ${signed(fx.od)}`); } });

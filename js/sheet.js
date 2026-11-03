@@ -32,12 +32,12 @@
       html += checks(chk);
     }
     if (opts.note) html += `<p class="sheet-note muted small no-print">${opts.note}</p>`;
-    const pics = window.App.portrait(race.isHalf && race.parents ? race.parents : [race.base], 'sh-portrait');
+    const pics = window.App.heroPortrait((opts || {}).pic, race, 'sh-portrait');
     html += `<article class="sheet" id="sheet">
       <header class="sh-head ${pics ? 'has-portrait' : ''}">
         ${pics}
         <div class="sh-title"><h2>${esc(st.name || 'Безымянный герой')}</h2>
-        <p>${esc(cap(raceTitle))}, ${res.age ? esc(res.age.title.toLowerCase()) : 'возраст не выбран'}${res.agePct ? ` (${signed(res.agePct)}% от среднего уровня)` : ''}${st.player ? `, игрок: ${esc(st.player)}` : ''}${st.gender ? `, ${esc(st.gender)}` : ''}</p></div>
+        <p>${esc(cap(raceTitle))}, ${res.age ? esc(res.age.title.toLowerCase()) : 'возраст не выбран'}${res.ageStart && res.ageStart !== res.age ? ` (с ур. ${fmt(res.ageAtLevel)}; при создании — ${esc(res.ageStart.title.toLowerCase())})` : res.agePct ? ` (${signed(res.agePct)}% от среднего уровня)` : ''}${st.player ? `, игрок: ${esc(st.player)}` : ''}${st.gender ? `, ${esc(st.gender)}` : ''}</p></div>
         <dl class="sh-badges">
           <div><dt>Уровень</dt><dd>${fmt(res.level)}</dd></div>
           <div><dt>ОД в ход</dt><dd>${R.odText(d)}</dd></div>

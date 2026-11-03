@@ -197,11 +197,11 @@
         <datalist id="monsterList">${A.map(c => `<option value="${esc(c.n)}">`).join('')}</datalist>
         <p class="muted small">Боссы и легенды исключены. Список — лист «Существа» (${A.length}).</p>`;
     } else if (rule.kind === 'ghost') {
-      const maxLvl = res.age ? res.level : race.lvl;
+      const maxLvl = res.ageStart ? res.level : race.lvl;
       const fit = A.filter(c => R.roundLevel(c.lvl) <= maxLvl).sort((x, y) => y.lvl - x.lvl);
       html += `<input type="text" list="ghostList" data-bind="ancestor" data-rerender value="${esc(st.ancestor)}" placeholder="Начните вводить название существа" aria-label="Призрак-помощник">
         <datalist id="ghostList">${fit.map(c => `<option value="${esc(c.n)}">ур. ${fmt(R.roundLevel(c.lvl))}</option>`).join('')}</datalist>
-        <p class="muted small">Существа не выше уровня персонажа (сейчас ${fmt(maxLvl)}${res.age ? '' : ' — средний уровень расы; уточнится после выбора возраста'}): ${fit.length} из ${A.length}. Боссы и легенды исключены.</p>`;
+        <p class="muted small">Существа не выше уровня персонажа (сейчас ${fmt(maxLvl)}${res.ageStart ? '' : ' — средний уровень расы; уточнится после выбора возраста'}): ${fit.length} из ${A.length}. Боссы и легенды исключены.</p>`;
     } else {
       html += select('ancestor', opts, st.ancestor);
     }
@@ -248,8 +248,8 @@
       </button>`).join('');
     let html = `<div class="age-grid">${cards}</div>`;
     if (!race) return html + '<div class="card empty">Сначала выберите расу: возраст считается от её среднего уровня.</div>';
-    if (!res.age) return html;
-    const rg = C.AGE_RANGES[res.age.id];
+    if (!res.ageStart) return html;
+    const rg = C.AGE_RANGES[res.ageStart.id];
     html += `<div class="card age-calc">`;
     if (rg.min !== rg.max) {
       html += `<label class="range-label">Отклонение от среднего уровня: <output id="agePctOut">${signed(res.agePct)}%</output>
@@ -258,7 +258,7 @@
     } else if (rg.min === 0) {
       html += '<p>Взрослый — ровно средний уровень расы, без изменения очков.</p>';
     } else {
-      html += `<p>${esc(res.age.title)} — фиксированно <strong>${signed(rg.min)}%</strong> к среднему уровню расы${res.age.id === 'старец' ? ' (это верхняя граница возраста)' : ''}.</p>`;
+      html += `<p>${esc(res.ageStart.title)} — фиксированно <strong>${signed(rg.min)}%</strong> к среднему уровню расы${res.ageStart.id === 'старец' ? ' (это верхняя граница возраста)' : ''}.</p>`;
     }
     html += `<div id="ageLive">${ageLive(res)}</div></div>`;
     return html;
@@ -272,7 +272,7 @@
       <div><dt>${pts >= 0 ? 'Доп. очки характеристик' : 'Очки к снятию'}</dt><dd>${pts >= 0 ? '+' : '−'}${fmt(Math.abs(pts))}</dd></div>
       <div><dt>Очки талантов</dt><dd>${res.talentPoints}</dd></div>
     </dl>
-    <p class="muted small">Уровень: ${fmt(res.lvl0)} × ${signed(res.agePct)}% → ${fmt(res.level)} (округляется до целого). Очки: 3 × (${fmt(res.level)} − ${fmt(res.lvl0)}) = ${signed(pts)}; всего характеристик станет на ${fmt(Math.abs(pts))} ${pts >= 0 ? 'больше' : 'меньше'} расовых. Таланты: ⌊${fmt(res.level)} / 5⌋ = ${res.talentPoints}. ОД от возраста: ${signed(res.age.od)}. Черт: до ${res.age.traits} положительных и ${res.age.traits} отрицательных.</p>`;
+    <p class="muted small">Уровень: ${fmt(res.lvl0)} × ${signed(res.agePct)}% → ${fmt(res.level)} (округляется до целого). Очки: 3 × (${fmt(res.level)} − ${fmt(res.lvl0)}) = ${signed(pts)}; всего характеристик станет на ${fmt(Math.abs(pts))} ${pts >= 0 ? 'больше' : 'меньше'} расовых. Таланты: ⌊${fmt(res.level)} / 5⌋ = ${res.talentPoints}. ОД от возраста: ${signed(res.ageStart.od)}. Черт: до ${res.ageStart.traits} положительных и ${res.ageStart.traits} отрицательных.</p>`;
   }
 
   // ------------------------------------------------------------ шаг 3: дар / благословение / болезнь
@@ -399,7 +399,7 @@
   // ------------------------------------------------------------ шаг 4: черты
 
   function traitsStep(st, res) {
-    const ti = res.traits, age = res.age;
+    const ti = res.traits, age = res.ageStart;
     let html = '';
     if (!age) return '<div class="card empty">Сначала выберите возраст: от него зависит, сколько черт можно взять.</div>';
     if (age.traits === 0) html += '<p class="issue err">Ребёнок «не может брать положительные и отрицательные черты на старте».</p>';
@@ -466,7 +466,7 @@
   function statsStep(st, res) {
     const race = res.race;
     if (!race) return '<div class="card empty">Сначала выберите расу.</div>';
-    if (!res.age) return '<div class="card empty">Сначала выберите возраст — от него зависит количество очков.</div>';
+    if (!res.ageStart) return '<div class="card empty">Сначала выберите возраст — от него зависит количество очков.</div>';
     const pts = res.agePoints, left = pts - res.allocSum;
     const stepSize = +App.ui.allocStep || 1;
     let html = `<div class="alloc-head">
@@ -521,7 +521,7 @@
   // ------------------------------------------------------------ шаг 6: таланты
 
   function talentsStep(st, res) {
-    if (!res.race || !res.age) return '<div class="card empty">Сначала выберите расу и возраст.</div>';
+    if (!res.race || !res.ageStart) return '<div class="card empty">Сначала выберите расу и возраст.</div>';
     const left = res.talentPoints - res.talentSpent;
     let html = `<div class="alloc-head"><p>«За каждые 5 имеющихся уровней персонаж получает 1 очко таланта»: ⌊${fmt(res.level)} / 5⌋ = <strong>${res.talentPoints}</strong>.</p>
       <p class="left ${left ? 'attn' : 'done'}">${left > 0 ? `Осталось: ${left}` : left < 0 ? `Перерасход: ${-left}` : 'Все очки распределены'}</p></div>`;
