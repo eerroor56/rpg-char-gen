@@ -4,6 +4,7 @@ import { act, cap, heroList, newHeroId, openInWizard, toast, useHeroes, useLegac
 import { Icon } from '../../ui/Icon';
 import { fmt, signed, type Any } from '../create/kit';
 import DevTab from './DevTab';
+import FxTab from './FxTab';
 import { Sheet } from '../sheet/Sheet';
 import { sheetOpts } from '../create/Summary';
 
@@ -56,7 +57,7 @@ function HeroView({ id }: { id: string }) {
     };
   });
   useEffect(() => () => { if (App.devCtx && App.devCtx.record && App.devCtx.record.id === id) App.devCtx = null; }, [App, id]);
-  useLegacyCss(tab === 'gear' || tab === 'fx');
+  useLegacyCss(tab === 'gear');
   useEffect(() => { document.title = `${h.state?.name || 'Безымянный герой'} — Мастерская героя`; }, [h.state?.name]);
 
   const nfx = (rec.gm.effects || []).length;
@@ -93,6 +94,7 @@ function HeroView({ id }: { id: string }) {
   let body;
   if (tab === 'dev') body = <DevTab key={id} rec={rec} v={v} />;
   else if (tab === 'log') body = <Journal log={log} />;
+  else if (tab === 'fx') body = <FxTab rec={rec} v={v} gm />;
   else if (tab === 'sheet') body = <div className="wstack">
     <div className="cs-tools no-print">
       <button type="button" className="btn small" onClick={() => window.print()}>Печать / PDF</button>
@@ -103,7 +105,7 @@ function HeroView({ id }: { id: string }) {
   else {
     const o = { record: rec, perms: { gm: true, owner: true } };
     const I = window.Inv;
-    const html = !I ? '<div class="card empty">Раздел не загрузился.</div>' : tab === 'gear' ? I.gearTab(o, v) : I.effectsTab(o, v);
+    const html = !I ? '<div class="card empty">Раздел не загрузился.</div>' : I.gearTab(o, v);
     body = <LegacyPane html={html} />;
   }
 
