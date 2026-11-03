@@ -8,7 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 type Any = any;
 declare global {
   interface Window {
-    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any;
+    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any;
     GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>;
   }
 }
@@ -18,12 +18,47 @@ export const HEROES_KEY = 'hero-workshop:heroes';
 export const OLD_SITE = 'https://rpg-char-gen.web.app/';
 
 let ready = false;
-/** правила и данные таблицы — как App.start() прежнего сайта; пароль ГМ, если запомнен */
+/** правила и данные таблицы, черновик мастера, обработчики шагов — как App.start() прежнего сайта (без его разметки) */
 export function initLegacy() {
   if (ready) return;
   ready = true;
+  const App = window.App;
   window.Rules.init(window.GAME_DATA);
-  if (window.GMLock) window.GMLock.auto();
+  App.state = App.migrate(App.store.get(DRAFT_KEY, null)) || window.Rules.newState();
+  App.editingId = App.store.get(DRAFT_KEY + ':id', null);
+  App.step = App.step || 'race';
+  App.recompute();
+  App.bind();                 // нажатия и ввод в шагах мастера (data-act, data-bind) — на document.body
+  // мастер пересчитал героя — сообщить новой оболочке (шаги, сводка)
+  const recompute = App.recompute;
+  App.recompute = function (...a: unknown[]) { const r = recompute.apply(this, a); window.dispatchEvent(new Event('mh-create')); return r; };
+  if (window.GMLock) window.GMLock.auto().then((ok: boolean) => { if (ok) App.recompute(); });
+}
+const DRAFT_KEY = 'hero-workshop:draft';
+
+// ------------------------------------------------------------ мастер создания (шаги — App.steps прежнего сайта)
+export type Step = { id: string; title: string; short?: string; lead?: string };
+let createTick = 0;
+function subscribeCreate(cb: () => void) {
+  const f = () => { createTick++; cb(); };
+  window.addEventListener('mh-create', f);
+  return () => window.removeEventListener('mh-create', f);
+}
+export function useCreate() {
+  useSyncExternalStore(subscribeCreate, () => createTick);
+  const App = window.App;
+  return { state: App.state, res: App.res, step: App.step as string, steps: App.steps as Step[], editingId: App.editingId as string | null };
+}
+/** ошибки и предупреждения шага: ok — без ошибок (предупреждения не мешают) */
+export function stepStatus(res: Any, id: string) {
+  const errs = (res.errors || []).filter((e: Any) => e.step === id).length;
+  const warns = (res.warnings || []).filter((e: Any) => e.step === id).length;
+  return { errs, warns };
+}
+/** нажать кнопку прежнего мастера (App.actions) без разметки — например «Случайно» */
+export function act(name: string, dataset: Record<string, string> = {}) {
+  const App = window.App, f = App.actions[name];
+  if (f) f.call(App, { dataset, closest: () => null }, {});
 }
 
 export const toast = (text: string) => window.App.toast(text);

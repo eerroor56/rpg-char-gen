@@ -5,11 +5,12 @@ import Home from './pages/Home';
 import Heroes from './pages/Heroes';
 import Support from './pages/Support';
 import Moving from './pages/Moving';
+import Create from './pages/Create';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
 export const SECTIONS: { id: string; title: string; short: string; icon: IconName; old?: boolean; lead: string }[] = [
   { id: 'home', title: 'Главная', short: 'Главная', icon: 'home', lead: 'С чего начать' },
-  { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', old: true, lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
+  { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
   { id: 'heroes', title: 'Мои герои', short: 'Герои', icon: 'users', lead: 'Ваши персонажи — в облаке, на любом устройстве' },
   { id: 'game', title: 'Игра', short: 'Игра', icon: 'dice', old: true, lead: 'Кампании с ГМ: сессии, журнал, поле боя' },
   { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', old: true, lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
@@ -31,6 +32,7 @@ export default function App() {
   if (cur.id === 'home') page = <Home auth={auth} />;
   else if (cur.id === 'heroes') page = <Heroes auth={auth} />;
   else if (cur.id === 'support') page = <Support />;
+  else if (cur.id === 'create') page = <Create />;
   else page = <Moving section={cur} />;
 
   return (

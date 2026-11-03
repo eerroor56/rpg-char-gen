@@ -12,4 +12,5 @@ const copy = (from, to) => {
 copy('data/', 'data/');
 copy('img/', 'img/');
 copy('js/', 'legacy/js/');
-console.log('sync-legacy: data, img, js → public/');
+copy('css/', 'legacy/css/');   // стили шагов мастера создания (пока шаги из прежнего сайта)
+console.log('sync-legacy: data, img, js, css → public/');

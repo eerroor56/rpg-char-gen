@@ -14,6 +14,8 @@
   <body>
     <div id="root"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <!-- нужны обработчикам прежнего сайта (App.bind) -->
+    <div hidden><button id="ledgerToggle" type="button"></button><button id="toTop" type="button"></button><input type="file" id="importFile" accept="application/json,.json" /></div>
 
     <!-- логика прежнего сайта: данные таблицы, правила, расчёт персонажа, облако (копируются scripts/sync-legacy.mjs) -->
     <script src="data/data.js"></script>
