@@ -145,6 +145,7 @@
           && JSON.stringify(after.members) === JSON.stringify(before.members.filter(x => x !== uid));
         return gmEdit || joining || renaming || leaving;
       }
+      if (seg[0] === 'users' && seg[2] === 'heroes') return seg[1] === uid;
       if (seg[0] === 'joinCodes') {
         if (kind === 'read') return true;
         if (kind === 'create') { const c = docsAfter['campaigns/' + after.cid]; return after.gm === uid && !!c && c.gm === uid && c.code === seg[1]; }
@@ -477,6 +478,16 @@
     watchEvents(cid, cb, err, o) {
       const q = o && o.chid ? { where: ['chid', '==', o.chid] } : o && o.session ? { where: ['session', '==', o.session] } : { orderBy: ['ms', 'desc'], limit: (o && o.limit) || 60 };
       return A.watchQuery(`campaigns/${cid}/events`, q, rows => cb(rows.sort((a, b) => (b.ms || 0) - (a.ms || 0))), err);
+    },
+    // ---- «Мои герои» в облаке (js/herosync.js): users/{uid}/heroes/{id} — герой целиком строкой JSON (data),
+    // удалённый — пометкой deleted (чтобы не вернулся с другого устройства); читать и писать может только сам игрок
+    watchHeroes(cb, err) { return A.watchQuery(`users/${this.uid()}/heroes`, {}, cb, err); },
+    putHeroes(docs) {
+      const uid = this.uid();
+      const ops = docs.map(d => ({ type: 'set', path: `users/${uid}/heroes/${d.id}`, data: d }));
+      const parts = [];
+      for (let i = 0; i < ops.length; i += 400) parts.push(A.batch(ops.slice(i, i + 400)));
+      return Promise.all(parts);
     },
     watchSessions(cid, cb, err) { return A.watchQuery(`campaigns/${cid}/sessions`, { orderBy: ['n', 'desc'], limit: 50 }, cb, err); },
     watchPrivate(cid, pid, cb, err) { return A.watchDoc(`campaigns/${cid}/private/${pid}`, cb, err); },

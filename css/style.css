@@ -1564,3 +1564,10 @@ body.modal-open { overflow: hidden; }
 .dev-pic-ctl { margin: 4px 0 0; }
 .dev-pic-ctl label { color: var(--brass); cursor: pointer; }
 .dev-age { margin: 10px 0 0; }
+/* «Мои герои»: где хранятся (облако или этот браузер) */
+.sync-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 14px; padding: 10px 14px; border-radius: var(--radius-m); border: 1px solid var(--line-soft); background: var(--ink-2); }
+.sync-line > span:not(.sync-ic) { flex: 1 1 260px; }
+.sync-line.ok { border-color: rgba(103, 188, 167, .45); background: rgba(103, 188, 167, .08); }
+.sync-line.bad { border-color: rgba(224, 103, 92, .5); background: rgba(224, 103, 92, .08); }
+.sync-ic { font-size: 1.3rem; color: #8fd3ff; }
+.sync-line.ok .sync-ic { color: var(--ok); }

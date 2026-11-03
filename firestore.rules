@@ -70,6 +70,11 @@ service cloud.firestore {
     }
 
     // ---- персонажи
+    // ---- «Мои герои» в облаке: свои герои видит и меняет только сам игрок
+    match /users/{uid}/heroes/{hid} {
+      allow read, write: if signedIn() && me() == uid;
+    }
+
     match /campaigns/{cid}/characters/{chid} {
       // игрок не трогает то, что выдаёт ГМ (gm), свои ХП, МП, броню и зоркость в бою (vit — меняет ГМ)
       // и не меняет лист создания после утверждения

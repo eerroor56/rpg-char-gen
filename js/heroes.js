@@ -36,10 +36,20 @@
       perms: App.devCtx.perms,
       crumbs: '<a href="#heroes">Мои герои</a>',
       sub: `${race ? esc(cap(race.name)) + ', ' : ''}ур. ${fmt(v.res.level)}${v.lv.levels ? ` (при создании ${fmt(v.res0.level)})` : ''}`,
-      notice: '<p class="muted small">Здесь вы сами себе ГМ: опыт, общины и добычу вписываете сами, всё хранится в этом браузере. Чтобы развитие вёл ГМ, добавьте героя в кампанию во вкладке «Игра».</p>',
+      notice: `<p class="muted small">Здесь вы сами себе ГМ: опыт, общины и добычу вписываете сами${window.HeroSync && window.HeroSync.status().on ? ', всё сохраняется в облаке' : ', всё хранится в этом браузере (войдите в аккаунт — перенесётся в облако)'}. Чтобы развитие вёл ГМ, добавьте героя в кампанию во вкладке «Игра».</p>`,
       actions: `<button type="button" class="btn" data-act="openHero" data-id="${esc(id)}">Лист создания в мастере</button>`,
       log: (h.log || []).slice().reverse()
     });
+  }
+
+  // где хранятся герои: в облаке (вошли в аккаунт — js/herosync.js) или пока только в этом браузере
+  function syncLine(n) {
+    const s = window.HeroSync ? window.HeroSync.status() : { configured: false };
+    if (!s.configured) return '<p class="muted">Персонажи хранятся в этом браузере. Чтобы перенести их или показать ГМ, скачайте файл или отправьте ссылку с листа персонажа.</p>';
+    if (s.err) return `<div class="sync-line bad"><b>Облако недоступно:</b> ${esc(s.err)}. Герои пока хранятся в этом браузере — ничего не потеряно, синхронизация продолжится, когда облако ответит.</div>`;
+    if (s.on) return `<div class="sync-line ok"><span class="sync-ic" aria-hidden="true">☁</span><span>${s.loading ? 'Сверяю героев с облаком…' : `В облаке: <b>${n}</b> — видны на любом устройстве, где вы вошли${s.name ? ` как <b>${esc(s.name)}</b>` : ''}. Изменения сохраняются сами.`}</span></div>`;
+    return `<div class="sync-line"><span class="sync-ic" aria-hidden="true">☁</span><span>Сейчас герои хранятся только в этом браузере. <b>Войдите в аккаунт</b> — они перенесутся в облако и будут видны с любого устройства.</span>
+      <a class="btn small primary" href="#game">Войти</a></div>`;
   }
 
   function render(el) {
@@ -55,7 +65,7 @@
           <button type="button" class="btn" data-act="importHero">Загрузить файл</button>
           ${heroes.length ? '<button type="button" class="btn" data-act="exportAll">Скачать всех</button>' : ''}
         </div></div>
-      <p class="muted">Персонажи хранятся только в этом браузере. Чтобы перенести их или показать ГМ, скачайте файл или отправьте ссылку с листа персонажа.</p>
+      ${syncLine(heroes.length)}
       ${heroes.length > 4 ? `<input type="search" data-ui="heroQ" data-ui-target="heroes" value="${esc(App.ui.heroQ || '')}" placeholder="Поиск по имени или расе" aria-label="Поиск героя">` : ''}
       ${rows.length ? `<ul class="hero-list">${rows.map(h => {
         const res = window.Dev.compute(JSON.parse(JSON.stringify(h))).res;
