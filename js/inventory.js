@@ -1502,5 +1502,8 @@
     }
   });
 
-  window.Inv = { gearTab, effectsTab, sheetGear, sheetExtra, equipInto, incoming };
+  window.Inv = { gearTab, effectsTab, sheetGear, sheetExtra, equipInto, incoming,
+    // для новой версии (React рисует экипировку, рюкзак, карточку предмета и кошелёк сам, остальное — отсюда)
+    transferCard, giveRow, spellCard, addCard, stationsCard, makeCard,
+    priceOf, boostHtml, gunStats, gunDmgParts, ingEffects, knownProps, tInfo, roleKind, WEARABLE_ANY };
 })();

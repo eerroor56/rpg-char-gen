@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { act, cap, heroList, newHeroId, openInWizard, toast, useHeroes, useLegacyCss, useSync, writeHeroes, type Hero } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt, signed, type Any } from '../create/kit';
 import DevTab from './DevTab';
 import FxTab from './FxTab';
+import GearTab from './GearTab';
 import { Sheet } from '../sheet/Sheet';
 import { sheetOpts } from '../create/Summary';
 
@@ -102,12 +103,7 @@ function HeroView({ id }: { id: string }) {
     </div>
     <Sheet st={v.state} res={v.res0} opts={sheetOpts(rec, v)} />
   </div>;
-  else {
-    const o = { record: rec, perms: { gm: true, owner: true } };
-    const I = window.Inv;
-    const html = !I ? '<div class="card empty">Раздел не загрузился.</div>' : I.gearTab(o, v);
-    body = <LegacyPane html={html} />;
-  }
+  else body = <GearTab rec={rec} v={v} perms={{ gm: true, owner: true }} />;
 
   return (
     <div className="page hp">
@@ -149,16 +145,6 @@ function HeroView({ id }: { id: string }) {
       <div className="hp-body">{body}</div>
     </div>
   );
-}
-
-/** разметка прежнего сайта; обновляется, только когда изменилась (иначе терялся бы фокус в его полях) */
-function LegacyPane({ html }: { html: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const last = useRef('');
-  useLayoutEffect(() => {
-    if (ref.current && html !== last.current) { ref.current.innerHTML = html; last.current = html; }
-  });
-  return <div ref={ref} className="legacy-pane" />;
 }
 
 function Journal({ log }: { log: Any[] }) {
