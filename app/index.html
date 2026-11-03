@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Мастерская героя</title>
+    <meta name="description" content="Конструктор персонажа, справочник по таблицам игры и онлайн-кампании с ГМ" />
+    <meta name="theme-color" content="#14111f" />
+    <link rel="icon" href="img/app/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Forum&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- логика прежнего сайта: данные таблицы, правила, расчёт персонажа, облако (копируются scripts/sync-legacy.mjs) -->
+    <script src="data/data.js"></script>
+    <script src="data/images.js"></script>
+    <script src="legacy/js/config.js"></script>
+    <script src="legacy/js/rules.js"></script>
+    <script src="legacy/js/ui.js"></script>
+    <script src="legacy/js/combo.js"></script>
+    <script src="legacy/js/lock.js"></script>
+    <script src="legacy/js/random.js"></script>
+    <script src="legacy/js/steps.js"></script>
+    <script src="legacy/js/sheet.js"></script>
+    <script src="legacy/js/heroes.js"></script>
+    <script src="legacy/js/craft.js"></script>
+    <script src="legacy/js/brew.js"></script>
+    <script src="legacy/js/progress.js"></script>
+    <script src="legacy/js/inventory.js"></script>
+    <script src="legacy/js/firebase-config.js"></script>
+    <script src="legacy/js/cloud.js"></script>
+    <script src="legacy/js/herosync.js"></script>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

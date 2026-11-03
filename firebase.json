@@ -9,6 +9,8 @@
       "firestore.rules",
       "**/.*",
       "**/node_modules/**",
+      "app/**",
+      "firebase.react.json",
       "tools/**",
       "tests/**",
       "README.md",
