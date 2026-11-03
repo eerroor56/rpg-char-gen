@@ -1571,3 +1571,10 @@ body.modal-open { overflow: hidden; }
 .sync-line.bad { border-color: rgba(224, 103, 92, .5); background: rgba(224, 103, 92, .08); }
 .sync-ic { font-size: 1.3rem; color: #8fd3ff; }
 .sync-line.ok .sync-ic { color: var(--ok); }
+/* старый адрес (GitHub Pages): плашка «Мастерская переехала» (js/moved.js) */
+.moved-bar { position: sticky; top: 56px; z-index: 19; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 24px;
+  background: linear-gradient(90deg, rgba(214, 168, 92, .22), rgba(214, 168, 92, .1)); border-bottom: 1px solid rgba(214, 168, 92, .5); color: var(--text); }
+.moved-bar > span { flex: 1 1 320px; }
+.moved-bar a:not(.btn) { color: #f3d58f; font-weight: 700; }
+.moved-bar a.btn { text-decoration: none; }
+@media (max-width: 720px) { .moved-bar { top: 50px; padding: 8px 16px; font-size: .92rem; } }
