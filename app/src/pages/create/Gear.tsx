@@ -91,7 +91,7 @@ function WeaponCard({ w }: { w: Any }) {
       <KV k="Гнёзда / руки">{w.w.slots ?? '—'} / {w.w.hands ?? '—'}</KV>
       <KV k="Изготовить самому">{typeof w.w.skill === 'number' ? `ремесло ${w.w.skill}` : '—'}</KV>
     </dl>
-    <ul className="fx-list">{w.w.fx && <li><b>Свойство:</b> {w.w.fx}</li>}<Effect e={w.matEffect} label="Материал в оружии" /></ul>
+    <ul className="wfx">{w.w.fx && <li><b>Свойство:</b> {w.w.fx}</li>}<Effect e={w.matEffect} label="Материал в оружии" /></ul>
   </>;
 }
 
@@ -106,7 +106,7 @@ function ArmorCard({ a }: { a: Any }) {
       <KV k="Гнёзда для камней">{a.a.slots ?? '—'}</KV>
       <KV k="Изготовить самому">{typeof a.a.skill === 'number' ? `ремесло ${a.a.skill}` : '—'}</KV>
     </dl>
-    <ul className="fx-list">
+    <ul className="wfx">
       {a.a.fx && <li>{a.a.fx}</li>}
       <Effect e={a.matEffect} label="Материал в броне" />
       {a.statFx && (a.statFx.l || a.statFx.hpRegen) ? <li className="muted">Учтено: {a.statFx.l ? `ловкость ${signed(a.statFx.l)} ` : ''}{a.statFx.hpRegen ? `реген ХП ${signed(a.statFx.hpRegen)}` : ''}</li> : null}
@@ -136,7 +136,7 @@ function ItemSlot({ st, i }: { st: Any; i: number }) {
         {it.kind === 'potion' && <>
           <Sel value={it.effect} onChange={v => set(`items.${i}.effect`, v)} label="Эффект зелья" options={[{ v: '', t: '— эффект —' }, ...Rr.POTION_TYPES.map((p: string) => ({ v: p, t: p }))]} />
           <input type="text" value={it.note || ''} onChange={e => set(`items.${i}.note`, e.target.value, true)} placeholder="уточнение (напр. «огонь»)" aria-label="Уточнение зелья" />
-          <label className="inline">Сила, е <Stepper value={+it.power || 0} min={0} max={Cc.POTION_MAX} step={5} label="Сила зелья" onChange={v => set(`items.${i}.power`, v)} /></label>
+          <label className="winline">Сила, е <Stepper value={+it.power || 0} min={0} max={Cc.POTION_MAX} step={5} label="Сила зелья" onChange={v => set(`items.${i}.power`, v)} /></label>
         </>}
       </div>
     </div>

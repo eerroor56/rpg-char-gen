@@ -159,7 +159,7 @@ export function Search({ value, onChange, placeholder }: { value: string; onChan
 /** переключатель вкладок-«таблеток» */
 export function Seg<T extends string>({ value, items, onChange, label }: { value: T; items: { id: T; t: ReactNode }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div className="seg" role="tablist" aria-label={label}>
+    <div className="wseg" role="tablist" aria-label={label}>
       {items.map(it => <button key={it.id} type="button" role="tab" aria-selected={value === it.id} className={value === it.id ? 'is-on' : ''} onClick={() => onChange(it.id)}>{it.t}</button>)}
     </div>
   );

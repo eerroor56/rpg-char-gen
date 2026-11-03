@@ -17,7 +17,7 @@ export default function Stats({ res }: StepProps) {
         {pts !== 0 && <p className={'left ' + (left ? 'attn' : 'done')}>{left ? `Осталось: ${signed(left)}` : 'Все очки распределены'}</p>}
         {pts !== 0 && (
           <div className="row">
-            {Math.abs(pts) > 10 && <label className="inline">Шаг <Sel value={step} onChange={v => setStep(+v)} options={[1, 5, 10, 25, 50].map(n => ({ v: n, t: String(n) }))} label="Шаг кнопок" /></label>}
+            {Math.abs(pts) > 10 && <label className="winline">Шаг <Sel value={step} onChange={v => setStep(+v)} options={[1, 5, 10, 25, 50].map(n => ({ v: n, t: String(n) }))} label="Шаг кнопок" /></label>}
             <button type="button" className="btn ghost small" onClick={() => act('allocEven')}>Поровну</button>
             <button type="button" className="btn ghost small" onClick={() => act('allocReset')}>Сбросить</button>
           </div>
