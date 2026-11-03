@@ -121,22 +121,58 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
     if (!tv || !tv.total || !info || !info.effect) return null;
     const max = info.max || t.max, now = Rr.skillAt(info.effect, tv.total), ch = chanceNow(info.effect, tv.total);
     return (
-      <li key={t.id}><b>{t.name}</b> <span className="chip">{fmt(tv.total)}{max ? ` / ${fmt(max)}` : ''}</span>
+      <li key={t.id}><div>
+        <b>{t.name}</b> <span className="chip">{fmt(tv.total)}{max ? ` / ${fmt(max)}` : ''}</span>
         <p className="small">{now !== info.effect ? now : info.effect}</p>
         {ch && <p className="small hp-now">сейчас: {ch}</p>}
         {info.top && <p className={'small' + (max && tv.total >= max ? '' : ' muted')}>на максимальном уровне: {info.top}</p>}
-      </li>
+      </div></li>
     );
   }).filter(Boolean);
   const list = joinable();
 
   return (
-    <div className="hp-grid">
+    <div className="wstack hp-dev">
       {(errs.length > 0 || warns.length > 0) && <div className="hp-wide wstack tight">
         {errs.map((e: Any, i: number) => <p key={'e' + i} className="issue err">{e.msg}</p>)}
         {warns.map((e: Any, i: number) => <p key={'w' + i} className="issue warn">{e.msg}</p>)}
       </div>}
 
+      {(p.statPoints > 0 || p.talentPoints > 0) && (
+        <section className="card wstack">
+          <h2>Очки за новые уровни</h2>
+          <p className="small">Характеристики: <b>{p.statSpent + sum(draft.alloc)} / {p.statPoints}</b> · таланты и пассивные навыки: <b>{(p.talentSpent || 0) + sum(draft.talents) + sum(draft.passives)} / {p.talentPoints || 0}</b></p>
+          <div className="hp-alloc">
+            {(statLeft > 0 || sum(draft.alloc) > 0) && <div className="hp-alloc-col">
+              <h3>Характеристики <span className="muted small">— осталось {Math.max(0, statLeft)}</span></h3>
+              {Rr.STATS.map((k: string) => <div key={k} className="hp-arow"><span>{Rr.STAT_NAMES[k]} <span className="muted">{fmt(res.stats[k])}</span></span>
+                <Stepper value={draft.alloc[k] || 0} min={0} max={(draft.alloc[k] || 0) + Math.max(0, statLeft)} label={Rr.STAT_NAMES[k]} onChange={n => setBox('alloc', k, n)} /></div>)}
+            </div>}
+            {(talLeft > 0 || sum(draft.talents) > 0) && <div className="hp-alloc-col">
+              <h3>Таланты <span className="muted small">— осталось {Math.max(0, talLeft)}</span></h3>
+              {Rr.TALENTS.map((t: Any) => {
+                const tv = res.talents[t.id], dv = draft.talents[t.id] || 0;
+                const room = tv.blocked ? 0 : tv.maxInv - tv.inv - dv;
+                return <div key={t.id} className="hp-arow"><span>{t.name} <span className="muted">{fmt(tv.total)}</span></span>
+                  <Stepper value={dv} min={0} max={dv + Math.max(0, Math.min(talLeft, room))} label={t.name} onChange={n => setBox('talents', t.id, n)} /></div>;
+              })}
+            </div>}
+            {pas.length > 0 && (talLeft > 0 || sum(draft.passives) > 0) && <div className="hp-alloc-col">
+              <h3>Пассивные навыки <span className="muted small">— те же очки талантов</span></h3>
+              {pas.map(x => {
+                const dv = draft.passives[x.name] || 0, room = x.max ? x.max - x.lvl - dv : 0;
+                return <div key={x.name} className="hp-arow"><span>{cap(x.name)} <span className="muted">{fmt(x.lvl + dv)}{x.max ? ` / ${fmt(x.max)}` : ' · не прокачивается'}</span></span>
+                  {x.max ? <Stepper value={dv} min={0} max={dv + Math.max(0, Math.min(talLeft, room))} label={x.name} onChange={n => setBox('passives', x.name, n)} /> : null}</div>;
+              })}
+            </div>}
+          </div>
+          {sum(draft.alloc) + sum(draft.talents) + sum(draft.passives) > 0
+            ? <div className="row"><button type="button" className="btn primary small" onClick={savePoints}>Сохранить распределение</button><button type="button" className="btn ghost small" onClick={() => setDraft(newDraft())}>Сбросить</button></div>
+            : statLeft <= 0 && talLeft <= 0 && <p className="muted small">Все очки распределены.</p>}
+        </section>
+      )}
+
+      <div className="hp-cols">
       <section className="card wstack">
         <h2>Уровень и опыт</h2>
         <div className="hp-level">
@@ -173,40 +209,6 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
           <button type="button" className="btn small" onClick={karma}>Изменить</button>
         </div>
       </section>
-
-      {(p.statPoints > 0 || p.talentPoints > 0) && (
-        <section className="card wstack hp-wide">
-          <h2>Очки за новые уровни</h2>
-          <p className="small">Характеристики: <b>{p.statSpent + sum(draft.alloc)} / {p.statPoints}</b> · таланты и пассивные навыки: <b>{(p.talentSpent || 0) + sum(draft.talents) + sum(draft.passives)} / {p.talentPoints || 0}</b></p>
-          <div className="hp-alloc">
-            {(statLeft > 0 || sum(draft.alloc) > 0) && <div className="hp-alloc-col">
-              <h3>Характеристики <span className="muted small">— осталось {Math.max(0, statLeft)}</span></h3>
-              {Rr.STATS.map((k: string) => <div key={k} className="hp-arow"><span>{Rr.STAT_NAMES[k]} <span className="muted">{fmt(res.stats[k])}</span></span>
-                <Stepper value={draft.alloc[k] || 0} min={0} max={(draft.alloc[k] || 0) + Math.max(0, statLeft)} label={Rr.STAT_NAMES[k]} onChange={n => setBox('alloc', k, n)} /></div>)}
-            </div>}
-            {(talLeft > 0 || sum(draft.talents) > 0) && <div className="hp-alloc-col">
-              <h3>Таланты <span className="muted small">— осталось {Math.max(0, talLeft)}</span></h3>
-              {Rr.TALENTS.map((t: Any) => {
-                const tv = res.talents[t.id], dv = draft.talents[t.id] || 0;
-                const room = tv.blocked ? 0 : tv.maxInv - tv.inv - dv;
-                return <div key={t.id} className="hp-arow"><span>{t.name} <span className="muted">{fmt(tv.total)}</span></span>
-                  <Stepper value={dv} min={0} max={dv + Math.max(0, Math.min(talLeft, room))} label={t.name} onChange={n => setBox('talents', t.id, n)} /></div>;
-              })}
-            </div>}
-            {pas.length > 0 && (talLeft > 0 || sum(draft.passives) > 0) && <div className="hp-alloc-col">
-              <h3>Пассивные навыки <span className="muted small">— те же очки талантов</span></h3>
-              {pas.map(x => {
-                const dv = draft.passives[x.name] || 0, room = x.max ? x.max - x.lvl - dv : 0;
-                return <div key={x.name} className="hp-arow"><span>{cap(x.name)} <span className="muted">{fmt(x.lvl + dv)}{x.max ? ` / ${fmt(x.max)}` : ' · не прокачивается'}</span></span>
-                  {x.max ? <Stepper value={dv} min={0} max={dv + Math.max(0, Math.min(talLeft, room))} label={x.name} onChange={n => setBox('passives', x.name, n)} /> : null}</div>;
-              })}
-            </div>}
-          </div>
-          {sum(draft.alloc) + sum(draft.talents) + sum(draft.passives) > 0
-            ? <div className="row"><button type="button" className="btn primary small" onClick={savePoints}>Сохранить распределение</button><button type="button" className="btn ghost small" onClick={() => setDraft(newDraft())}>Сбросить</button></div>
-            : statLeft <= 0 && talLeft <= 0 && <p className="muted small">Все очки распределены.</p>}
-        </section>
-      )}
 
       <section className="card wstack">
         <h2>Фракции, гильдии, религия</h2>
@@ -272,6 +274,7 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
         </Field>
         {notes !== null && notes !== (rec.notes || '') && <div className="row"><button type="button" className="btn small primary" onClick={saveNotes}>Сохранить заметки</button><button type="button" className="btn ghost small" onClick={() => setNotes(null)}>Отменить</button></div>}
       </section>
+      </div>
     </div>
   );
 }

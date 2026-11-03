@@ -14,8 +14,8 @@ export const SECTIONS: { id: string; title: string; short: string; icon: IconNam
   { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
   { id: 'heroes', title: 'Мои герои', short: 'Герои', icon: 'users', lead: 'Ваши персонажи — в облаке, на любом устройстве' },
   { id: 'game', title: 'Игра', short: 'Игра', icon: 'dice', old: true, lead: 'Кампании с ГМ: сессии, журнал, поле боя' },
-  { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', old: true, lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
   { id: 'world', title: 'Мир', short: 'Мир', icon: 'globe', old: true, lead: 'Карта, уровни мира, места' },
+  { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', old: true, lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
   { id: 'rules', title: 'Как считается', short: 'Правила', icon: 'scale', old: true, lead: 'Формулы и решения по спорным местам' },
   { id: 'support', title: 'Поддержать', short: 'Поддержать', icon: 'heart', lead: 'СБП, USDT и TON, Telegram' },
 ];
