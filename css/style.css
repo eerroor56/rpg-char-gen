@@ -910,8 +910,8 @@ textarea { width: 100%; }
 .bt-info { display: flex; flex-direction: column; gap: 6px; }
 .bt-info.is-hid { border-style: dashed; border-color: rgba(224, 103, 92, .6); }
 .bt-info-head { display: flex; gap: 10px; align-items: center; }
-.bt-face { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; border: 3px solid hsl(var(--hue, 40) 70% 60%); background: hsl(var(--hue, 40) 35% 22%); color: #fff; font-weight: 700; }
-.bt-face img { width: 100%; height: 100%; object-fit: cover; }
+.bt-face { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; position: relative; border: 3px solid hsl(var(--hue, 40) 70% 60%); background: hsl(var(--hue, 40) 35% 22%); color: #fff; font-weight: 700; }
+.bt-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }   /* в сетке height: 100% не растягивал картинку — была узкой полоской */
 .bt-face.foe { border-color: #d34a4a; background: #4a1c1f; }
 .bt-face.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
 .bt-face.obj { border: 1px solid var(--line); background: var(--panel); padding: 5px; }

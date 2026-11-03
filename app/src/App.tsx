@@ -44,7 +44,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className="side" aria-label="Разделы">
+      <aside className="app-side" aria-label="Разделы">
         <a className="app-brand" href="#home"><Mark /><span>Мастерская героя</span></a>
         <nav className="side-nav">
           {SECTIONS.map(s => (
