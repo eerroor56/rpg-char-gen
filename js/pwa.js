@@ -8,7 +8,10 @@
   'use strict';
   const App = window.App;
   const oldHost = /\.github\.io$/i.test(location.hostname);
-  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  // открыто как приложение: окно приложения (любой режим) или запуск с иконки (start_url — ./?app=1; запоминается до закрытия)
+  if (/[?&]app=1(&|$)/.test(location.search)) { try { sessionStorage.setItem('mh-app', '1'); } catch (e) { /* noop */ } }
+  const standalone = () => ['standalone', 'minimal-ui', 'fullscreen', 'window-controls-overlay'].some(m => window.matchMedia(`(display-mode: ${m})`).matches)
+    || navigator.standalone === true || (() => { try { return sessionStorage.getItem('mh-app') === '1'; } catch (e) { return false; } })();
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let prompt = null;
 

@@ -1583,6 +1583,7 @@ body.modal-open { overflow: hidden; }
   border: 1px solid rgba(143, 211, 255, .5); background: rgba(143, 211, 255, .1); color: #bfe6ff; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .install-link svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .install-link:hover { border-color: #8fd3ff; color: #fff; }
+.install-link[hidden] { display: none; }      /* display: inline-flex иначе перебивает атрибут hidden */
 .install-link:not([hidden]) + .support-link { margin-left: 0; }
 @media (max-width: 720px) {
   .install-link { padding: 7px; gap: 0; }
