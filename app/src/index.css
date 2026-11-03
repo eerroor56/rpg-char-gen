@@ -653,3 +653,32 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
 .rules-doc th, .rules-doc td { padding: 8px 10px; text-align: left; vertical-align: top; border-top: 1px solid var(--line-soft); }
 .rules-doc thead th { background: var(--panel-2); color: var(--muted); border-top: 0; }
 .rules-doc tbody th { color: var(--brass-2); font-weight: 700; }
+
+/* ---------- левая панель: свернуть до значков */
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.side-top .app-brand { min-width: 0; }
+.side-top .app-brand span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-mini { position: absolute; top: 24px; right: -14px; z-index: 2; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+.side-mini .ic { width: 15px; height: 15px; }
+.side-mini:hover { color: var(--brass-2); border-color: var(--brass); }
+.app-side, .main { transition: width .18s ease, margin-left .18s ease; }
+.shell.is-mini { --side: 78px; }
+.is-mini .app-side { padding: 18px 10px; align-items: stretch; }
+.is-mini .side-top { justify-content: center; }
+.is-mini .app-brand { padding: 4px; justify-content: center; }
+.is-mini .app-brand span, .is-mini .side-link span, .is-mini .side-old, .is-mini .side-acc > span:not(.side-acc-ic) { display: none; }
+.is-mini .side-link { justify-content: center; padding: 11px 0; }
+.is-mini .side-link .ic { width: 1.4em; height: 1.4em; }
+.is-mini .side-acc { justify-content: center; padding: 8px 0; }
+@media (prefers-reduced-motion: reduce) { .app-side, .main { transition: none; } }
+
+/* ---------- широкие таблицы: стрелки «влево / вправо» */
+.rf-scroll { position: relative; }
+.rf-arrows { position: sticky; top: calc(50vh - 22px); height: 0; z-index: 4; pointer-events: none; }
+.rf-arrow { pointer-events: auto; position: absolute; top: 44px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; padding: 0 0 3px;
+  border: 1px solid var(--brass); background: rgba(34, 29, 59, .92); color: var(--brass-2); font: 400 1.9rem/1 var(--font-display); cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45); backdrop-filter: blur(4px); transition: background-color .15s ease, transform .12s ease; }
+.rf-arrow:hover { background: var(--brass); color: var(--brass-ink); }
+.rf-arrow:active { transform: scale(.94); }
+.rf-arrow.l { left: 8px; }
+.rf-arrow.r { right: 8px; }

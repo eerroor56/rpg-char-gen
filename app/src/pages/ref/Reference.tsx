@@ -148,16 +148,48 @@ function TableBlock({ id, b, rows, q }: { id: string; b: Block; rows: Row[]; q: 
 function Table({ b, rows, head }: { b: Block; rows: Row[]; head: ReactNode }) {
   const [lim, setLim] = useState(PAGE);
   return <>
-    <div className="rf-wrap">
+    <HScroll>
       <table className="rf-tbl">
         {b.cols && <thead>{head}</thead>}
         <tbody>{rows.slice(0, lim).map((r, i) => (
           <tr key={i}>{r.cells.map((c, j) => { const len = plain(c).length; return <td key={j} className={len > 70 ? 'long' : len > 25 ? 'mid' : undefined} dangerouslySetInnerHTML={{ __html: capHtml(c) }} />; })}</tr>
         ))}</tbody>
       </table>
-    </div>
+    </HScroll>
     {rows.length > lim && <button type="button" className="btn ghost small rf-more" onClick={() => setLim(l => l + PAGE * 2)}>Показать ещё ({rows.length - lim})</button>}
   </>;
+}
+
+/**
+ * широкая таблица: стрелки «влево / вправо» листают её, не уходя к полосе прокрутки внизу. Стрелки держатся посередине
+ * экрана, пока таблица видна (липкая полоса нулевой высоты), и появляются, только если в ту сторону есть что листать.
+ */
+function HScroll({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ l: false, r: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const upd = () => setEdge({ l: el.scrollLeft > 4, r: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+    upd();
+    el.addEventListener('scroll', upd, { passive: true });
+    const ro = new ResizeObserver(upd);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => { el.removeEventListener('scroll', upd); ro.disconnect(); };
+  }, []);
+  const go = (d: number) => { const el = ref.current; if (el) el.scrollBy({ left: d * Math.max(200, el.clientWidth * 0.8), behavior: 'smooth' }); };
+  return (
+    <div className="rf-scroll">
+      {(edge.l || edge.r) && (
+        <div className="rf-arrows">
+          {edge.l && <button type="button" className="rf-arrow l" onClick={() => go(-1)} aria-label="Прокрутить таблицу влево" title="Влево">‹</button>}
+          {edge.r && <button type="button" className="rf-arrow r" onClick={() => go(1)} aria-label="Прокрутить таблицу вправо" title="Вправо">›</button>}
+        </div>
+      )}
+      <div ref={ref} className="rf-wrap">{children}</div>
+    </div>
+  );
 }
 
 function GridBlock({ b }: { b: Block }) {
@@ -165,7 +197,7 @@ function GridBlock({ b }: { b: Block }) {
     <section className="rf-block">
       <div className="rf-bhead"><h2>{b.title}</h2></div>
       {b.note && <p className="muted small">{window.App.sentCap(b.note)}</p>}
-      <div className="rf-wrap"><table className="rf-tbl grid"><tbody>{b.grid!.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table></div>
+      <HScroll><table className="rf-tbl grid"><tbody>{b.grid!.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table></HScroll>
     </section>
   );
 }

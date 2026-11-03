@@ -24,12 +24,16 @@ export const SECTIONS: { id: string; title: string; short: string; icon: IconNam
   { id: 'support', title: 'Поддержать', short: 'Поддержать', icon: 'heart', lead: 'СБП, USDT и TON, Telegram' },
 ];
 const MOBILE_MAIN = ['home', 'create', 'heroes', 'game'];
+const MINI_KEY = 'hero-workshop:side-mini';
 
 export default function App() {
   initLegacy();
   const { tab, rest } = useRoute();
   const auth = useAuth();
   const [more, setMore] = useState(false);
+  // левая панель свёрнута до значков — запоминается в этом браузере
+  const [mini, setMini] = useState(() => { try { return localStorage.getItem(MINI_KEY) === '1'; } catch { return false; } });
+  const toggleMini = () => setMini(m => { try { localStorage.setItem(MINI_KEY, m ? '0' : '1'); } catch { /* noop */ } return !m; });
   const cur = SECTIONS.find(s => s.id === tab) || SECTIONS[0];
   window.App.tab = cur.id;   // прежний сайт перерисовывает «Игру», только пока открыта она
   const heroId = cur.id === 'heroes' && rest[0] ? decodeURIComponent(rest[0]) : '';
@@ -49,12 +53,15 @@ export default function App() {
   else page = <Moving section={cur} />;
 
   return (
-    <div className="shell">
+    <div className={'shell' + (mini ? ' is-mini' : '')}>
       <aside className="app-side" aria-label="Разделы">
-        <a className="app-brand" href="#home"><Mark /><span>Мастерская героя</span></a>
+        <div className="side-top">
+          <a className="app-brand" href="#home" title="Мастерская героя"><Mark /><span>Мастерская героя</span></a>
+          <button type="button" className="side-mini" onClick={toggleMini} aria-pressed={mini} title={mini ? 'Развернуть панель' : 'Свернуть панель до значков'} aria-label={mini ? 'Развернуть панель' : 'Свернуть панель'}><Icon name={mini ? 'expand' : 'collapse'} /></button>
+        </div>
         <nav className="side-nav">
           {SECTIONS.map(s => (
-            <a key={s.id} href={'#' + s.id} className={`side-link${s.id === cur.id ? ' is-on' : ''}${s.id === 'support' ? ' is-love' : ''}`} aria-current={s.id === cur.id ? 'page' : undefined}>
+            <a key={s.id} href={'#' + s.id} className={`side-link${s.id === cur.id ? ' is-on' : ''}${s.id === 'support' ? ' is-love' : ''}`} title={mini ? s.title : undefined} aria-current={s.id === cur.id ? 'page' : undefined}>
               <Icon name={s.icon} /><span>{s.id === 'create' ? 'Создание' : s.title}</span>
               {s.old && <em className="side-old" title="Пока открывается в прежней версии">скоро</em>}
             </a>
@@ -96,7 +103,7 @@ function Mark() {
 function Account({ auth }: { auth: ReturnType<typeof useAuth> }) {
   if (!auth.configured) return null;
   return (
-    <a className="side-acc" href="#heroes">
+    <a className="side-acc" href="#heroes" title={auth.user ? auth.user.name + ' — в облаке' : 'Войти'}>
       <span className="side-acc-ic"><Icon name="user" /></span>
       {auth.user ? <span><b>{auth.user.name}</b><small>в облаке</small></span> : <span><b>Войти</b><small>герои — на любом устройстве</small></span>}
     </a>
