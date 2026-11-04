@@ -822,6 +822,14 @@
   }
 
   // ------------------------------------------------------------ каталог: что можно выдать из таблиц
+  // напитки листа «алхимия»: алкоголь и наркотическое — отдельные списки (уточнение ГМ 2026-11-04). В прежних данных наркотическое
+  // шло в том же списке после строки-заголовка «Наркотическое» — делим здесь; новые данные несут его отдельно (alchemy.drugs)
+  function drinks(A) {
+    const all = (A && A.alcohol) || [];
+    if (A && A.drugs) return { alcohol: all, drugs: A.drugs };
+    const head = all.findIndex(x => /^наркот/i.test(String(x.name || '').trim()) && !(x.e || []).length && !x.cook && !x.price);
+    return head < 0 ? { alcohol: all, drugs: [] } : { alcohol: all.slice(0, head), drugs: all.slice(head + 1) };
+  }
   function catalog(unlocked) {
     const d = D(), list = [];
     const add = (kind, name, effect, price, extra) => list.push(Object.assign({ kind, name, effect: effect || '', price: price || '' }, extra || {}));
@@ -831,7 +839,7 @@
     (d.materials || []).forEach(m => add('material', m.name, `урон ${m.dmg} / броня ${m.arm} за ед.`, m.price));
     (d.crystals || []).forEach(m => add('crystal', m.name, `урон ${m.dmg} / броня ${m.arm} за слиток; украшение: ${(m.ej || {}).t || '—'}`, m.price));
     if (unlocked && d.alchemy.ingredients) d.alchemy.ingredients.forEach(x => add('item', x.n, (x.e || []).map(e => e[0]).filter(Boolean).join(', '), x.price));
-    if (unlocked && d.alchemy.alcohol) d.alchemy.alcohol.forEach(x => add('food', x.name, (x.e || []).join(', '), x.price));
+    if (unlocked && d.alchemy.alcohol) { const dr = drinks(d.alchemy); dr.alcohol.concat(dr.drugs).forEach(x => add('food', x.name, (x.e || []).join(', '), x.price)); }
     if (unlocked && d.alchemy.essences) d.alchemy.essences.forEach(x => add('item', 'эссенция ' + x.name, x.effect, x.price));
     const seen = new Set();
     return list.filter(x => { const k = x.kind + ':' + norm(x.name); if (seen.has(k)) return false; seen.add(k); return true; });
@@ -867,7 +875,7 @@
   }
 
   window.Craft = {
-    KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
+    drinks, KIND_NAMES, CRAFTABLE, CATS, EFFECT_KINDS, BASES, baseOf, modules, models, material, allMaterials, isCrystal, guns, fuels,
     slotCat, slotsFor, compute, autoName, startInventory, inventoryOf, equipStats,
     walletCopper, money, priceCopper, craftPrice, tablePrice, trade, withPurse, purseDelta, pay, breakCoin, gatherCoins, parseDrop, parseStatMods, parseParamMods, applyParamMods, PARAMS, catalog, effectSources, isTome, tomeBonus, num
   };

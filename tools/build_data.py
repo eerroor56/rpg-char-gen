@@ -850,11 +850,17 @@ def build_alchemy(wb):
         v = row_txt(ws, r, "L", "Q")
         if v[0]:
             food.append({"name": v[0], "e": [x for x in v[1:4] if x], "cook": v[4], "price": v[5]})
-    alcohol = []
+    # напитки: алкоголь, а после строки-заголовка «Наркотическое» — наркотическое, отдельным списком (уточнение ГМ 2026-11-04)
+    alcohol, drugs = [], []
+    target = alcohol
     for r in range(49, 97):
         v = row_txt(ws, r, "L", "Q")
-        if v[0]:
-            alcohol.append({"name": v[0], "e": [x for x in v[1:4] if x], "cook": v[4], "price": v[5]})
+        if not v[0]:
+            continue
+        if v[0].strip().lower().startswith("наркот") and not any(v[1:]):
+            target = drugs
+            continue
+        target.append({"name": v[0], "e": [x for x in v[1:4] if x], "cook": v[4], "price": v[5]})
     essences = []
     for r in range(2, 49):
         v = row_txt(ws, r, "S", "U")
@@ -862,7 +868,7 @@ def build_alchemy(wb):
             essences.append({"name": v[0], "effect": v[1], "price": v[2]})
     ess_note = txt(ws.cell(2, col("V")).value)
     return {
-        "ingredients": ingredients, "food": food, "alcohol": alcohol, "essences": essences,
+        "ingredients": ingredients, "food": food, "alcohol": alcohol, "drugs": drugs, "essences": essences,
         "essenceNote": ess_note, "nameLegend": list(ALCH_NAME.values()), "useLegend": list(ALCH_USE.values()),
     }
 
@@ -1052,7 +1058,7 @@ def main():
         "creatures": creatures, "creatureUpgrades": upgrades, "creatureLegend": creature_legend,
         "society": society,
         "skills": {k: skills.pop(k) for k in ("stances", "actives", "passives")},
-        "alchemy": {k: alchemy.pop(k) for k in ("ingredients", "alcohol", "essences", "essenceNote", "nameLegend", "useLegend")},
+        "alchemy": {k: alchemy.pop(k) for k in ("ingredients", "alcohol", "drugs", "essences", "essenceNote", "nameLegend", "useLegend")},
         "artifacts": artifacts,
         "mechanics": mech,
     }

@@ -104,13 +104,15 @@
     } },
     { id: 'alchemy', title: 'Алхимия и кухня', locked: true, build() {
       const A = D.alchemy;
+      const drinks = window.Craft.drinks(A);     // алкоголь и наркотическое — отдельные таблицы
       return [
         ...(window.Brew ? [{ brew: true, custom: () => `<section class="card brew-card"><h2>Калькулятор: блюдо, напиток, зелье</h2>${window.Brew.form({ host: 'ref' })}</section>` }] : []),
         { title: 'Ингредиенты', note: `Зелёным — бафф, красным — дебафф (лист «алхимия»). Пометки названия: ${esc(A.nameLegend.join(', '))}. Доп. свойства по применению: ${esc(A.useLegend.join(', '))}.`,
           cols: ['Ингредиент', 'Эффекты', 'Цена', 'Ур. навыка', 'Дополнительно'],
           rows: A.ingredients.map(i => row([`<b>${esc(i.n)}</b> ${tag(i.tag, i.tag === 'запрещённое' ? 'bad' : 'warn')}`, i.e.map(([t, s]) => `<span class="eff ${s === '+' ? 'plus' : s === '-' ? 'minus' : ''}">${App.capHtml(esc(t))}</span>`).join(' '), esc(i.price), esc(i.lvl), i.x.map(([t, u]) => `${App.capHtml(esc(t))} ${tag(u)}`).join('<br>')], '', cap(i.g))) },
         { title: 'Еда', cols: ['Блюдо', 'Эффекты', 'Приготовление', 'Цена'], rows: A.food.map(f => row([`<b>${esc(f.name)}</b>`, esc(f.e.join(', ')), esc(f.cook), esc(f.price)])) },
-        { title: 'Алкоголь', cols: ['Напиток', 'Эффекты', 'Приготовление', 'Цена'], rows: A.alcohol.map(f => row([`<b>${esc(f.name)}</b>`, esc(f.e.join(', ')), esc(f.cook), esc(f.price)])) },
+        { title: 'Алкоголь', cols: ['Напиток', 'Эффекты', 'Приготовление', 'Цена'], rows: drinks.alcohol.map(f => row([`<b>${esc(f.name)}</b>`, esc(f.e.join(', ')), esc(f.cook), esc(f.price)])) },
+        ...(drinks.drugs.length ? [{ title: 'Наркотическое', cols: ['Название', 'Эффекты', 'Приготовление', 'Цена'], rows: drinks.drugs.map(f => row([`<b>${esc(f.name)}</b>`, esc(f.e.join(', ')), esc(f.cook), esc(f.price)])) }] : []),
         { title: 'Эссенции', note: esc(A.essenceNote), cols: ['Эссенция', 'Эффект', 'Цена'], rows: A.essences.map(e => row([`<b>${esc(e.name)}</b>`, esc(e.effect), esc(e.price)])) }
       ];
     } },
