@@ -72,8 +72,9 @@ export function HeroScreen(o: {
   else if (tab === 'fx') body = <FxTab rec={rec} v={v} gm={!!o.perms.gm} />;
   else if (tab === 'sheet') body = <div className="wstack">
     <div className="cs-tools no-print">
-      <button type="button" className="btn small" onClick={() => window.print()}>Печать / PDF</button>
-      <button type="button" className="btn small" onClick={() => act('exportImage')}>Скачать картинку</button>
+      <button type="button" className="btn small" onClick={() => act('exportPdf', { name: rec.state?.name || 'герой' })}><Icon name="download" />Скачать PDF</button>
+      <button type="button" className="btn small" onClick={() => act('exportImage', { name: rec.state?.name || 'герой' })}>Скачать картинку</button>
+      <button type="button" className="btn small" onClick={() => window.print()}>Печать</button>
     </div>
     <Sheet st={v.state} res={v.res0} opts={sheetOpts(rec, v)} />
   </div>;

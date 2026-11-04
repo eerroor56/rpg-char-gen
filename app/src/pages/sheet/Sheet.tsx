@@ -229,8 +229,9 @@ export function SheetTools() {
     <div className="cs-tools no-print">
       <button type="button" className="btn small" onClick={() => act('shareLink')}><Icon name="copy" />Ссылка для ГМ</button>
       <button type="button" className="btn small" onClick={() => act('exportHero')}><Icon name="download" />Скачать файл</button>
-      <button type="button" className="btn small" onClick={() => window.print()}>Печать / PDF</button>
+      <button type="button" className="btn small" onClick={() => act('exportPdf')}><Icon name="download" />Скачать PDF</button>
       <button type="button" className="btn small" onClick={() => act('exportImage')}>Скачать картинку</button>
+      <button type="button" className="btn small" onClick={() => window.print()}>Печать</button>
     </div>
   );
 }

@@ -324,27 +324,74 @@
   }
 
   // ------------------------------------------------------------ действия листа
+  // библиотека с cdnjs — один раз, по первому нажатию
+  const libs = {};
+  function lib(key, src) {
+    if (window[key]) return Promise.resolve();
+    return libs[key] || (libs[key] = new Promise((ok, bad) => {
+      const sc = document.createElement('script');
+      sc.src = src; sc.onload = ok;
+      sc.onerror = () => { delete libs[key]; bad(new Error('Нет доступа к библиотеке — воспользуйтесь «Печать / PDF»')); };
+      document.head.appendChild(sc);
+    }));
+  }
+  function shot() {
+    return lib('html2canvas', 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(() => {
+      const el = document.getElementById('sheet');
+      if (!el) throw new Error('Лист не найден');
+      return window.html2canvas(el, { backgroundColor: '#f3ead7', scale: 2, useCORS: true });
+    });
+  }
+  const fileName = b => String((b && b.dataset && b.dataset.name) || App.state.name || 'герой').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'герой';
 
   Object.assign(App.actions, {
     print() { window.print(); },
-    exportImage() {
-      const run = () => {
-        const el = document.getElementById('sheet');
-        if (!el || !window.html2canvas) { App.toast('Не удалось подготовить картинку'); return; }
-        window.html2canvas(el, { backgroundColor: '#f3ead7', scale: 2 }).then(canvas => {
-          const a = document.createElement('a');
-          a.href = canvas.toDataURL('image/jpeg', 0.92);
-          a.download = (App.state.name || 'герой') + '.jpg';
-          document.body.appendChild(a); a.click(); a.remove();
-        }).catch(() => App.toast('Не удалось подготовить картинку'));
-      };
-      if (window.html2canvas) return run();
-      const sc = document.createElement('script');
-      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      sc.onload = run;
-      sc.onerror = () => App.toast('Нет доступа к библиотеке картинок — воспользуйтесь «Печать / PDF»');
-      document.head.appendChild(sc);
+    // картинка и PDF листа: снимок #sheet (html2canvas). b.dataset.name — имя файла (у героя из «Моих героев» и кампании)
+    exportImage(b) {
+      const name = fileName(b);
       App.toast('Готовлю картинку…');
+      shot().then(canvas => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/jpeg', 0.92);
+        a.download = name + '.jpg';
+        document.body.appendChild(a); a.click(); a.remove();
+      }).catch(e => App.toast(e && e.message ? e.message : 'Не удалось подготовить картинку'));
+    },
+    // PDF: лист по страницам A4; страница режется между блоками листа, а не посреди текста
+    exportPdf(b) {
+      const name = fileName(b);
+      App.toast('Готовлю PDF…');
+      Promise.all([shot(), lib('jspdf', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')]).then(([canvas]) => {
+        const el = document.getElementById('sheet');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+        const M = 8, W = 210 - 2 * M, H = 297 - 2 * M;               // поля 8 мм
+        const k = canvas.width / el.offsetWidth;                    // пикселей холста на пиксель листа
+        const pageH = Math.floor(canvas.width * H / W);             // высота страницы в пикселях холста
+        // где можно резать: низ каждого блока листа
+        const top = el.getBoundingClientRect().top;
+        const cuts = [...el.querySelectorAll('.cs-head, .cs-block, .cs-foot, section, table tr')]
+          .map(x => Math.round((x.getBoundingClientRect().bottom - top) * k)).filter(y => y > 0).sort((p, q) => p - q);
+        let y = 0, first = true;
+        while (y < canvas.height - 2) {
+          let end = Math.min(canvas.height, y + pageH);
+          if (end < canvas.height) {
+            const ok = cuts.filter(c => c > y + pageH * 0.5 && c <= end);
+            if (ok.length) end = ok[ok.length - 1];
+          }
+          const part = document.createElement('canvas');
+          part.width = canvas.width; part.height = end - y;
+          const ctx = part.getContext('2d');
+          ctx.fillStyle = '#f3ead7'; ctx.fillRect(0, 0, part.width, part.height);
+          ctx.drawImage(canvas, 0, y, canvas.width, end - y, 0, 0, canvas.width, end - y);
+          if (!first) pdf.addPage();
+          pdf.setFillColor(243, 234, 215); pdf.rect(0, 0, 210, 297, 'F');
+          pdf.addImage(part.toDataURL('image/jpeg', 0.9), 'JPEG', M, M, W, W * part.height / part.width);
+          first = false; y = end;
+        }
+        pdf.setProperties({ title: name, subject: 'Лист персонажа — Мастерская героя' });
+        pdf.save(name + '.pdf');
+      }).catch(e => App.toast(e && e.message ? e.message : 'Не удалось подготовить PDF'));
     },
     async shareLink() {
       const url = location.origin + location.pathname + '#hero=' + await App.encodeLink(App.state);
