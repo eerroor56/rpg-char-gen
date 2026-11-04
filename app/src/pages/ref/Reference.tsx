@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { toast, useLegacyCss } from '../../lib/legacy';
+import { toast } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { BrewForm } from '../brew/BrewForm';
+import { WorldMap } from './WorldMap';
 
 /*
  * Справочник (#ref/<раздел>) и Мир (#world): таблицы листов игры с поиском, сортировкой по колонке и группами.
  * Данные разделов — js/reference.js (Reference.SECTIONS, Reference.WORLD: build() → блоки { title, note, cols, rows, order,
- * grid, custom }); здесь только показ. Калькулятор зелий — ../brew/BrewForm.tsx, карту мира пока рисует прежний сайт.
+ * grid, custom }); здесь только показ. Калькулятор зелий — ../brew/BrewForm.tsx, карта мира — ./WorldMap.tsx.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -63,7 +64,6 @@ export function World() {
 function Tables({ sec, title, placeholder, world }: { sec: Any; title: string; placeholder: string; world?: boolean }) {
   const [q, setQ] = useState('');
   const blocks: Block[] = useMemo(() => sec.build(), [sec]);
-  useLegacyCss(blocks.some(b => b.custom && !b.brew));   // карта мира — со стилями прежнего сайта
   const nq = window.Rules.norm(q);
   const shown = blocks.map((b, i) => ({ b, i, rows: nq && !b.custom && !b.grid ? b.rows.filter(r => r.text.includes(nq)) : b.rows }))
     .filter(x => !nq || (!x.b.custom && (x.b.grid ? false : x.rows.length)));
@@ -82,7 +82,7 @@ function Tables({ sec, title, placeholder, world }: { sec: Any; title: string; p
         </nav>
       )}
       {shown.length ? shown.map(({ b, i, rows }) => b.brew ? <section key={i} className="card wstack"><h2 className="h-sec">Калькулятор: блюдо, напиток, зелье</h2><BrewForm opts={{ host: 'ref' }} /></section>
-        : b.custom ? <LegacyBlock key={i} make={b.custom} />
+        : b.custom ? <WorldMap key={i} />
         : b.grid ? <GridBlock key={i} b={b} />
           : <TableBlock key={i} id={'rfb-' + i} b={b} rows={rows} q={nq} />)
         : <div className="card empty"><Icon name="search" /><p>По запросу «{q}» {world ? 'ничего' : 'в разделе ничего'} нет.</p></div>}
@@ -202,24 +202,6 @@ function GridBlock({ b }: { b: Block }) {
       <HScroll><table className="rf-tbl grid"><tbody>{b.grid!.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table></HScroll>
     </section>
   );
-}
-
-/** особый блок прежнего сайта; калькулятор зелий просит перерисовку через Reference.refresh() */
-function LegacyBlock({ make }: { make: () => string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const paint = () => {
-      const el = ref.current;
-      if (!el) return;
-      el.innerHTML = make();
-      if (window.WorldMap) window.WorldMap.mount(el);
-    };
-    paint();
-    const again = () => window.App.keepFocus(document.activeElement || document.body, paint);
-    window.addEventListener('mh-ref', again);
-    return () => window.removeEventListener('mh-ref', again);
-  }, [make]);
-  return <div ref={ref} className="legacy-pane" />;
 }
 
 // ------------------------------------------------------------ пароль ГМ

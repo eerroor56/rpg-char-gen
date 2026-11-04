@@ -238,5 +238,6 @@
     if (e.key === 'Escape' && App.ui.wmap && App.ui.wmap.full) App.actions.mapFull();
   });
 
-  window.WorldMap = { html, mount };
+  // новая версия (React) рисует карту сама: состояние (App.ui.wmap), строки таблиц и значки мест — отсюда
+  window.WorldMap = { html, mount, state: S, landRow, seaRow, placeRow, sightRow, ICONS, MAX_K };
 })();

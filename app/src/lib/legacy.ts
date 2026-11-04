@@ -9,12 +9,10 @@ type Any = any;
 declare global {
   interface Window {
     App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any; Game: Any; Reference: Any; WorldMap: Any; Craft: Any; Brew: Any; Battle: Any; Dungeon: Any;
-    GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>;
+    GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>; WORLD_MAP: Any;
   }
 }
 
-/** метка сборки (vite.config.ts): к файлам прежнего сайта — чтобы после выкладки не брались старые из кэша */
-declare const __LEGACY_V__: string;
 
 export const HEROES_KEY = 'hero-workshop:heroes';
 /** Адрес прежней версии — для разделов, которые ещё не перенесены */
@@ -161,17 +159,6 @@ export function openInWizard(h: Hero, step = 'summary') {
 }
 export const newHeroId = () => 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-/** стили прежнего сайта — пока на экране его разметка (лист персонажа, инвентарь) */
-export function useLegacyCss(on = true) {
-  useEffect(() => {
-    if (!on) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet'; link.href = 'legacy/css/style.css?v=' + __LEGACY_V__; link.dataset.legacy = '1';
-    document.head.appendChild(link);
-    document.body.classList.add('sheet-on');
-    return () => { link.remove(); document.body.classList.remove('sheet-on'); };
-  }, [on]);
-}
 
 export type SyncStatus = { configured: boolean; signedIn: boolean; on: boolean; loading: boolean; err: string; n: number; name: string };
 let syncJson = '';
