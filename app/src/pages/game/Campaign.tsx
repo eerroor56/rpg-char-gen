@@ -1,16 +1,16 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { cap, useLegacyCss } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt } from '../create/kit';
+import { Allies, BattleCard, type BattleCtx } from './Battle';
 import { charView, copyText, joinLink, run, setTarget, STATUS, useWatch, when, type Any } from './cloud';
 import { Dice } from './Dice';
 
 /*
- * Страница кампании (#game/<кампания>): персонажи, союзники, сессия, журнал, бросок d100, участники и приглашение (ГМ),
+ * Страница кампании (#game/<кампания>): поле боя, персонажи, союзники, сессия, журнал, бросок d100, участники и приглашение (ГМ),
  * казна, итоги сессий, заметки ГМ, настройки. Данные — живые подписки js/cloud.js.
- * Поле боя, союзники отряда и генератор подземелий пока рисует прежний код (js/battle.js, js/dungeon.js): им отдаются
- * данные и функции сохранения; бросок и журнал при поле боя — в панели рядом с картой (сюда их вставляет React).
+ * Поле боя и союзники — ./Battle.tsx (расчёт — js/battle.js); при поле боя бросок и журнал — в панели рядом с картой.
+ * Генератор подземелий пока рисует прежний код (js/dungeon.js).
  */
 const FEED_SHUT = 'hero-workshop:feed-shut';
 const ORDER: Record<string, number> = { review: 0, active: 1, draft: 2, dead: 3, retired: 4 };
@@ -26,8 +26,7 @@ export function Campaign({ cid }: { cid: string }) {
   const gm = !!camp.data && camp.data.gm === me;
   const priv = useWatch(gm ? cid + '|priv' : null, (ok) => C.watchPrivate(cid, '_campaign', ok, () => { /* заметки не обязательны */ }));
   const [, tick] = useState(0);
-  const legacyOn = !!camp.data && (gm || !!camp.data.board);
-  useLegacyCss(legacyOn);   // поле боя, союзники, подземелья — со стилями прежнего сайта
+  useLegacyCss(gm);   // генератор подземелий (только у ГМ) — пока со стилями прежнего сайта
 
   if (camp.err && !camp.data) return (
     <div className="page"><a className="crumb" href="#game"><span aria-hidden="true">←</span> Все кампании</a>
@@ -49,16 +48,14 @@ export function Campaign({ cid }: { cid: string }) {
   const party = inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой' }));
   const saveAllies = (allies: Any[]) => patchCamp({ allies });
 
-  const battle = window.Battle ? window.Battle.card({
-    cid, camp: c, gm, me, level: partyLevel, rerender, side: arena ? '<div class="cp-side"></div>' : '',
-    heroes, saveAllies, allies: c.allies || [],
+  const bctx: BattleCtx = {
+    cid, camp: c, gm, me, level: partyLevel, rerender, heroes, saveAllies, allies: c.allies || [],
     saveBoard: (board: Any) => patchCamp({ board }),
     savePos: (chid: string, pos: Any) => patchChar(chid, { pos }),
     // ХП, МП, броня и зоркость героя в бою — в его персонаже (vit): меняет только ГМ
     saveVit: (chid: string, vit: Any) => patchChar(chid, { vit }),
     saveAllyPos: (chid: string, aid: string, p: Any) => { const ch = list.find(x => x.id === chid); return patchChar(chid, { apos: { ...((ch && ch.apos) || {}), [aid]: p } }); },
-  }) : '';
-  const allies = window.Battle && chars.data ? window.Battle.alliesBlock({ gm, heroes: party, allies: c.allies || [], save: saveAllies }) : '';
+  };
   const dungeon = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender }) : '';
 
   const dice = <Dice cid={cid} chid={myHero?.id} chName={myHero ? myHero.name || 'Безымянный герой' : undefined} side={arena} />;
@@ -77,60 +74,37 @@ export function Campaign({ cid }: { cid: string }) {
       </header>
       {(camp.err || chars.err) && <p className="issue err">{camp.err || chars.err}</p>}
 
-      {battle && <BattleBox html={battle} slot={arena ? <>{dice}{journal}</> : null} />}
+      {window.Battle && <BattleCard o={bctx} side={arena ? <>{dice}{journal}</> : null} />}
 
       <div className="cp-grid">
         <div className="wstack cp-main">
           <Characters cid={cid} camp={c} gm={gm} me={me} list={chars.data ? list : null} />
-          {allies && <LegacyBlock html={allies} />}
+          {window.Battle && chars.data && <Allies gm={gm} heroes={party} allies={c.allies || []} save={saveAllies} />}
           <NewChar cid={cid} camp={c} />
           {!arena && dice}
-          {dungeon && <LegacyBlock html={dungeon} />}
           {!arena && journal}
+          {(sessions.data || []).length > 0 && <SessionNotes cid={cid} gm={gm} sessions={sessions.data!} current={s.n} />}
+          {gm && <PrivateNotes key={String(!!priv.data)} save={text => run(() => C.savePrivate(cid, '_campaign', text), 'Заметки сохранены')} text={(priv.data || {}).text || ''} title="Заметки ГМ" placeholder="сюжетные зацепки, секреты, планы" />}
         </div>
         <aside className="wstack cp-side-col">
           <Session cid={cid} gm={gm} s={s} />
           {gm && chars.data && <Treasury cid={cid} list={inGame} />}
           {gm && <Invite cid={cid} code={c.code} />}
           <Members cid={cid} camp={c} gm={gm} me={me} list={list} />
-          {(sessions.data || []).length > 0 && <SessionNotes cid={cid} gm={gm} sessions={sessions.data!} current={s.n} />}
-          {gm && <PrivateNotes key={String(!!priv.data)} save={text => run(() => C.savePrivate(cid, '_campaign', text), 'Заметки сохранены')} text={(priv.data || {}).text || ''} title="Заметки ГМ" placeholder="сюжетные зацепки, секреты, планы" />}
           {gm && <Settings cid={cid} camp={c} />}
         </aside>
       </div>
+      {dungeon && <LegacyBlock html={dungeon} className="cp-dungeon" />}
     </div>
   );
 }
 
-// ------------------------------------------------------------ поле боя (прежний код) + панель рядом с картой
-// Перерисовка не трогает поле, пока фишку тянут (Battle.busy); прокрутка журнала и панели не сбрасывается
-function BattleBox({ html, slot }: { html: string; slot: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const last = useRef('');
-  const [host, setHost] = useState<Element | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || html === last.current || (window.Battle && window.Battle.busy())) return;
-    const kept = [...el.querySelectorAll<HTMLElement>('[data-keep], .bt-side')].map(x => [x.dataset.keep || 'side', x.scrollTop] as const);
-    const draw = () => { el.innerHTML = html; last.current = html; };
-    const a = document.activeElement as HTMLElement | null;
-    if (a && a.dataset && a.dataset.ui && el.contains(a)) window.App.keepFocus(a, draw); else draw();
-    kept.forEach(([k, top]) => { const x = k === 'side' ? el.querySelector('.bt-side') : el.querySelector(`[data-keep="${k}"]`); if (x) x.scrollTop = top; });
-    const h = el.querySelector('.cp-side');
-    setHost(prev => (prev === h ? prev : h));
-  });
-  return <>
-    <div ref={ref} className="legacy-pane cp-battle" />
-    {host && slot ? createPortal(slot, host) : null}
-  </>;
-}
-
-/** разметка прежнего сайта (союзники, подземелья): обновляется, только когда изменилась */
-function LegacyBlock({ html }: { html: string }) {
+/** разметка прежнего сайта (генератор подземелий): обновляется, только когда изменилась */
+function LegacyBlock({ html, className }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef('');
   useLayoutEffect(() => { if (ref.current && html !== last.current) { ref.current.innerHTML = html; last.current = html; } });
-  return <div ref={ref} className="legacy-pane" />;
+  return <div ref={ref} className={'legacy-pane' + (className ? ' ' + className : '')} />;
 }
 
 // ------------------------------------------------------------ персонажи

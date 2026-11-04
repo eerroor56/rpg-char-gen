@@ -1344,5 +1344,50 @@
     }
   });
 
-  window.Battle = { card, generate, fromRoom, busy, ready, alliesBlock, PRESETS, TYPES: T };
+  // ------------------------------------------------------------ для новой версии (React): расчёт без разметки
+  // view(o) — то же, что card(o), но вместо HTML отдаёт, что где стоит; кнопки — прежние App.actions (bt…, al…)
+  function view(o) {
+    ctx = o;
+    const board = o.camp && o.camp.board;
+    if (!board) return { board: null };
+    const { at, decor } = layout(board, o.heroes);
+    const vis = fogOn(board) ? sight(board, at) : null;
+    const sid = selId(board, at);
+    autoNext(board, at);
+    return { board, at, decor, vis, fog: fogFor(board), sid, cur: curTok(board, at) };
+  }
+  // выбранная фишка (как в selInfo): null — нечего показать
+  function selected(board, at, s) {
+    if (!s) return null;
+    const kind = s.slice(0, 1), id = s.slice(2);
+    const t = [...at.values()].find(v => v.kind === kind && (kind === 'h' ? v.o.id === id : v.o.i === id))
+      || (kind === 'o' ? (() => { const o = board.objs.find(x => x.i === id); return o ? { kind: 'o', o } : null; })() : null);
+    if (!t) return null;
+    if (t.kind === 'f' && fogFor(board) && !sight(board, at).has(key(t.o.x, t.o.y))) return null;
+    if (hid(t) && veil()) return null;
+    return t;
+  }
+  // подсказки для полей «кто»: существа (после пароля ГМ) и расы — [название, вид]
+  let crNames = { sig: '', list: [] };
+  function creatures() {
+    const d = D(), cs = d.creatures || [], rs = d.races || [];
+    const sig = cs.length + ':' + rs.length + ':' + ((d.meta || {}).built || '');
+    if (crNames.sig !== sig) {
+      const seen = new Set(), out = [];
+      cs.map(c => [c.n, 'существо']).concat(rs.map(r => [cap(r.name), 'раса'])).forEach(([n, k]) => {
+        const nk = R.norm(n);
+        if (!seen.has(nk)) { seen.add(nk); out.push([n, k]); }
+      });
+      crNames = { sig, list: out.slice(0, 2500) };
+    }
+    return crNames.list;
+  }
+  const api = {
+    view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
+    info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
+    turnOn, spent, odLeft, has, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
+  };
+
+  window.Battle = Object.assign({ card, generate, fromRoom, busy, ready, alliesBlock, PRESETS, TYPES: T }, api);
 })();

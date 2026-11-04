@@ -940,7 +940,9 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .cp-roll b.edge { color: var(--err); }
 .cp-settings summary { font-weight: 700; }
 .cp-settings[open] summary { margin-bottom: 10px; }
-.cp-battle { min-width: 0; }
+.cp-dungeon { min-width: 0; }
+.cp .legacy-pane > :first-child { margin-top: 0; }
+.cp .legacy-pane > :last-child { margin-bottom: 0; }
 /* бросок и журнал в панели у поля боя */
 .cp-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
 .cp-side .card { padding: 10px 12px; border-radius: var(--r-m); }
@@ -951,3 +953,189 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .cp-side .cp-ev { flex: 1 1 0; min-height: 90px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 @media (max-width: 1100px) { .cp-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .cp-side .cp-ev { flex: none; max-height: 50vh; } }
+
+/* ---------- поле боя (pages/game/Battle.tsx). Классы .bt-grid, .bt-cell, .can-move, .bt-ghost, .bt-dist, .is-dragging, drop-ok / drop-bad
+   нужны перетаскиванию из js/battle.js. Всё внутри .bf — чтобы стили прежнего сайта (они подключены у ГМ ради подземелий) не перебивали */
+.bf { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.bf.is-gm { --bt-chrome: 250px; }
+.bf p { margin: 0; }
+.bf input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; flex: none; accent-color: var(--brass); }
+.bf .bt-check { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+.bf .bt-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; align-items: center; }
+.bf .bt-tools select { width: auto; max-width: 100%; min-height: 34px; padding: 4px 10px; font-size: .88rem; }
+.bf .bt-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 3px 11px 3px 6px; border-radius: 999px; border: 1px solid var(--line-soft); background: var(--bg-2);
+  color: var(--text); font: inherit; font-size: .85rem; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+.bf .bt-chip svg { width: 22px; height: 22px; }
+.bf .bt-chip:hover { border-color: rgba(214, 168, 92, .6); }
+.bf .bt-chip.is-on { border-color: var(--brass); background: rgba(214, 168, 92, .16); color: #f3d58f; }
+.bf .bt-ico { width: 22px; text-align: center; font-size: 1rem; line-height: 1; }
+.bf .bt-ico.foe { color: #e06464; }
+.bf .bt-foe-row input[type="text"] { flex: 1 1 220px; width: auto; min-width: 0; }
+.bf .bt-wrap { container-type: inline-size; overflow-x: auto; padding: 2px; margin: 4px 0; }
+.bf .bt-grid { --cell: clamp(28px, min(calc((100cqi - 8px) / var(--w)), calc((100vh - var(--bt-chrome, 170px)) / var(--h))), 56px); --floor-a: #2f4a2a; --floor-b: #34512e;
+  display: grid; grid-template-columns: repeat(var(--w), var(--cell)); grid-auto-rows: var(--cell); width: max-content; margin: 0 auto;
+  border: 2px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--floor-a); }
+@supports not (width: 1cqi) { .bf .bt-grid { --cell: 36px; } }
+.bf .bt-p-swamp { --floor-a: #33402a; --floor-b: #3a4730; }
+.bf .bt-p-field { --floor-a: #4a5a2e; --floor-b: #506134; }
+.bf .bt-p-desert { --floor-a: #8a7148; --floor-b: #93794e; }
+.bf .bt-p-snow { --floor-a: #aebfcc; --floor-b: #b9c9d5; }
+.bf .bt-p-mountain { --floor-a: #55545a; --floor-b: #5c5b61; }
+.bf .bt-p-cave { --floor-a: #2f2b33; --floor-b: #35303a; }
+.bf .bt-p-town { --floor-a: #4a4744; --floor-b: #514e4a; }
+.bf .bt-p-room, .bf .bt-p-library, .bf .bt-p-kitchen, .bf .bt-p-workshop { --floor-a: #4b3524; --floor-b: #533b29; }
+.bf .bt-p-dungeon, .bf .bt-p-altar, .bf .bt-p-alchemy, .bf .bt-p-garden { --floor-a: #3d3a42; --floor-b: #444049; }
+.bf .bt-cell { position: relative; background: var(--floor-a); box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .28); }
+.bf .bt-cell.alt { background: var(--floor-b); }
+.bf .bt-cell.cell-water { background: #1f4f74; }
+.bf .bt-cell.drop-ok { background: rgba(127, 209, 138, .35); box-shadow: inset 0 0 0 2px #7fd18a; }
+.bf .bt-cell.drop-bad { background: rgba(224, 100, 100, .3); box-shadow: inset 0 0 0 2px #e06464; }
+.bf .bt-cell.fog::after { content: ""; position: absolute; inset: 0; background: rgba(6, 5, 12, .72); pointer-events: none; }
+.bf .bt-cell.fog .bt-obj, .bf .bt-cell.fog .bt-decor { opacity: .55; }
+.bf .bt-obj, .bf .bt-decor { position: absolute; inset: 6%; display: grid; place-items: center; }
+.bf .bt-obj svg, .bf .bt-decor svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); }
+.bf .bt-decor { inset: 12%; opacity: .7; }
+.bf .bt-obj.fill-water { inset: 0; }
+.bf .bt-obj.fill-water svg { filter: none; opacity: .8; }
+.bf .bt-obj.is-sel, .bf .bt-decor.is-sel { outline: 2px solid #f3d58f; outline-offset: -2px; border-radius: 4px; }
+.bf .bt-grid svg { pointer-events: none; }
+.bf .cv { position: absolute; right: 0; top: 0; width: 9px; height: 9px; border: 1px solid #f3d58f; border-radius: 2px; background: #f3d58f; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+.bf .cv.cv1 { background: linear-gradient(135deg, #f3d58f 50%, transparent 50%); }
+.bf .bt-legend { color: var(--muted); }
+.bf .bt-legend .cv { position: relative; display: inline-block; vertical-align: -1px; margin: 0 4px 0 2px; }
+/* фишки: герой — цвет игрока, союзник — зелёная двойная рамка, противник — красная; полоски брони, ХП и МП */
+.bt-tok { position: absolute; inset: 7%; padding: 0; border-radius: 50%; border: 3px solid hsl(var(--hue, 40) 70% 60%); background: hsl(var(--hue, 40) 35% 22%);
+  color: #fff; display: grid; place-items: center; font: 700 calc(var(--cell) * .32)/1 var(--font-body); box-shadow: 0 3px 8px rgba(0, 0, 0, .5); cursor: default; }
+.bt-tok img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; -webkit-user-drag: none; user-select: none; pointer-events: none; }
+.bt-tok.foe { border-color: #d34a4a; background: #4a1c1f; }
+.bt-tok.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
+.bt-bars { position: absolute; left: 6%; right: 6%; bottom: -5px; display: grid; gap: 1px; pointer-events: none; }
+.bt-bars i { display: block; height: 4px; border-radius: 2px; background: #3cc46a; box-shadow: 0 0 0 1px rgba(0, 0, 0, .7); min-width: 1px; }
+.bt-bars i.mp { background: #4a8fe0; height: 3px; }
+.bt-bars i.arm { background: #b9c3d1; height: 3px; }
+.bf .bt-tok.is-turn { box-shadow: 0 0 0 3px #f3d58f, 0 0 16px 4px rgba(243, 213, 143, .65); animation: bt-turn 1.4s ease-in-out infinite alternate; z-index: 2; }
+@keyframes bt-turn { to { box-shadow: 0 0 0 3px #f3d58f, 0 0 6px 1px rgba(243, 213, 143, .35); } }
+.bf .bt-tok.down { filter: grayscale(1) brightness(.6); }
+.bf .bt-tok.down::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; color: #ff8a8a; font-size: calc(var(--cell) * .55); font-weight: 700; text-shadow: 0 0 4px #000; }
+.bf .bt-tok.unseen { outline: 2px dashed rgba(255, 255, 255, .55); outline-offset: 1px; }
+.bf .bt-tok.hid { opacity: .5; outline: 2px dashed #e0675c; outline-offset: 1px; }
+.bf .bt-tok.hid.is-sel { opacity: .8; }
+.bf .bt-tok.mine { box-shadow: 0 0 0 2px #fff3d6, 0 3px 8px rgba(0, 0, 0, .5); }
+.bf .bt-tok.is-sel, .bf .bt-tok:focus-visible { outline: 2px solid #f3d58f; outline-offset: 2px; }
+.bf .can-move { cursor: grab; touch-action: none; }
+.bf .can-move:hover { filter: brightness(1.12); }
+.bf .is-dragging { opacity: .3; }
+body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select: none; }
+.bt-ghost { position: fixed; left: 0; top: 0; right: auto; bottom: auto; inset: auto; z-index: 120; pointer-events: none; opacity: .92; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .55)); }
+.bt-ghost.bt-tok { font-size: 14px; }
+.bt-dist { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); padding: 1px 7px; border-radius: 9px; background: #1b1712; color: #f3d58f;
+  font: 700 12px/1.4 var(--font-body); white-space: nowrap; }
+.bt-dist:empty { display: none; }
+/* карта слева, справа закреплена панель — ход и ОД, выбранная фишка, бросок, журнал; ниже — таблица, подсказки, новое поле */
+.bf .bt-arena { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); grid-template-areas: "main side" "extra side"; gap: 6px 18px; align-items: start; }
+.bf .bt-main { grid-area: main; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.bf .bt-extra { grid-area: extra; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.bf .bt-side { grid-area: side; position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 520px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px; padding: 2px 4px 2px 2px; margin-right: -4px; }
+.bf .bt-side > * { flex: none; }
+.bf .bt-side > .cp-side { flex: 1 1 auto; }
+.bf .bt-panel { margin: 0; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--bg-2); }
+.bf .bt-fx { padding: 6px 10px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--r-s) var(--r-s) 0; }
+.bf .bt-hint { margin: 0; }
+.bf .bt-fog { gap: 6px 14px; }
+.bf .bt-zor-ctl { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.bf .bt-zor-ctl .btn.small { padding: 2px 9px; min-height: 28px; }
+.bf .link.danger { color: var(--err); }
+@media (max-width: 600px) { .bf.card { padding: 14px 10px; } }
+@media (max-width: 1020px) {
+  .bf .bt-arena { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side" "extra"; }
+  .bf .bt-side { position: static; height: auto; min-height: 0; overflow: visible; margin: 4px 0 0; padding: 0; }
+}
+/* ход: чей, ОД как ХП (кружки; сверх положенного — другим цветом), кнопки, очередь */
+.bf .bt-turns.my-turn { border-color: #f3d58f; box-shadow: 0 0 0 1px rgba(243, 213, 143, .35), 0 0 18px rgba(243, 213, 143, .12); }
+.bf .bt-turns .bt-big { width: 100%; margin-bottom: 6px; }
+.bf .bt-turn-head { margin: 0 0 6px; }
+.bf .bt-od { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 2px 0 4px; }
+.bf .bt-od > b { font-size: 1.25rem; font-variant-numeric: tabular-nums; color: var(--text); }
+.bf .bt-od > b.over { color: #8fe0a8; }
+.bf .bt-od > b.bad { color: var(--err); }
+.bf .bt-pips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.bf .bt-pips i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(243, 213, 143, .55); background: transparent; }
+.bf .bt-pips i.on { background: #f3d58f; border-color: #f3d58f; }
+.bf .bt-pips i.over { background: #7fd18a; border-color: #7fd18a; }
+.bf .bt-turn-act { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.bf .bt-turn-act .btn { flex: 1 1 auto; min-height: 36px; padding: 6px 12px; }
+.bf .bt-order { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; padding: 0; margin: 6px 0 0; }
+.bf .bt-order li { margin: 0; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-soft); font-size: .84rem; }
+.bf .bt-order li b { color: var(--brass); margin-right: 3px; font-variant-numeric: tabular-nums; }
+.bf .bt-order li.k-h { border-color: rgba(214, 168, 92, .5); }
+.bf .bt-order li.k-a { border-color: rgba(92, 196, 138, .55); }
+.bf .bt-order li.k-f { border-color: rgba(211, 74, 74, .55); }
+.bf .bt-order li.is-cur { background: rgba(243, 213, 143, .2); border-color: #f3d58f; }
+.bf .bt-order li.down { opacity: .45; text-decoration: line-through; }
+.bf .bt-order .link { color: var(--text); text-decoration: none; }
+.bf .bt-turn-gm { margin-top: 6px; gap: 14px; }
+/* выбранная фишка: портрет, имя, броня / ХП / МП строками, кнопки урона и лечения */
+.bf .bt-info { display: flex; flex-direction: column; gap: 6px; }
+.bf .bt-info.is-hid { border-style: dashed; border-color: rgba(224, 103, 92, .6); }
+.bf .bt-info-head { display: flex; gap: 10px; align-items: center; }
+.bf .bt-face { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; position: relative; border: 3px solid hsl(var(--hue, 40) 70% 60%); background: hsl(var(--hue, 40) 35% 22%); color: #fff; font-weight: 700; }
+.bf .bt-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bf .bt-face.foe { border-color: #d34a4a; background: #4a1c1f; }
+.bf .bt-face.ally { border-color: #5cc48a; background: #1d4a33; border-style: double; border-width: 4px; }
+.bf .bt-face.obj { border: 1px solid var(--line); background: var(--panel); padding: 5px; }
+.bf .bt-face.obj svg { width: 100%; height: 100%; }
+.bf .bt-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; align-items: flex-start; }
+.bf .bt-who b { font-size: 1.05rem; line-height: 1.2; }
+.bf .bt-x { flex: none; align-self: flex-start; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-soft); background: transparent; color: var(--muted); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.bf .bt-x:hover { color: var(--text); border-color: var(--brass); }
+.bf .bt-info-act { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.bf .bt-vit { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; gap: 5px 8px; align-items: center; }
+.bf .bt-vl { font-size: .86rem; color: var(--muted); }
+.bf .bt-vn { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.bf .bt-vbar { display: block; width: 100%; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.bf .bt-vbar i { display: block; height: 100%; background: #3cc46a; }
+.bf .bt-vbar.mp i { background: #4a8fe0; }
+.bf .bt-vbar.arm i { background: #b9c3d1; }
+.bf .bt-reg { margin-left: 4px; font-size: .8rem; color: #8fd6a4; }
+.bf .bt-vbar.mp + .bt-vn .bt-reg { color: #8fb8ee; }
+.bf .bt-vit-sub { display: flex; flex-wrap: wrap; gap: 3px 12px; align-items: center; }
+.bf .bt-mini { width: 4.6em; min-height: 0; margin: 0 0 0 4px; padding: 2px 6px; }
+.bf .bt-vit-ctl { display: grid; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
+.bf .bt-amt { flex: 0 0 92px; width: 92px; min-height: 34px; padding: 4px 8px; font-size: 1.05rem; text-align: center; font-variant-numeric: tabular-nums; }
+.bf .bt-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.bf .bt-btns .btn { flex: 1 1 0; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+.bf .btn.bt-dmg { border-color: rgba(224, 103, 92, .7); color: #ffb3aa; }
+.bf .btn.bt-dmg:hover { border-color: var(--err); }
+.bf .btn.bt-heal { border-color: rgba(103, 188, 167, .7); color: #a6e6d4; }
+.bf .btn.bt-heal:hover { border-color: var(--ok); }
+.bf .bt-more summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.bf .bt-more .bt-btns { gap: 4px 12px; margin-top: 4px; }
+.bf .bt-more p { margin: 4px 0 0; }
+/* таблица всех на поле, подсказки, новое поле */
+.bf .bt-roster-wrap { overflow-x: auto; margin-top: 6px; }
+.bf .bt-roster-t { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.bf .bt-roster-t th, .bf .bt-roster-t td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; }
+.bf .bt-roster-t thead th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+.bf .bt-roster-t tr.k-h th { box-shadow: inset 3px 0 0 rgba(214, 168, 92, .7); }
+.bf .bt-roster-t tr.k-a th { box-shadow: inset 3px 0 0 rgba(92, 196, 138, .7); }
+.bf .bt-roster-t tr.k-f th { box-shadow: inset 3px 0 0 rgba(211, 74, 74, .7); }
+.bf .bt-roster-t tr.down { opacity: .5; }
+.bf .bt-roster-t tr.hid th .link { opacity: .7; }
+.bf .bt-roster-t .link { color: var(--text); }
+.bf .bt-help summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.bf .bt-help p { margin: 6px 0 0; }
+.bt-new summary { cursor: pointer; font-weight: 700; color: var(--brass-2); }
+.bt-new[open] summary { margin-bottom: 10px; }
+.bt-form { margin-bottom: 10px; }
+.bt-form .bt-wide { grid-column: 1 / -1; }
+.bt-gen { gap: 8px 14px; }
+/* союзники отряда */
+.bf-ally-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.bf-ally { display: flex; gap: 12px; padding: 10px; border-radius: var(--r-l); border: 1px solid rgba(92, 196, 138, .45); background: var(--bg-2); }
+.bf-ally-pic { flex: none; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; border: 3px double #5cc48a; background: #1d4a33; display: grid; place-items: center; color: #fff; font-weight: 700; }
+.bf-ally-pic img { width: 100%; height: 100%; object-fit: cover; }
+.bf-ally-body { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.bf-ally-body b { font-family: var(--font-display); font-weight: 400; font-size: 1.15rem; }
+.bf-ally-rules { margin: 8px 0 0; padding-left: 18px; }
+.bf-allies .link.danger { color: var(--err); }
