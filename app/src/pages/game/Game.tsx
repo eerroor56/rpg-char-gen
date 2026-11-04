@@ -1,13 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { cloudCall, toast, useLegacyCss, type useAuth } from '../../lib/legacy';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { cloudCall, toast, type useAuth } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { SignIn } from '../../ui/SignIn';
+import { Dice } from './Dice';
+import { Campaign } from './Campaign';
+import { CharPage } from './CharPage';
 import { Sigil } from '../../ui/Sigil';
 
 /*
  * «Игра»: #game — вход, мои кампании, новая кампания, вход по коду, бросок d100 (новое);
- * #game/join/КОД — вход по ссылке-приглашению; #game/<кампания>[/<персонаж>] — страницы кампании и персонажа с полем
- * боя, сессиями и журналом пока рисует прежний сайт (js/game.js, js/battle.js, js/dungeon.js) — с живыми подписками.
+ * #game/join/КОД — вход по ссылке-приглашению; #game/<кампания> — ./Campaign.tsx, #game/<кампания>/<персонаж> — ./CharPage.tsx.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -25,7 +27,7 @@ export default function Game({ auth, path }: { auth: Auth; path: string[] }) {
     </div></div>
   );
   if (path[0] === 'join') return <Join auth={auth} code={path[1] || ''} />;
-  if (path[0] && auth.user) return <LegacyGame path={path.slice(0, 2)} />;
+  if (path[0] && auth.user) return path[1] ? <CharPage key={path[0] + '/' + path[1]} cid={path[0]} chid={path[1]} /> : <Campaign key={path[0]} cid={path[0]} />;
   return <GameHome auth={auth} />;
 }
 
@@ -175,55 +177,4 @@ function Join({ auth, code }: { auth: Auth; code: string }) {
         <div className="acc-body"><b>Войдите, чтобы присоединиться</b><SignIn big /></div></section>
     </div>
   );
-}
-
-// ------------------------------------------------------------ бросок d100
-// честный бросок 1–100: криптографический генератор браузера, без перекоса (лишние значения отбрасываются)
-function d100() {
-  const cr = window.crypto;
-  if (!cr || !cr.getRandomValues) return Math.floor(Math.random() * 100) + 1;
-  const a = new Uint32Array(1), lim = 4294967200;
-  do { cr.getRandomValues(a); } while (a[0] >= lim);
-  return a[0] % 100 + 1;
-}
-function Dice() {
-  const ui = window.App.ui;
-  const [why, setWhy] = useState('');
-  const [hist, setHist] = useState<{ n: number; why: string }[]>(ui.gDiceHist || []);
-  const [fresh, setFresh] = useState(0);
-  const roll = () => {
-    const n = d100();
-    const h = [{ n, why: why.trim().slice(0, 200) }, ...hist].slice(0, 12);
-    ui.gDiceHist = h; ui.gDiceLast = { n, ms: Date.now() };   // общая история с бросками в кампании
-    setHist(h); setWhy(''); setFresh(f => f + 1);
-  };
-  const last = hist[0];
-  return (
-    <section className="card g-dice">
-      <h2><Icon name="dice" />Бросок d100</h2>
-      <div className="gd-row">
-        <div key={fresh} className={'gd-n' + (last ? '' : ' empty') + (fresh ? ' fresh' : '') + (last && (last.n === 1 || last.n === 100) ? ' edge' : '')} aria-live="polite" aria-label="Результат броска">{last ? last.n : '—'}</div>
-        <div className="gd-ctl">
-          <input type="text" value={why} onChange={e => setWhy(e.target.value)} maxLength={200} placeholder="за что бросок (необязательно)" aria-label="За что бросок" onKeyDown={e => e.key === 'Enter' && roll()} />
-          <button type="button" className="btn primary" onClick={roll}>Бросить d100</button>
-        </div>
-      </div>
-      {hist.length > 1 && <p className="small gd-hist">Предыдущие: {hist.slice(1, 9).map((h, i) => <span key={i} title={h.why}>{h.n}</span>)}</p>}
-      <p className="muted small">Бросок никуда не записывается. В кампании результат попадает в журнал — его видят ГМ и все игроки.</p>
-    </section>
-  );
-}
-
-// ------------------------------------------------------------ кампания и персонаж — прежний сайт
-function LegacyGame({ path }: { path: string[] }) {
-  useLegacyCss();
-  const ref = useRef<HTMLDivElement>(null);
-  const key = path.join('/');
-  useLayoutEffect(() => {
-    const App = window.App;
-    App.ui.gamePath = key.split('/');
-    if (ref.current && window.Game) window.Game.render(ref.current);
-  }, [key]);
-  useEffect(() => () => { if (window.Game) window.Game.leave(); }, []);
-  return <div ref={ref} className="legacy-game" />;
 }

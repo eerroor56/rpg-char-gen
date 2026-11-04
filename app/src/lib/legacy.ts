@@ -8,7 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 type Any = any;
 declare global {
   interface Window {
-    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any; Game: Any; Reference: Any; WorldMap: Any; Craft: Any; Brew: Any;
+    App: Any; Rules: Any; Dev: Any; Cloud: Any; HeroSync: Any; GMLock: Any; RandomHero: Any; Inv: Any; Sheet: Any; Game: Any; Reference: Any; WorldMap: Any; Craft: Any; Brew: Any; Battle: Any; Dungeon: Any;
     GAME_DATA: Any; RACE_IMAGES: Record<string, { src: string; w: number; h: number }>;
   }
 }

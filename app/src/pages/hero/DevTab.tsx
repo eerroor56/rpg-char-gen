@@ -27,7 +27,9 @@ function chanceNow(eff: string, lvl: number) {
   return segs.length ? `${fmt(Math.min(100, lvl * ((C().MAKE || {}).CHANCE_PER_LVL || 1)))}% — ${segs.join('; ')}` : '';
 }
 
-export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
+/** perms: gm — начислять опыт и карму, принимать в общины, записывать изученное; owner — распределять свои очки и вести заметки */
+export default function DevTab({ rec, v, perms = { gm: true, owner: true } }: { rec: Any; v: Any; perms?: { gm?: boolean; owner?: boolean } }) {
+  const isGm = !!perms.gm, canSpend = !!(perms.gm || perms.owner);
   const Dev = window.Dev, Rr = R();
   const { res, res0, lv } = v;
   const [draft, setDraft] = useState<Draft>(newDraft);
@@ -138,7 +140,7 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
         {warns.map((e: Any, i: number) => <p key={'w' + i} className="issue warn">{e.msg}</p>)}
       </div>}
 
-      {(p.statPoints > 0 || p.talentPoints > 0) && (
+      {canSpend && (p.statPoints > 0 || p.talentPoints > 0) && (
         <section className="card wstack">
           <h2>Очки за новые уровни</h2>
           <p className="small">Характеристики: <b>{p.statSpent + sum(draft.alloc)} / {p.statPoints}</b> · таланты и пассивные навыки: <b>{(p.talentSpent || 0) + sum(draft.talents) + sum(draft.passives)} / {p.talentPoints || 0}</b></p>
@@ -187,7 +189,7 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
           {res.ageStart && res.ageStart !== res.age && <> — с ур. {fmt(res.ageAtLevel)}, при создании {res.ageStart.title.toLowerCase()}</>}
           <br /><span className="muted">{res.age.buff}</span>
           {res.ageNext && <><br /><span className="muted">Следующий — {res.ageNext.age.title.toLowerCase()}: с ур. {fmt(res.ageNext.level)}.</span></>}</p>}
-        <div className="hp-row">
+        {isGm && <><div className="hp-row">
           <input type="number" min={0} inputMode="numeric" value={f.xp} onChange={e => setF({ ...f, xp: e.target.value })} placeholder="сколько опыта" aria-label="Сколько опыта начислить" onKeyDown={e => e.key === 'Enter' && xpGive()} />
           <button type="button" className="btn small" onClick={xpGive}>Начислить</button>
         </div>
@@ -196,18 +198,18 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
           <button type="button" className="btn small" onClick={xpCreature}>Начислить</button>
         </div>
         <datalist id="hpCreatures">{creatures.map(c => <option key={c.n} value={c.n}>ур. {fmt(Rr.roundLevel(c.lvl))}</option>)}</datalist>
-        <p className="muted small">Опыт за существо = его уровню{d.expPct || d.expMul !== 1 ? ' с бонусами героя к опыту' : ''}. До следующего уровня нужно опыта в 100 раз больше текущего уровня.</p>
+        <p className="muted small">Опыт за существо = его уровню{d.expPct || d.expMul !== 1 ? ' с бонусами героя к опыту' : ''}. До следующего уровня нужно опыта в 100 раз больше текущего уровня.</p></>}
       </section>
 
       <section className="card wstack">
         <h2>Карма</h2>
         <p><b className="hp-karma">{signed(d.karma)}</b> <span className="muted small">характер{d.align ? ` «${d.align}»` : ''}: {signed(d.karmaBase)}{d.karmaGm ? `; изменения в игре: ${signed(d.karmaGm)}` : ''}; предел ±{C().KARMA_LIMIT}</span></p>
         <p className="muted small">Плюс — очки света, минус — очки тьмы.</p>
-        <div className="hp-row">
+        {isGm && <div className="hp-row">
           <input type="text" inputMode="numeric" value={f.karma} onChange={e => setF({ ...f, karma: e.target.value })} placeholder="+10 или −5" aria-label="На сколько изменить карму" />
           <input type="text" value={f.why} onChange={e => setF({ ...f, why: e.target.value })} maxLength={200} placeholder="за что (необязательно)" aria-label="За что" />
           <button type="button" className="btn small" onClick={karma}>Изменить</button>
-        </div>
+        </div>}
       </section>
 
       <section className="card wstack">
@@ -225,14 +227,14 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
               <p><b>{g.name}</b> <span className="chip">{g.kind || g.type || 'община'}</span></p>
               <p className="small">Бонус к статам: {st.length ? st.join(', ') : 'нет'}</p>
               {gifts.length > 0 && <ol className="small hp-gifts">{gifts.map((x, j) => <li key={j} className={j < open ? '' : 'locked'}>{x}{j >= open && <span className="muted"> — откроется после {10 * (j + 1)} заданий</span>}</li>)}</ol>}
-              <div className="hp-row small">Заданий выполнено:
+              {isGm ? <div className="hp-row small">Заданий выполнено:
                 <span className="stp mini"><button type="button" onClick={() => quest(i, -1)} disabled={!g.quests} aria-label="Минус задание">−</button><output>{g.quests || 0}</output><button type="button" onClick={() => quest(i, 1)} aria-label="Плюс задание">+</button></span>
                 <button type="button" className="link small" onClick={() => leave(i)}>выйти</button>
-              </div>
+              </div> : <p className="small">Заданий выполнено: <b>{g.quests || 0}</b></p>}
             </div>
           );
         }) : <p className="muted small">Пока ни в одной общине. Фракцию и религию герой получает в игре.</p>}
-        {list.length ? (
+        {!isGm ? null : list.length ? (
           <div className="hp-row">
             <Sel value={f.group} onChange={g => setF({ ...f, group: g })} label="Община" options={[{ v: '', t: '— вступить в общину —' } as Opt].concat(list.map(g => ({ v: String(g.row), t: g.name + (g.join ? ` (${g.join})` : ''), group: cap(g.type) })).sort((a, b) => String(a.group).localeCompare(String(b.group))))} />
             <button type="button" className="btn small" onClick={join}>Вступить</button>
@@ -253,25 +255,25 @@ export default function DevTab({ rec, v }: { rec: Any; v: Any }) {
                 {now && <p className="small hp-now">сейчас (ур. {fmt(ps.lvl)}): {now}</p>}
                 {ps && ps.top && <p className={'small' + (ps.max && ps.lvl >= ps.max ? '' : ' muted')}>на максимальном уровне: {ps.top}</p>}
               </div>
-              <button type="button" className="link small" onClick={() => unlearn(i)}>убрать</button>
+              {isGm && <button type="button" className="link small" onClick={() => unlearn(i)}>убрать</button>}
             </li>
           );
         })}</ul> : <p className="muted small">Пока ничего не изучено после создания.</p>}
-        <div className="hp-row">
+        {isGm && <><div className="hp-row">
           <Sel value={f.learnKind} onChange={k => setF({ ...f, learnKind: k })} label="Что изучено" options={Object.entries(LEARN_KINDS).map(([k, x]) => ({ v: k, t: x.t }))} />
           <input type="text" list="hpLearn" value={f.learnName} onChange={e => setF({ ...f, learnName: e.target.value })} placeholder="название" aria-label="Название" />
           <button type="button" className="btn small" onClick={learn}>Добавить</button>
         </div>
-        <datalist id="hpLearn">{LEARN_KINDS[f.learnKind].list().map(n => <option key={n} value={n} />)}</datalist>
+        <datalist id="hpLearn">{LEARN_KINDS[f.learnKind].list().map(n => <option key={n} value={n} />)}</datalist></>}
         {talentsNow.length > 0 && <><h3>Таланты сейчас</h3><ul className="hp-list">{talentsNow}</ul></>}
         {pas.some(x => x.max) && <p className="muted small">Пассивные навыки прокачиваются очками талантов (за каждые 5 уровней) — в «Очках за новые уровни».</p>}
       </section>
 
       <section className="card wstack">
         <h2>Заметки</h2>
-        <Field label="Что важно помнить о герое: клятвы, долги, знакомые">
+        {canSpend ? <Field label="Что важно помнить о герое: клятвы, долги, знакомые">
           <textarea rows={5} value={notes !== null ? notes : rec.notes || ''} onChange={e => setNotes(e.target.value)} />
-        </Field>
+        </Field> : <p className="small cs-pre">{rec.notes || '—'}</p>}
         {notes !== null && notes !== (rec.notes || '') && <div className="row"><button type="button" className="btn small primary" onClick={saveNotes}>Сохранить заметки</button><button type="button" className="btn ghost small" onClick={() => setNotes(null)}>Отменить</button></div>}
       </section>
       </div>
