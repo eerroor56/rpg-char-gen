@@ -83,6 +83,8 @@ h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); }
 
 /* ---------- элементы */
 .card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r-l); padding: 18px 20px; }
+/* стили прежнего сайта (подключаются ради его кусков) дают .card отступ снизу — у карточек новой версии его нет: расстояния задаёт сетка */
+.shell .card { margin: 0; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform .12s ease, border-color .15s ease, background-color .15s ease; }
 .btn:hover { border-color: var(--brass); }
@@ -940,9 +942,55 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .cp-roll b.edge { color: var(--err); }
 .cp-settings summary { font-weight: 700; }
 .cp-settings[open] summary { margin-bottom: 10px; }
-.cp-dungeon { min-width: 0; }
-.cp .legacy-pane > :first-child { margin-top: 0; }
-.cp .legacy-pane > :last-child { margin-bottom: 0; }
+/* генератор подземелий (pages/game/Dungeon.tsx) */
+.dg { --dg-room: 44px; --dg-cor: 26px; min-width: 0; }
+.dg h3 { font: 700 1.05rem/1.3 var(--font-body); margin: 0; }
+.dg p { margin: 0; }
+.dg .gr-check { align-self: end; }
+.dg .chip.warn { color: #f3d58f; border-color: rgba(239, 197, 109, .5); }
+.dg .link.danger { color: var(--err); }
+.dg-scroll { overflow: auto; padding: 10px; background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: var(--r-m); max-height: 70vh; }
+.dg-map { display: grid; width: max-content; margin: 0 auto; }
+.dg-void { display: block; }
+.dg-room, .dg-key { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); font: 700 .9rem/1 var(--font-body); }
+.dg-room { width: var(--dg-room); height: var(--dg-room); padding: 0; cursor: pointer; transition: transform .15s ease, border-color .15s ease, box-shadow .2s ease; }
+.dg-room:hover { border-color: var(--brass); transform: scale(1.08); box-shadow: 0 6px 16px rgba(0, 0, 0, .4); z-index: 1; }
+.dg-room.is-sel { outline: 2px solid #f3d58f; outline-offset: 1px; animation: dg-pulse 1.8s ease-in-out infinite; }
+@keyframes dg-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(243, 213, 143, .55); } 50% { box-shadow: 0 0 0 6px rgba(243, 213, 143, 0); } }
+.dg-key { display: inline-grid; min-width: 26px; height: 20px; padding: 0 4px; font-size: .75rem; margin: 0 2px 0 6px; vertical-align: middle; }
+.dg .t-entrance { background: #2f5a4d; border-color: var(--ok); }
+.dg .t-empty { background: var(--panel-2); color: var(--muted); }
+.dg .t-enemies { background: #5a2a33; border-color: #b05a62; }
+.dg .t-treasury { background: #5a4a22; border-color: var(--brass); }
+.dg .t-trap { background: #4d3a5e; border-color: #9a7cc0; }
+.dg .t-special { background: #23485a; border-color: #5fa3c0; }
+.dg .t-final { background: #7a1f24; border-color: var(--err); color: #ffd9d4; box-shadow: 0 0 0 2px var(--brass); }
+.dg .t-secret { background: transparent; border-style: dashed; border-color: var(--muted); }
+.dg-cor { display: grid; place-items: center; color: var(--muted); font-size: .72rem; position: relative; isolation: isolate; text-shadow: 0 0 3px var(--bg-2), 0 0 3px var(--bg-2); }
+.dg-cor::before { content: ''; position: absolute; background: var(--line); z-index: -1; }
+.dg-cor.h::before { left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; }
+.dg-cor.v::before { top: 0; bottom: 0; left: 50%; width: 4px; margin-left: -2px; }
+.dg-cor.stairs { color: #efc56d; font-weight: 700; }
+.dg-cor.stairs::before { background: rgba(239, 197, 109, .55); }
+.dg-cor.secret::before { background: none; border: 0 dashed var(--muted); }
+.dg-cor.secret.h::before { border-top-width: 2px; height: 0; margin-top: 0; }
+.dg-cor.secret.v::before { border-left-width: 2px; width: 0; margin-left: 0; }
+.dg-legend { line-height: 2; }
+.dg-room-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; background: var(--bg-2); border-left: 3px solid var(--brass); border-radius: var(--r-s); }
+.dg-foes { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dg-foes li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line-soft); }
+.dg-track { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; }
+.dg-track-col { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.dg-light { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.dg-light label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.dg-light input { width: 84px; }
+.dg-log { margin: 0; padding-left: 18px; }
+.dg-all summary { cursor: pointer; color: var(--muted); }
+.dg-row { padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: .92rem; }
+@media (max-width: 720px) {
+  .dg { --dg-room: 36px; --dg-cor: 20px; }
+  .dg-room { font-size: .8rem; }
+}
 /* бросок и журнал в панели у поля боя */
 .cp-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
 .cp-side .card { padding: 10px 12px; border-radius: var(--r-m); }

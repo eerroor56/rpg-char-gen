@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { cap, useLegacyCss } from '../../lib/legacy';
+import { useState } from 'react';
+import { cap } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt } from '../create/kit';
 import { Allies, BattleCard, type BattleCtx } from './Battle';
+import { DungeonCard } from './Dungeon';
 import { charView, copyText, joinLink, run, setTarget, STATUS, useWatch, when, type Any } from './cloud';
 import { Dice } from './Dice';
 
@@ -10,7 +11,7 @@ import { Dice } from './Dice';
  * Страница кампании (#game/<кампания>): поле боя, персонажи, союзники, сессия, журнал, бросок d100, участники и приглашение (ГМ),
  * казна, итоги сессий, заметки ГМ, настройки. Данные — живые подписки js/cloud.js.
  * Поле боя и союзники — ./Battle.tsx (расчёт — js/battle.js); при поле боя бросок и журнал — в панели рядом с картой.
- * Генератор подземелий пока рисует прежний код (js/dungeon.js).
+ * Генератор подземелий (только ГМ) — ./Dungeon.tsx (генерация — js/dungeon.js). Стили прежнего сайта здесь больше не нужны.
  */
 const FEED_SHUT = 'hero-workshop:feed-shut';
 const ORDER: Record<string, number> = { review: 0, active: 1, draft: 2, dead: 3, retired: 4 };
@@ -26,7 +27,6 @@ export function Campaign({ cid }: { cid: string }) {
   const gm = !!camp.data && camp.data.gm === me;
   const priv = useWatch(gm ? cid + '|priv' : null, (ok) => C.watchPrivate(cid, '_campaign', ok, () => { /* заметки не обязательны */ }));
   const [, tick] = useState(0);
-  useLegacyCss(gm);   // генератор подземелий (только у ГМ) — пока со стилями прежнего сайта
 
   if (camp.err && !camp.data) return (
     <div className="page"><a className="crumb" href="#game"><span aria-hidden="true">←</span> Все кампании</a>
@@ -56,7 +56,11 @@ export function Campaign({ cid }: { cid: string }) {
     saveVit: (chid: string, vit: Any) => patchChar(chid, { vit }),
     saveAllyPos: (chid: string, aid: string, p: Any) => { const ch = list.find(x => x.id === chid); return patchChar(chid, { apos: { ...((ch && ch.apos) || {}), [aid]: p } }); },
   };
-  const dungeon = gm && window.Dungeon ? window.Dungeon.card({ cid, level: partyLevel, rerender }) : '';
+  // подземелье текстом — в конец заметок ГМ
+  const addNotes = (text: string) => {
+    const was = String((priv.data || {}).text || '').trim();
+    run(() => C.savePrivate(cid, '_campaign', (was ? was + '\n\n' : '') + text), 'Подземелье добавлено в заметки ГМ');
+  };
 
   const dice = <Dice cid={cid} chid={myHero?.id} chName={myHero ? myHero.name || 'Безымянный герой' : undefined} side={arena} />;
   const journal = <Journal cid={cid} gm={gm} events={events.data} chars={list} sessions={sessions.data || []} feed={feed} setFeed={f => { App.ui.gFeed = f; setFeed(f); }} side={arena} />;
@@ -94,17 +98,9 @@ export function Campaign({ cid }: { cid: string }) {
           {gm && <Settings cid={cid} camp={c} />}
         </aside>
       </div>
-      {dungeon && <LegacyBlock html={dungeon} className="cp-dungeon" />}
+      {gm && window.Dungeon && <DungeonCard cid={cid} level={partyLevel} rerender={rerender} addNotes={addNotes} />}
     </div>
   );
-}
-
-/** разметка прежнего сайта (генератор подземелий): обновляется, только когда изменилась */
-function LegacyBlock({ html, className }: { html: string; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const last = useRef('');
-  useLayoutEffect(() => { if (ref.current && html !== last.current) { ref.current.innerHTML = html; last.current = html; } });
-  return <div ref={ref} className={'legacy-pane' + (className ? ' ' + className : '')} />;
 }
 
 // ------------------------------------------------------------ персонажи

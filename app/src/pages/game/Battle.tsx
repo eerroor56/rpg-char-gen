@@ -167,7 +167,7 @@ function Tools({ board }: { board: Any }) {
     <div className="bt-tools" role="toolbar" aria-label="Инструменты поля">
       {chip('', 'Двигать', <span className="bt-ico">✥</span>)}
       {Object.keys(P.set).map(t => chip(t, cap(B.info(t).n), <Glyph t={t} />))}
-      <select value={others.includes(tool) ? tool : ''} onChange={e => act('btToolAny', {}, e.target.value)} aria-label="Другой предмет">
+      <select className="sel" value={others.includes(tool) ? tool : ''} onChange={e => act('btToolAny', {}, e.target.value)} aria-label="Другой предмет">
         <option value="">другой предмет…</option>
         {others.map(t => <option key={t} value={t}>{cap(B.info(t).n)}</option>)}
       </select>
@@ -193,18 +193,18 @@ function GenForm({ open }: { open: boolean }) {
       <summary>{open ? 'Создать поле боя' : 'Новое поле боя'}</summary>
       <div className="fgrid bt-form">
         <label className="fld"><span className="fld-l">Местность</span>
-          <select value={B.pickedPreset()} onChange={e => ui.set('btPreset', e.target.value)}>
+          <select className="sel" value={B.pickedPreset()} onChange={e => ui.set('btPreset', e.target.value)}>
             {list.map(([g, opts]) => <optgroup key={g} label={g}>{opts.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</optgroup>)}
           </select></label>
         <label className="fld"><span className="fld-l">Ширина</span><input type="number" min={B.SIZE[0]} max={B.SIZE[1]} step={1} value={val('btW', 15)} onChange={e => ui.set('btW', e.target.value)} /></label>
         <label className="fld"><span className="fld-l">Высота</span><input type="number" min={B.SIZE[0]} max={B.SIZE[1]} step={1} value={val('btH', 15)} onChange={e => ui.set('btH', e.target.value)} /></label>
         <label className="fld"><span className="fld-l">Предметов</span>
-          <select value={val('btDensity', 'mid')} onChange={e => ui.set('btDensity', e.target.value)}>
+          <select className="sel" value={val('btDensity', 'mid')} onChange={e => ui.set('btDensity', e.target.value)}>
             {Object.entries(B.DENSITY as Record<string, [number, string]>).map(([k, d]) => <option key={k} value={k}>{d[1]}</option>)}
           </select></label>
         <label className="fld"><span className="fld-l">Противников</span><input type="number" min={0} max={40} step={1} value={val('btFoeN', 4)} onChange={e => ui.set('btFoeN', e.target.value)} /></label>
         <label className="fld"><span className="fld-l">Случайные — из</span>
-          <select value={val('btFoeSrc', 'bestiary')} onChange={e => ui.set('btFoeSrc', e.target.value)}>
+          <select className="sel" value={val('btFoeSrc', 'bestiary')} onChange={e => ui.set('btFoeSrc', e.target.value)}>
             <option value="bestiary">бестиария</option><option value="races">рас</option><option value="mix">бестиария и рас</option>
           </select></label>
         <label className="fld bt-wide"><span className="fld-l">Кто именно</span>
@@ -426,11 +426,11 @@ export function Allies({ gm, heroes, allies, save }: { gm: boolean; heroes: { id
           <label className="fld"><span className="fld-l">Кто</span><input type="text" list="alCreatures" value={ui.get('alName')} onChange={e => ui.set('alName', e.target.value)} placeholder="существо, раса или своё" /></label>
           <label className="fld"><span className="fld-l">Имя</span><input type="text" value={ui.get('alNick')} onChange={e => ui.set('alNick', e.target.value)} maxLength={60} placeholder="кличка (необязательно)" /></label>
           <label className="fld"><span className="fld-l">Вид</span>
-            <select value={ui.get('alKind') || 'pet'} onChange={e => ui.set('alKind', e.target.value)}>
+            <select className="sel" value={ui.get('alKind') || 'pet'} onChange={e => ui.set('alKind', e.target.value)}>
               {Object.entries(B.ALLY_KINDS as Record<string, [string, string]>).map(([k, d]) => <option key={k} value={k}>{cap(d[0])}</option>)}
             </select></label>
           <label className="fld"><span className="fld-l">Чей</span>
-            <select value={ui.get('alOf')} onChange={e => ui.set('alOf', e.target.value)}>
+            <select className="sel" value={ui.get('alOf')} onChange={e => ui.set('alOf', e.target.value)}>
               <option value="">всего отряда</option>
               {heroes.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select></label>

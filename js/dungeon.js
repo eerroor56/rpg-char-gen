@@ -509,5 +509,28 @@
     }
   });
 
-  window.Dungeon = { card, text, generate, habMatch };
+  // ------------------------------------------------------------ для новой версии (React): данные без разметки
+  // карта — сетка: комнаты в чётных клетках, коридоры между ними (как mapHtml)
+  function mapGrid(dg) {
+    const xs = dg.rooms.map(r => r.x), ys = dg.rooms.map(r => r.y);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys);
+    const W = (Math.max(...xs) - x0) * 2 + 1, H = (Math.max(...ys) - y0) * 2 + 1;
+    const grid = Array.from({ length: H }, () => Array(W).fill(null));
+    dg.rooms.forEach(r => { grid[(r.y - y0) * 2][(r.x - x0) * 2] = { r }; });
+    dg.links.forEach(l => {
+      const a = dg.rooms[l.a], b = dg.rooms[l.b];
+      grid[a.y + b.y - 2 * y0][a.x + b.x - 2 * x0] = { l, v: a.x === b.x };
+    });
+    return { W, H, grid };
+  }
+  const api = {
+    setCtx: o => { ctx = { cid: o.cid, rerender: o.rerender || (() => {}) }; },
+    load, isOpen: cid => (App.ui.dgOpen !== undefined ? App.ui.dgOpen : !!load(cid)),
+    // параметры генерации: по умолчанию — от уровня отряда
+    opts: level => { const lvl = Math.max(1, Math.round(level || 1)); return App.ui.dgOpts || (App.ui.dgOpts = { min: Math.max(0, Math.round(lvl * 0.5)), max: Math.round(lvl * 1.5) + 2, hab: '-1', boss: true }); },
+    unlocked, mapGrid, pathToFinal, codeOf, titleOf, roomLabel, lightPct, lightOf, lightSources,
+    TYPES, SPECIAL, STAIR_BONUS, PATROL_STEP, ROOM_COST, CORR_COST
+  };
+
+  window.Dungeon = Object.assign({ card, text, generate, habMatch }, api);
 })();
