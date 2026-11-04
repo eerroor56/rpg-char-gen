@@ -44,11 +44,12 @@ export function initLegacy() {
   // прежний сайт просит перерисовать всё (открыты разделы ГМ) или справочник (калькулятор зелий) — сообщить разделам
   App.render = function () { this.recompute(); window.dispatchEvent(new Event('mh-gm')); };
   // «Ссылка для ГМ»: герой целиком в адресе (#hero=…) — открыть его в мастере на листе
-  const openShared = () => {
+  // ссылка бывает прежней (JSON в base64) и короткой (сжатой) — App.decodeLink разбирает обе
+  const openShared = async () => {
     const m = location.hash.match(/^#hero=([A-Za-z0-9_-]+)/);
     if (!m) return;
     try {
-      App.state = App.migrate(App.decode(m[1]));
+      App.state = App.migrate(await App.decodeLink(m[1]));
       App.editingId = null;
       App.prevState = null;
       App.save();

@@ -346,8 +346,8 @@
       document.head.appendChild(sc);
       App.toast('Готовлю картинку…');
     },
-    shareLink() {
-      const url = location.origin + location.pathname + '#hero=' + App.encode(App.state);
+    async shareLink() {
+      const url = location.origin + location.pathname + '#hero=' + await App.encodeLink(App.state);
       const done = () => App.toast('Ссылка скопирована — отправьте её ГМ');
       if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(done, () => prompt('Скопируйте ссылку:', url));
       else prompt('Скопируйте ссылку:', url);

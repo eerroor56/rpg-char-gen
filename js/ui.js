@@ -316,8 +316,7 @@
     loadFromHash() {
       const m = location.hash.match(/^#hero=([A-Za-z0-9_\-]+)/);
       if (!m) return false;
-      try {
-        const st = this.decode(m[1]);
+      this.decodeLink(m[1]).then(st => {
         this.state = this.migrate(st);
         this.editingId = null;
         this.save();
@@ -325,26 +324,82 @@
         this.step = 'summary';
         this.route();
         this.toast('Персонаж загружен из ссылки');
-      } catch (e) {
+      }).catch(() => {
         history.replaceState(null, '', '#create');
         this.route();
         this.toast('Ссылка повреждена — персонаж не загружен');
-      }
+      });
       return true;
     },
 
-    encode(st) {
-      const json = JSON.stringify(st);
-      const bytes = new TextEncoder().encode(json);
+    // ------------------------------------------------------------ герой в ссылке (#hero=…)
+    // Прежний вид — base64 от JSON целиком (начинается с «ey»). Новый, короткий: «1» + base64 от сжатого (deflate) JSON,
+    // из которого убрано всё, что совпадает с пустым героем (migrate при открытии восстановит). Открываются оба
+    b64(bytes) {
       let bin = '';
       bytes.forEach(b => { bin += String.fromCharCode(b); });
       return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     },
-    decode(s) {
-      const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-      const bin = atob(b64);
-      const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-      return JSON.parse(new TextDecoder().decode(bytes));
+    unb64(s) {
+      const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from(bin, c => c.charCodeAt(0));
+    },
+    encode(st) { return this.b64(new TextEncoder().encode(JSON.stringify(st))); },
+    decode(s) { return JSON.parse(new TextDecoder().decode(this.unb64(s))); },
+    // только отличия от пустого героя: пустые строки, нули по умолчанию, пустые списки и объекты не пишем
+    packState(st) {
+      const def = R.newState();
+      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      const strip = (v, d) => {
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          const o = {};
+          Object.entries(v).forEach(([k, x]) => {
+            const dk = d && typeof d === 'object' ? d[k] : undefined;
+            if (x === '' || x === null || x === undefined || same(x, dk)) return;
+            const y = strip(x, dk);
+            if (y && typeof y === 'object' && !Array.isArray(y) && !Object.keys(y).length) return;
+            o[k] = y;
+          });
+          return o;
+        }
+        return v;
+      };
+      return Object.assign({ v: st.v }, strip(st, def));
+    },
+    // текст в байты: латиница — 1 байт, кириллица (U+0400–045F) — тоже 1 байт (0x80–0xDF), прочее — 0xFF + 2 байта UTF-16.
+    // Вдвое короче UTF-8 для русского текста (внешность, история), до сжатия
+    bytesOf(s) {
+      const out = [];
+      for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if (c < 0x80) out.push(c);
+        else if (c >= 0x400 && c < 0x460) out.push(0x80 + c - 0x400);
+        else out.push(0xFF, c >> 8, c & 0xFF);
+      }
+      return new Uint8Array(out);
+    },
+    textOf(b) {
+      let s = '';
+      for (let i = 0; i < b.length; i++) {
+        const x = b[i];
+        if (x < 0x80) s += String.fromCharCode(x);
+        else if (x < 0xE0) s += String.fromCharCode(0x400 + x - 0x80);
+        else { s += String.fromCharCode((b[i + 1] << 8) | b[i + 2]); i += 2; }
+      }
+      return s;
+    },
+    async deflate(bytes, how) {
+      return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new (how ? CompressionStream : DecompressionStream)('deflate-raw'))).arrayBuffer());
+    },
+    // «2» — короткий вид: отличия от пустого героя → однобайтовая кириллица → deflate → base64url
+    async encodeLink(st) {
+      if (!window.CompressionStream) return this.encode(st);
+      return '2' + this.b64(await this.deflate(this.bytesOf(JSON.stringify(this.packState(st))), true));
+    },
+    async decodeLink(s) {
+      if (s[0] === '2') return JSON.parse(this.textOf(await this.deflate(this.unb64(s.slice(1)), false)));
+      if (s[0] === '1') return JSON.parse(new TextDecoder().decode(await this.deflate(this.unb64(s.slice(1)), false)));
+      return this.decode(s);
     },
 
     // ------------------------------------------------------------ состояние
