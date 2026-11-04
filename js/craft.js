@@ -274,7 +274,8 @@
     const out = { item, kind, base, cat: slotCat(item), effects: [], warnings: [], notes: [], glyphs: [],
       damage: null, armor: null, pen: 0, req: [], statFx: { l: 0, hpRegen: 0 }, hands: 0, slots: slotsOf(item), sockets: 0, mult: [], bonus: [], size };
     if (!CRAFTABLE.includes(kind)) {
-      if (item.effect) out.effects.push({ src: KIND_NAMES[kind] || 'эффект', text: item.effect });
+      // у приготовленного (блюдо, напиток, зелье) — ещё и эффекты с цветом: fx [{ t, m: '+' | '-' | '' }]
+      if (item.effect) out.effects.push(Object.assign({ src: KIND_NAMES[kind] || 'эффект', text: item.effect }, Array.isArray(item.fx) && item.fx.length ? { fx: item.fx } : {}));
       return out;
     }
     if (ctx.sizeId && size.id !== ctx.sizeId) out.notes.push(`Сделан под рост «${size.name.toLowerCase()}», а персонаж — «${sizeOf(ctx.sizeId).name.toLowerCase()}».`);

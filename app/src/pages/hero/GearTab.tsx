@@ -174,7 +174,7 @@ function ItemCard({ it, c, perms, isWorn, rec, v }: { it: Any; c: Any; perms: Pe
         <button type="button" className="gr-x" onClick={() => act('invSel', { v: '' })} aria-label="Закрыть карточку" title="Закрыть">✕</button>
       </div>
       {rows.length > 0 && <dl className="kvs">{rows.map(([t, x]) => <div key={t} className="kv"><dt>{t}</dt><dd>{x}</dd></div>)}</dl>}
-      {effs.length > 0 && <ul className="wfx">{effs.map((e, i) => <li key={i}><b>{e.src}:</b> {e.text}{e.scale && e.scale !== 'за предмет' ? <> <span className="chip">{e.scale}</span></> : null}{e.applied ? <span className="muted small"> — учтено в {e.applied === 'dmg' ? 'уроне' : 'броне'}</span> : null}</li>)}</ul>}
+      {effs.length > 0 && <ul className="wfx">{effs.map((e, i) => <li key={i}><b>{e.src}:</b> {e.fx ? <FxText fx={e.fx} text={e.text} /> : e.text}{e.scale && e.scale !== 'за предмет' ? <> <span className="chip">{e.scale}</span></> : null}{e.applied ? <span className="muted small"> — учтено в {e.applied === 'dmg' ? 'уроне' : 'броне'}</span> : null}</li>)}</ul>}
       {boost && <div className="gr-boost" dangerouslySetInnerHTML={{ __html: boost }} />}
       {it.note && <p className="small gr-pre">{it.note}</p>}
       {tome && <>
@@ -201,6 +201,12 @@ function ItemCard({ it, c, perms, isWorn, rec, v }: { it: Any; c: Any; perms: Pe
       <GiveRow it={it} perms={perms} />
     </section>
   );
+}
+
+// эффекты приготовленного с цветом, как в листе «алхимия»: зелёным — бафф, красным — дебафф
+function FxText({ fx, text }: { fx: { t: string; m?: string }[]; text: string }) {
+  const tail = (String(text || '').match(/(\s\((испорчено|консервы)\))+$/) || [''])[0];    // пометки в конце описания
+  return <>{fx.map((x, i) => <span key={i}>{i > 0 && ', '}<span className={'bw-eff' + (x.m === '+' ? ' plus' : x.m === '-' ? ' minus' : '')}>{x.t}</span></span>)}{tail}</>;
 }
 
 // ------------------------------------------------------------ кошелёк

@@ -1195,7 +1195,7 @@
       let made = qty, luck = '';
       if (d.mode === 'cook' && ch.cook.two) { const x = d100(); if (x <= ch.cook.two) { made = qty * 2; luck = `кулинария ${fmt(ch.cook.lvl)}: бросок ${x} ≤ ${fmt(ch.cook.two)} — 2 блюда вместо 1`; } else luck = `кулинария ${fmt(ch.cook.lvl)}: бросок ${x} > ${fmt(ch.cook.two)}`; }
       if (d.mode === 'potion' && ch.alch.three) { const x = d100(); if (x <= ch.alch.three) { made = qty * 3; luck = `алхимия ${fmt(ch.alch.lvl)}: бросок ${x} ≤ ${fmt(ch.alch.three)} — 3 зелья вместо 1`; } else luck = `алхимия ${fmt(ch.alch.lvl)}: бросок ${x} > ${fmt(ch.alch.three)}`; }
-      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe + (roll ? `; бросок ${roll}` : ''), qty: made, src: 'приготовил сам' };
+      const it = { id: newId(), kind: r.kind, name, effect: r.summary, fx: r.fx, note: r.recipe + (roll ? `; бросок ${roll}` : ''), qty: made, src: 'приготовил сам' };
       if (r.cost && !r.cost.unknown.length) it.price = Math.round(r.cost.total * qty / made);      // цена ингредиентов за штуку
       const used = takeFromBag(v, chk.req);
       App.ui.brew = B.blank(d.mode);
@@ -1367,7 +1367,7 @@
       if (r.warnings.length && !confirm(`Есть замечания:\n${r.warnings.join('\n')}\n\nВсё равно выдать?`)) return;
       const name = String(d.name || '').trim() || r.name;
       const qty = Math.max(1, Math.floor(num(d.qty) || 1));
-      const it = { id: newId(), kind: r.kind, name, effect: r.summary, note: r.recipe, qty, src: 'выдал ГМ' };
+      const it = { id: newId(), kind: r.kind, name, effect: r.summary, fx: r.fx, note: r.recipe, qty, src: 'выдал ГМ' };
       if (r.cost && !r.cost.unknown.length) it.price = r.cost.total;      // цена ингредиентов за штуку
       gmChange(gm => { addStack(gm.items, it); }, `Получено: «${name}»${qty > 1 ? ' ×' + qty : ''} (${r.summary})`);
       App.ui.brew = window.Brew.blank(d.mode);

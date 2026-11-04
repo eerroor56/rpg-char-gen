@@ -585,37 +585,58 @@ def build_skills(wb):
         v = row_txt(ws, r, "J", "L")
         if v[0]:
             gifts.append({"name": v[0], "bonus": v[1], "debuff": v[2]})
-    curses_special = []
-    for r in range(53, 59):
+    # колонка J: проклятия, благословения, модификации, болезни — блоки ищутся по серым заголовкам (книга (6) сдвинула их на 10 строк).
+    # Под заголовками благословений и болезней — строка-подсказка «назвыние | эффект | …», её пропускаем
+    # заголовок — одно слово в ячейке; сравниваем по началу (txt правит опечатки: «благословления» → «благословения»)
+    def find_j(text, start=1):
+        for r in range(start, ws.max_row + 1):
+            t = txt(ws.cell(r, col("J")).value).lower().strip()
+            if t.startswith(text) and " " not in t:
+                return r
+        raise SystemExit(f"Лист «скилы»: не найден заголовок «{text}…» в колонке J")
+    j_curse = find_j("проклятия")
+    j_bless = find_j("благослов", j_curse)
+    j_mods = find_j("модификации", j_bless)
+    j_dis = find_j("болезни", j_mods)
+    try:
+        j_end = find_j("созвездия", j_dis)
+    except SystemExit:
+        j_end = ws.max_row + 1
+    is_hint = lambda v: v[0].lower().strip() in ("назвыние", "название")
+    curses_special, curses = [], []
+    for r in range(j_curse + 1, j_bless):
         v = row_txt(ws, r, "J", "K")
-        if v[0]:
-            curses_special.append({"name": v[0], "effect": v[1],
-                                   "itemCurse": fill_key(ws.cell(r, col("J"))) == "th4"})
-    curses = []
-    for r in range(59, 97):
-        v = row_txt(ws, r, "J", "K")
-        if v[0]:
+        if not v[0]:
+            continue
+        fk = fill_key(ws.cell(r, col("J")))
+        if fk in ("th5", "th4"):     # великие проклятия (оранжевые) и проклятия предметов (голубые)
+            curses_special.append({"name": v[0], "effect": v[1], "itemCurse": fk == "th4"})
+        else:
             curses.append({"name": v[0], "effect": v[1]})
     curse_rules = [txt(ws.cell(r, col("N")).value) for r in range(2, 9) if txt(ws.cell(r, col("N")).value)]
     buffs = []
-    for r in range(99, 109):
+    for r in range(j_bless + 1, j_mods):
         v = row_txt(ws, r, "J", "M")
-        if v[0]:
+        if v[0] and not is_hint(v):
             buffs.append({"name": v[0].replace("♥", "").strip(), "effect": v[1], "dur": v[2], "how": v[3],
                           "birth": "♥" in v[0]})
     mods = []
-    for r in range(110, 152):
+    for r in range(j_mods + 1, j_dis):
         v = row_txt(ws, r, "J", "M")
         if v[0]:
             mods.append(v)
     diseases = []
     DIS_CAT = {"th9": "расстройство (0 пси)", "th5": "великая болезнь", "th7": "особая"}
-    for r in range(160, 210):
+    disease_note = ""
+    for r in range(j_dis + 1, j_end):
         v = row_txt(ws, r, "J", "L")
-        if v[0]:
-            diseases.append({"name": v[0].replace("♥", "").strip(), "e1": v[1], "e2": v[2],
-                             "birth": "♥" in v[0], "cat": DIS_CAT.get(fill_key(ws.cell(r, col("J")))) or "обычная"})
-    disease_note = txt(ws.cell(159, col("N")).value)
+        if not v[0]:
+            continue
+        if is_hint(v):
+            disease_note = txt(ws.cell(r, col("N")).value)
+            continue
+        diseases.append({"name": v[0].replace("♥", "").strip(), "e1": v[1], "e2": v[2],
+                         "birth": "♥" in v[0], "cat": DIS_CAT.get(fill_key(ws.cell(r, col("J")))) or "обычная"})
     traits_pos, traits_neg, traits_acq = [], [], []
     target = None
     for r in range(1, 56):
@@ -933,7 +954,7 @@ def build_world(wb):
 def build_mechanics(wb):
     ws = wb["механики"]
     main = sectioned(ws, 1, 163, "A", "C")
-    craft = generic_block(ws, 1, 28, "E", "G", header_row=1)
+    craft = generic_block(ws, 1, 45, "E", "G", header_row=1)     # крафтильни: ГМ добавляет строки снизу
     dungeon = generic_block(ws, 1, 16, "I", "L", header_row=1)
     return {"main": main, "craft": craft, "dungeon": dungeon}
 

@@ -82,10 +82,7 @@ h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); }
 }
 
 /* ---------- элементы */
-.card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r-l); padding: 18px 20px; }
-/* стили прежнего сайта (подключаются ради его кусков) дают .card отступ снизу — у карточек новой версии его нет: расстояния задаёт сетка */
-.shell .card { margin: 0; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--line);
+.card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r-l); padding: 18px 20px; }.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform .12s ease, border-color .15s ease, background-color .15s ease; }
 .btn:hover { border-color: var(--brass); }
 .btn:active { transform: scale(.97); }
