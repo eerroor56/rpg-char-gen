@@ -849,3 +849,30 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
   .gr-sum { flex: 1; }
   .gr-coins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- снаряжение, второй заход: заклинания, крафтильни, «Выдать предмет» */
+.gr-spells { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.gr-spells li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-m); border: 1px dashed var(--line); background: var(--bg-2); }
+.gr-spells li.full { border-style: solid; border-color: rgba(214, 168, 92, .45); background: linear-gradient(160deg, rgba(214, 168, 92, .1), var(--bg-2) 70%); }
+.gr-spells li.over { border-color: var(--err); }
+.gr-spells li.is-edit { grid-column: 1 / -1; border-color: var(--brass); }
+.gr-sp-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); color: var(--brass-2); font-weight: 700; font-size: .85rem; }
+.gr-sp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gr-sp-f { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; color: var(--brass-2); overflow-wrap: anywhere; }
+.gr-sp-ops { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.gr-sp-form { flex: 1; }
+.gr-stations summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; cursor: pointer; list-style: none; }
+.gr-stations summary::-webkit-details-marker { display: none; }
+.gr-stations summary::before { content: "▸"; color: var(--brass-2); }
+.gr-stations[open] summary::before { content: "▾"; }
+.gr-stations[open] summary { margin-bottom: 10px; }
+.gr-st-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-top: 8px; }
+.gr-check { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-m); background: var(--bg-2); border: 1px solid var(--line-soft); cursor: pointer; }
+.gr-check.is-on { border-color: rgba(111, 194, 171, .5); }
+.gr-check input { width: 18px; height: 18px; min-height: 0; flex: none; accent-color: var(--brass); }
+.gr-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-modes button { border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font: inherit; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+.gr-modes button:hover { color: var(--text); border-color: var(--brass); }
+.gr-modes button.is-on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
+.gr-hit { padding: 10px 12px; border-radius: var(--r-m); background: var(--bg-2); }
+.gr-hit p { margin: 0 0 4px; }

@@ -91,10 +91,10 @@ export function stepStatus(res: Any, id: string) {
   return { errs, warns };
 }
 /** нажать кнопку прежнего мастера (App.actions) без разметки — например «Случайно» */
-export function act(name: string, dataset: Record<string, string> = {}, value?: string) {
+export function act(name: string, dataset: Record<string, string> = {}, value?: string, checked?: boolean) {
   const App = window.App, f = App.actions[name];
-  // value — для действий, которые читают значение поля (data-change: invCat и т.п.)
-  if (f) f.call(App, { dataset, value, closest: () => null }, {});
+  // value, checked — для действий, которые читают поле (data-change: invCat, invStation и т.п.)
+  if (f) f.call(App, { dataset, value, checked, closest: () => null }, {});
 }
 
 export const toast = (text: string) => window.App.toast(text);

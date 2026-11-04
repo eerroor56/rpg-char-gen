@@ -1,27 +1,19 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { act } from '../../lib/legacy';
 import { fmt, norm, R, signed, type Any } from '../create/kit';
 import { Icon } from '../../ui/Icon';
+import { LegacyHtml, useUi } from './gearKit';
+import { AddItem, Spells, Stations } from './GearMore';
 
 /*
  * «Снаряжение» героя: экипировка (кукла), рюкзак, карточка предмета, кошелёк — на React. Расчёт предметов и кошелька —
  * js/craft.js (Craft.compute, money, trade…), запись — действия js/inventory.js (invEquip, invQty, invPay…: они же
  * проверяют правила и пишут журнал). Поля ввода хранятся в App.ui под теми же ключами, что читают эти действия.
- * Заклинания, крафтильни и «Выдать предмет» (изготовить, кухня и зелья, таблицы, добыча, своё) пока рисует прежний код.
+ * Заклинания, крафтильни и «Выдать предмет» — ./GearMore.tsx.
  */
 type Perms = { gm?: boolean; owner?: boolean };
 const SIDE_L = ['head', 'face', 'neck', 'cloak', 'body'], SIDE_R = ['gloves', 'belt', 'legs', 'feet', 'brooch'];
 const JEWEL = ['ring', 'bracelet', 'earring', 'nose', 'brow'];
-
-/** поле, которое читает действие прежнего сайта (App.ui[key]) */
-function useUi() {
-  const [, tick] = useState(0);
-  const ui = window.App.ui;
-  return {
-    get: (k: string) => (ui[k] === undefined || ui[k] === null ? '' : String(ui[k])),
-    set: (k: string, v: string) => { ui[k] = v; tick(t => t + 1); },
-  };
-}
 
 export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Perms }) {
   const ui = useUi();
@@ -35,7 +27,7 @@ export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Pe
   const selCalc = sel ? K.compute(sel, v.ctx) : null;
   const worn = new Set(Object.values(inv.equip));
   const transfer = I.transferCard(perms);
-  const legacy = I.spellCard(rec, v, canEquip) + (perms.gm ? I.addCard(v) + I.stationsCard(rec, v) : perms.owner ? I.makeCard(v, rec) : '');
+  const make = !perms.gm && perms.owner ? I.makeCard(v, rec) : '';   // игрок в кампании: «Создать самому» — пока прежний код
 
   const slot = (s: Any) => {
     const id = inv.equip[s.id], it = id ? byId.get(id) : null;
@@ -120,7 +112,10 @@ export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Pe
       </section>
 
       <Wallet w={inv.wallet} perms={perms} />
-      {legacy && <LegacyHtml html={legacy} />}
+      <Spells rec={rec} v={v} canEdit={canEquip} />
+      {perms.gm && <AddItem v={v} />}
+      {perms.gm && <Stations rec={rec} v={v} />}
+      {make && <LegacyHtml html={make} />}
     </div>
   );
 }
@@ -268,12 +263,4 @@ function Wallet({ w, perms }: { w: Any; perms: Perms }) {
       <p className="muted small">1 мд = 100 пл, 1 пл = 100 з, 1 з = 100 се, 1 се = 100 м. Цены в таблицах без пометки — в медных.</p>
     </section>
   );
-}
-
-/** разметка прежнего сайта (заклинания, «Выдать предмет», крафтильни, передача): обновляется, только когда изменилась */
-function LegacyHtml({ html }: { html: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const last = useRef('');
-  useLayoutEffect(() => { if (ref.current && html !== last.current) { ref.current.innerHTML = html; last.current = html; } });
-  return <div ref={ref} className="legacy-pane" />;
 }
