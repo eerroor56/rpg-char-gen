@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { act, cap, heroList, newHeroId, openInWizard, toast, useHeroes, useLegacyCss, useSync, writeHeroes, type Hero } from '../../lib/legacy';
+import { act, cap, heroList, newHeroId, openInWizard, toast, useHeroes, useSync, writeHeroes, type Hero } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt, signed, type Any } from '../create/kit';
 import DevTab from './DevTab';
@@ -58,7 +58,6 @@ function HeroView({ id }: { id: string }) {
     };
   });
   useEffect(() => () => { if (App.devCtx && App.devCtx.record && App.devCtx.record.id === id) App.devCtx = null; }, [App, id]);
-  useLegacyCss(tab === 'gear');
   useEffect(() => { document.title = `${h.state?.name || 'Безымянный герой'} — Мастерская героя`; }, [h.state?.name]);
 
   const nfx = (rec.gm.effects || []).length;

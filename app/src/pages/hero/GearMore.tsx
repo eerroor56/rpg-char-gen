@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { act } from '../../lib/legacy';
 import { fmt, norm, signed, type Any } from '../create/kit';
-import { LegacyHtml, useUi } from './gearKit';
+import { useUi } from './gearKit';
+import { CraftForm } from './CraftForm';
+import { BrewForm } from '../brew/BrewForm';
 
 /*
  * «Снаряжение», второй заход: ячейки заклинаний, крафтильни, «Выдать предмет» (из таблиц, добыча с существа, своё).
  * Запись — действия js/inventory.js (invStation, invTAdd, invDropTake, invCAdd…) или прямо Dev.commit (заклинания).
- * «Изготовить» и «Кухня и зелья» пока рисует прежний код (Inv.craftForm, Brew.form).
+ * «Изготовить» — ./CraftForm.tsx, «Кухня и зелья» — ../brew/BrewForm.tsx.
  */
 const n = (x: unknown) => { const v = parseFloat(String(x ?? '').replace(',', '.')); return Number.isFinite(v) ? v : 0; };
 
@@ -96,8 +98,8 @@ export function AddItem({ v }: { v: Any }) {
   const mode = ui.get('invAdd') || 'craft';
   const editing = !!(window.App.ui.invDraft && window.App.ui.invDraft.editId);
   let body;
-  if (mode === 'craft') body = <LegacyHtml html={window.Inv.craftForm(v)} />;
-  else if (mode === 'brew') body = <LegacyHtml html={(window as Any).Brew.form({ host: 'dev', issueAct: 'invBrewSave', herbsAct: 'invHerbsTake' })} />;
+  if (mode === 'craft') body = <CraftForm v={v} />;
+  else if (mode === 'brew') body = <BrewForm opts={{ host: 'dev', issueAct: 'invBrewSave', herbsAct: 'invHerbsTake' }} />;
   else if (mode === 'table') body = <TableForm v={v} />;
   else if (mode === 'drop') body = <DropForm v={v} />;
   else body = <CustomForm />;

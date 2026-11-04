@@ -456,5 +456,15 @@
     brewHerbsClear() { App.ui.brewHerbs = null; rerender(); }
   });
 
-  window.Brew = { form, compute, draft, blank, parseEff, potionTypes, ing };
+  // новая версия (React) рисует калькулятор сама: configure — те же настройки, что у form, но без разметки
+  function configure(opts) {
+    opts = opts || {};
+    host = opts.host || 'ref';
+    src = opts.ings || null;
+    checkFn = opts.check || null;
+    known = opts.known === undefined ? null : opts.known;
+  }
+  window.Brew = { form, compute, draft, blank, parseEff, potionTypes, ing,
+    configure, ings, bases, baseText, creatures, gather, effStr, hidIdx, d100,
+    COOK, ALCO, MODES, STATIONS, SPOIL, MAX_ING, ALCO_PER, BOSS_STATS, CUT, HERBS, BC };
 })();

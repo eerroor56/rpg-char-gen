@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast, useLegacyCss } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
+import { BrewForm } from '../brew/BrewForm';
 
 /*
  * Справочник (#ref/<раздел>) и Мир (#world): таблицы листов игры с поиском, сортировкой по колонке и группами.
  * Данные разделов — js/reference.js (Reference.SECTIONS, Reference.WORLD: build() → блоки { title, note, cols, rows, order,
- * grid, custom }); здесь только показ. Особые блоки (карта мира, калькулятор зелий) пока рисует прежний сайт.
+ * grid, custom }); здесь только показ. Калькулятор зелий — ../brew/BrewForm.tsx, карту мира пока рисует прежний сайт.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
 type Row = { cells: string[]; g?: string; text: string };
-type Block = { title?: string; note?: string; cols?: string[] | null; rows: Row[]; order?: string[]; grid?: string[][]; custom?: () => string };
+type Block = { title?: string; note?: string; cols?: string[] | null; rows: Row[]; order?: string[]; grid?: string[][]; custom?: () => string; brew?: boolean };
 const PAGE = 150;
 
 /** разделы ГМ открылись или закрылись (пароль) — перерисовать */
@@ -62,7 +63,7 @@ export function World() {
 function Tables({ sec, title, placeholder, world }: { sec: Any; title: string; placeholder: string; world?: boolean }) {
   const [q, setQ] = useState('');
   const blocks: Block[] = useMemo(() => sec.build(), [sec]);
-  useLegacyCss(blocks.some(b => b.custom));   // карта мира и калькулятор зелий — со стилями прежнего сайта
+  useLegacyCss(blocks.some(b => b.custom && !b.brew));   // карта мира — со стилями прежнего сайта
   const nq = window.Rules.norm(q);
   const shown = blocks.map((b, i) => ({ b, i, rows: nq && !b.custom && !b.grid ? b.rows.filter(r => r.text.includes(nq)) : b.rows }))
     .filter(x => !nq || (!x.b.custom && (x.b.grid ? false : x.rows.length)));
@@ -80,7 +81,8 @@ function Tables({ sec, title, placeholder, world }: { sec: Any; title: string; p
           {blocks.map((b, i) => b.title && <a key={i} href={'#'} onClick={e => { e.preventDefault(); document.getElementById('rfb-' + i)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{b.title}</a>)}
         </nav>
       )}
-      {shown.length ? shown.map(({ b, i, rows }) => b.custom ? <LegacyBlock key={i} make={b.custom} />
+      {shown.length ? shown.map(({ b, i, rows }) => b.brew ? <section key={i} className="card wstack"><h2 className="h-sec">Калькулятор: блюдо, напиток, зелье</h2><BrewForm opts={{ host: 'ref' }} /></section>
+        : b.custom ? <LegacyBlock key={i} make={b.custom} />
         : b.grid ? <GridBlock key={i} b={b} />
           : <TableBlock key={i} id={'rfb-' + i} b={b} rows={rows} q={nq} />)
         : <div className="card empty"><Icon name="search" /><p>По запросу «{q}» {world ? 'ничего' : 'в разделе ничего'} нет.</p></div>}

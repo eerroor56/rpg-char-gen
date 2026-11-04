@@ -876,3 +876,31 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .gr-modes button.is-on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
 .gr-hit { padding: 10px 12px; border-radius: var(--r-m); background: var(--bg-2); }
 .gr-hit p { margin: 0 0 4px; }
+
+/* ---------- «Изготовить» и калькулятор кухни и зелий */
+.bw h3, .cr h3 { font-family: var(--font-body); font-weight: 700; font-size: 1rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; }
+.bw-rows { display: grid; gap: 6px; }
+.bw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bw-row > input[type=text], .bw-row > select.sel { flex: 1 1 200px; width: auto; min-width: 0; }
+.bw-ok { color: var(--ok); }
+.bw-herbs { display: grid; gap: 8px; padding: 10px 12px; border-radius: var(--r-m); background: var(--bg-2); }
+.bw-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.bw-out, .cr-preview { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--r-m); background: var(--bg-2); border: 1px solid rgba(214, 168, 92, .35); }
+.bw-out p, .cr-preview p { margin: 0; }
+.bw-out.spoiled { border-color: var(--err); }
+.bw-name, .cr-name { font-family: var(--font-display); font-size: 1.25rem; }
+.bw-eff { font-weight: 700; }
+.bw-eff.plus { color: var(--ok); }
+.bw-eff.minus { color: #f0a3a3; }
+.bw-eff.unknown { color: var(--muted); }
+.chip.bad { color: var(--err); border-color: rgba(227, 111, 100, .5); }
+.bw-help { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
+.cr-more summary { font-weight: 700; }
+.cr-more[open] > summary { margin-bottom: 10px; }
+.cr-bits { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; }
+.cr-bits div { display: flex; gap: 6px; }
+.cr-bits dt { color: var(--muted); }
+.cr-bits dd { margin: 0; font-weight: 700; }
+.cr-preview .boost-list { margin: 0; padding-left: 18px; }
+.cr-preview .good-text { color: var(--ok); }
+.cr-preview .bad-text { color: var(--err); }
