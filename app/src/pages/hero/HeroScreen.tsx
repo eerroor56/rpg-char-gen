@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import { act, cap, toast } from '../../lib/legacy';
+import { act, cap, toast, useLegacyCss } from '../../lib/legacy';
 import { Icon } from '../../ui/Icon';
 import { fmt, signed, type Any } from '../create/kit';
 import DevTab from './DevTab';
@@ -42,6 +42,8 @@ export function HeroScreen(o: {
   const canEdit = !!(o.perms.gm || o.perms.owner);
 
   useEffect(() => { Dev.own(o.id); }, [Dev, o.id]);
+  // в кампании на «Снаряжении» ещё есть части прежнего кода (передача вещей, «Создать самому» у игрока) — им нужны его стили
+  useLegacyCss(tab === 'gear' && !!o.party);
   // текущий герой для кнопок прежнего сайта и для Dev.commit
   useLayoutEffect(() => {
     App.devCtx = {
