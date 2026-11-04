@@ -12,7 +12,18 @@ export function useUi() {
   };
 }
 
-/** разметка прежнего сайта (изготовление, кухня и зелья, передача): обновляется, только когда изменилась */
+/** «Что нужно» — игрок создаёт сам: крафтильни, навык, сырьё в рюкзаке (✓ есть, ✗ нет) */
+export function Needs({ list }: { list: { ok: boolean; text: string }[] }) {
+  if (!list.length) return null;
+  return (
+    <div className="gr-needs">
+      <h3>Что нужно</h3>
+      <ul>{list.map((x, i) => <li key={i} className={x.ok ? 'ok' : 'no'}><span aria-hidden="true">{x.ok ? '✓' : '✗'}</span> {x.text}</li>)}</ul>
+    </div>
+  );
+}
+
+/** разметка прежнего сайта (что дают усиления предмета): обновляется, только когда изменилась */
 export function LegacyHtml({ html }: { html: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef('');

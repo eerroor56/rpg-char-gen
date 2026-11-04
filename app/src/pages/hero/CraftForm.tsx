@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { act } from '../../lib/legacy';
 import { fmt, norm, signed, type Any } from '../create/kit';
-import { LegacyHtml } from './gearKit';
+import { LegacyHtml, Needs } from './gearKit';
 
 /*
  * «Изготовить» (ГМ выдаёт предмет, собранный из материалов): вид и основа, материал на урон и на остальное, огнестрел
@@ -12,8 +12,10 @@ import { LegacyHtml } from './gearKit';
 const ARMORISH = ['armor', 'shield', 'prosthesis'];
 const roleKind = (kind: string) => kind === 'weapon' || kind === 'gun';
 
-export function CraftForm({ v }: { v: Any }) {
-  const App = window.App, K = window.Craft, C = (window as Any).GM_CONFIG, Rr = window.Rules;
+// make — игрок создаёт сам из рюкзака: без усиленного ремесла, существа в предмете, особых свойств и своей цены (это решает ГМ),
+// материал — из рюкзака, «что нужно» и кнопка «Создать» (invMake)
+export function CraftForm({ v, make }: { v: Any; make?: boolean }) {
+  const App = window.App, K = window.Craft, C = (window as Any).GM_CONFIG, Rr = window.Rules, I = window.Inv;
   const [, tick] = useState(0);
   const re = () => tick(t => t + 1);
   if (!App.ui.invDraft) act('invReset');
@@ -71,7 +73,8 @@ export function CraftForm({ v }: { v: Any }) {
   return (
     <div className="wstack cr">
       {head}
-      <datalist id="crMats">{K.allMaterials().map((m: Any) => <option key={m.name} value={m.name}>урон {m.dmg} · броня {m.arm}{K.isCrystal(m.name) ? ' · камень' : ''}</option>)}</datalist>
+      {make ? <datalist id="crMats">{I.bagMats(v).map(({ m, have }: Any) => <option key={m.name} value={m.name}>в рюкзаке {fmt(have)} ед. · урон {m.dmg} · броня {m.arm}</option>)}</datalist>
+        : <datalist id="crMats">{K.allMaterials().map((m: Any) => <option key={m.name} value={m.name}>урон {m.dmg} · броня {m.arm}{K.isCrystal(m.name) ? ' · камень' : ''}</option>)}</datalist>}
       {isG && <Gun d={d} c={c} field={field} run={run} />}
       {isW ? <>
         <h3>Материал на урон{isG && <span className="muted small"> (стволы, ресивер, корпус)</span>} {sum('dmg')}</h3>
@@ -93,8 +96,8 @@ export function CraftForm({ v }: { v: Any }) {
           <div className="fgrid">
             <label className="fld"><span className="fld-l">{isA ? 'Улучшение на броневом верстаке' : 'Заточка на точильном станке'} <span className="muted">— +{C.CRAFT.SHARPEN_STEP}% {isA ? 'защиты' : 'урона'} за раз, до {C.CRAFT.SHARPEN_MAX}; поломка — от {C.CRAFT.SHARPEN_BREAK_FROM}%</span></span>
               <input type="number" min={0} max={C.CRAFT.SHARPEN_MAX} step={1} value={cr.sharpen || 0} onChange={e => field('craft.sharpen', e.target.value, 'number')} /></label>
-            <label className="fld"><span className="fld-l">Усиленное ремесло <span className="muted">— 2Х — 40%, 3Х — 20%, если с нуля из своего материала</span></span>
-              <select className="sel" value={String(cr.quality || 1)} onChange={e => field('craft.quality', e.target.value)}>{C.CRAFT.QUALITY.map((q: number) => <option key={q} value={q}>{q === 1 ? 'нет' : `${q}Х`}</option>)}</select></label>
+            {!make && <label className="fld"><span className="fld-l">Усиленное ремесло <span className="muted">— 2Х — 40%, 3Х — 20%, если с нуля из своего материала</span></span>
+              <select className="sel" value={String(cr.quality || 1)} onChange={e => field('craft.quality', e.target.value)}>{C.CRAFT.QUALITY.map((q: number) => <option key={q} value={q}>{q === 1 ? 'нет' : `${q}Х`}</option>)}</select></label>}
             <label className="fld"><span className="fld-l">Модель <span className="muted">— с 100 ур. ремесла</span></span>
               <select className="sel" value={cr.model || ''} onChange={e => field('craft.model', e.target.value)}><option value="">— нет —</option>{K.models().map((m: Any) => <option key={m.id} value={m.id}>{m.name}: {m.fx}</option>)}</select></label>
             <label className="gr-check"><input type="checkbox" checked={!!cr.enrich} onChange={e => field('craft.enrich', e.target.checked, 'checkbox')} /><span>Обогатитель: эффект материала 2Х</span></label>
@@ -126,6 +129,7 @@ export function CraftForm({ v }: { v: Any }) {
             onAdd={() => run('invListAdd', { k: 'inlays' })} onDel={i => run('invListDel', { k: 'inlays', v: String(i) })}
             render={(m, i) => <input type="text" list="crMats" value={m} onChange={e => field(`craft.inlays.${i}`, e.target.value)} aria-label="Камень" />} />
 
+          {!make && <>
           <h3>Существо в предмете</h3>
           <div className="fgrid">
             <label className="fld"><span className="fld-l">Как</span>
@@ -147,6 +151,7 @@ export function CraftForm({ v }: { v: Any }) {
           </>}
           <label className="fld"><span className="fld-l">Особые свойства</span>
             <textarea rows={2} value={cr.extra || ''} onChange={e => field('craft.extra', e.target.value)} placeholder="наполнение кровью, маной, силой демона; уникальные свойства" /></label>
+          </>}
         </div>
       </details>
 
@@ -154,16 +159,22 @@ export function CraftForm({ v }: { v: Any }) {
         <label className="fld"><span className="fld-l">Название</span><input type="text" value={d.name || ''} onChange={e => field('name', e.target.value)} placeholder={K.autoName(d)} /></label>
         <label className="fld"><span className="fld-l">Количество</span><input type="number" min={1} step={1} value={d.qty || 1} onChange={e => field('qty', e.target.value, 'number')} /></label>
         <label className="fld"><span className="fld-l">Заметка</span><input type="text" value={d.note || ''} onChange={e => field('note', e.target.value)} placeholder="кто выковал, откуда" /></label>
-        <label className="fld"><span className="fld-l">Своя цена <span className="muted">— за штуку: «5(се)», «2 з 50 се»; пусто — по материалам</span></span>
-          <input type="text" value={d.priceIn || ''} onChange={e => field('priceIn', e.target.value)} placeholder="по материалам" maxLength={60} /></label>
+        {!make && <label className="fld"><span className="fld-l">Своя цена <span className="muted">— за штуку: «5(се)», «2 з 50 се»; пусто — по материалам</span></span>
+          <input type="text" value={d.priceIn || ''} onChange={e => field('priceIn', e.target.value)} placeholder="по материалам" maxLength={60} /></label>}
       </div>
 
       <Preview item={item} c={c} />
-      <Price d={d} item={item} v={v} />
-      <div className="row">
+      <Price d={d} item={item} v={v} make={make} />
+      {make ? <>
+        <Needs list={I.forgeNeeds(v, d).list} />
+        <div className="row">
+          <button type="button" className="btn primary" onClick={() => run('invMake')}>Создать</button>
+          <button type="button" className="btn ghost" onClick={() => run('invReset')}>Очистить</button>
+        </div>
+      </> : <div className="row">
         <button type="button" className="btn primary" onClick={() => run('invSave')}>{d.editId ? 'Сохранить изменения' : 'Выдать'}</button>
         <button type="button" className="btn ghost" onClick={() => run('invReset')}>{d.editId ? 'Отмена' : 'Очистить'}</button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -239,10 +250,10 @@ function Preview({ item, c }: { item: Any; c: Any }) {
 }
 
 // цена изготовленного: по материалам с расшифровкой или своя, если ГМ её вписал; за штуку и за всё количество
-function Price({ d, item, v }: { d: Any; item: Any; v: Any }) {
+function Price({ d, item, v, make }: { d: Any; item: Any; v: Any; make?: boolean }) {
   const K = window.Craft;
   const p = K.craftPrice(item), qty = Math.max(1, Math.floor(+d.qty || 1));
-  const typed = String(d.priceIn || '').trim(), own = typed ? K.priceCopper(typed) : null;
+  const typed = make ? '' : String(d.priceIn || '').trim(), own = typed ? K.priceCopper(typed) : null;
   if (!p.lines.length && !p.unknown.length && own === null) return null;
   const each = own !== null ? own : p.total;
   const cha = +v.res.der.charisma || 0, t = each > 0 ? K.trade(each, cha) : null;
@@ -255,7 +266,7 @@ function Price({ d, item, v }: { d: Any; item: Any; v: Any }) {
       {p.lines.length > 0 && <p className="muted small">{p.lines.map(how).join(' + ')}</p>}
       {t && <p className="small">У торговца за штуку: купить <b>{K.money(t.buy)}</b> <span className="muted small">(наценка {fmt(t.markup)}%)</span> · продать <b>{K.money(t.sell)}</b>{t.sellPct ? <span className="muted small"> ({signed(t.sellPct)}%)</span> : null}</p>}
       {p.unknown.length > 0 && <p className="muted small">Без цены в таблице: {p.unknown.join(', ')} — не посчитано.</p>}
-      {own === null && p.lines.length > 0 && <p className="muted small">Только материал: заточка, глифы, модель, усиленное ремесло и существо в предмете в таблице не оценены — добавьте их своей ценой.</p>}
+      {own === null && p.lines.length > 0 && !make && <p className="muted small">Только материал: заточка, глифы, модель, усиленное ремесло и существо в предмете в таблице не оценены — добавьте их своей ценой.</p>}
     </div>
   );
 }

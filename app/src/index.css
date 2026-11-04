@@ -877,6 +877,18 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .gr-modes button:hover { color: var(--text); border-color: var(--brass); }
 .gr-modes button.is-on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
 .gr-hit { padding: 10px 12px; border-radius: var(--r-m); background: var(--bg-2); }
+/* кампания: передача вещей, «Создать самому» у игрока, «что нужно» */
+.gr-give h3, .gr-make h3 { font: 700 1rem/1.3 var(--font-body); margin: 0; }
+.gr-give .hp-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 12px; border-radius: var(--r-m); background: var(--bg-2); }
+.gr-give-row { padding-top: 10px; border-top: 1px dashed var(--line-soft); }
+.gr-make .chip { margin-right: 4px; }
+.gr-luck { margin: 0; padding: 8px 12px; border-left: 3px solid var(--brass); background: rgba(214, 168, 92, .08); border-radius: 0 var(--r-s) var(--r-s) 0; }
+.gr-needs { padding: 10px 14px; border-radius: var(--r-m); background: var(--bg-2); border: 1px solid var(--line-soft); }
+.gr-needs h3 { font: 700 1rem/1.3 var(--font-body); margin: 0 0 6px; }
+.gr-needs ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: .92rem; }
+.gr-needs li.ok span { color: var(--ok); }
+.gr-needs li.no { color: #ffb3ab; }
+.gr-needs li span { display: inline-block; width: 1.2em; font-weight: 700; }
 .gr-hit p { margin: 0 0 4px; }
 
 /* ---------- «Изготовить» и калькулятор кухни и зелий */

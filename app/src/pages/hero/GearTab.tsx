@@ -2,14 +2,15 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { act } from '../../lib/legacy';
 import { fmt, norm, R, signed, type Any } from '../create/kit';
 import { Icon } from '../../ui/Icon';
-import { LegacyHtml, useUi } from './gearKit';
+import { useUi } from './gearKit';
 import { AddItem, Spells, Stations } from './GearMore';
+import { GiveRow, MakeCard, Transfers } from './GearParty';
 
 /*
  * «Снаряжение» героя: экипировка (кукла), рюкзак, карточка предмета, кошелёк — на React. Расчёт предметов и кошелька —
  * js/craft.js (Craft.compute, money, trade…), запись — действия js/inventory.js (invEquip, invQty, invPay…: они же
  * проверяют правила и пишут журнал). Поля ввода хранятся в App.ui под теми же ключами, что читают эти действия.
- * Заклинания, крафтильни и «Выдать предмет» — ./GearMore.tsx.
+ * Заклинания, крафтильни и «Выдать предмет» — ./GearMore.tsx; передача вещей и «Создать самому» в кампании — ./GearParty.tsx.
  */
 type Perms = { gm?: boolean; owner?: boolean };
 const SIDE_L = ['head', 'face', 'neck', 'cloak', 'body'], SIDE_R = ['gloves', 'belt', 'legs', 'feet', 'brooch'];
@@ -26,8 +27,7 @@ export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Pe
   const sel = selId ? byId.get(selId) : null;
   const selCalc = sel ? K.compute(sel, v.ctx) : null;
   const worn = new Set(Object.values(inv.equip));
-  const transfer = I.transferCard(perms);
-  const make = !perms.gm && perms.owner ? I.makeCard(v, rec) : '';   // игрок в кампании: «Создать самому» — пока прежний код
+  const make = !perms.gm && perms.owner;   // игрок: «Создать самому»
 
   const slot = (s: Any) => {
     const id = inv.equip[s.id], it = id ? byId.get(id) : null;
@@ -56,7 +56,7 @@ export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Pe
 
   return (
     <div className="wstack gr">
-      {transfer && <LegacyHtml html={transfer} />}
+      <Transfers perms={perms} />
 
       <section className="card wstack">
         <h2>Экипировка</h2>
@@ -115,7 +115,7 @@ export default function GearTab({ rec, v, perms }: { rec: Any; v: Any; perms: Pe
       <Spells rec={rec} v={v} canEdit={canEquip} />
       {perms.gm && <AddItem v={v} />}
       {perms.gm && <Stations rec={rec} v={v} />}
-      {make && <LegacyHtml html={make} />}
+      {make && <MakeCard rec={rec} v={v} />}
     </div>
   );
 }
@@ -162,7 +162,6 @@ function ItemCard({ it, c, perms, isWorn, rec, v }: { it: Any; c: Any; perms: Pe
   } else if (c.cat) add('Где надевать', K.CATS[c.cat]);
   if (it.src) add('Откуда', it.src);
   const boost = I.boostHtml(c);
-  const give = I.giveRow(it, perms);
   const tome = K.isTome(it) && perms.gm;
   if (tome && !ui.get('invTome')) window.App.ui.invTome = 's';
   if (tome && !ui.get('invTomeN')) window.App.ui.invTomeN = String(K.tomeBonus(it));
@@ -199,7 +198,7 @@ function ItemCard({ it, c, perms, isWorn, rec, v }: { it: Any; c: Any; perms: Pe
           <button type="button" className="btn ghost danger" onClick={() => act('invDel', { v: it.id })}>Убрать</button>
         </>}
       </div>
-      {give && <LegacyHtml html={give} />}
+      <GiveRow it={it} perms={perms} />
     </section>
   );
 }

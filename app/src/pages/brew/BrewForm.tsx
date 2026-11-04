@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { act } from '../../lib/legacy';
 import { norm, type Any } from '../create/kit';
+import { Needs } from '../hero/gearKit';
 
 /*
  * Калькулятор кухни, винокурни и алхимического стола. Правила и расчёт — js/brew.js (Brew.compute и константы), черновик —
  * App.ui.brew (его же читают действия «Выдать» / «Забрать в рюкзак» в js/inventory.js). Здесь — только форма.
- * opts: { host: 'ref' | 'dev', issueAct, herbsAct, issueLabel } — как у Brew.form прежнего сайта.
+ * opts — как у Brew.form прежнего сайта: host, issueAct, herbsAct, issueLabel; игрок готовит сам: ings (ингредиенты из рюкзака),
+ * known (сколько свойств видит), check (что нужно и что есть), noHerbs / noCuts (без сбора трав и вырезок), autoRoll (бросок —
+ * при создании), empty (текст, если ингредиентов нет).
  */
-export type BrewOpts = { host: 'ref' | 'dev'; issueAct?: string; herbsAct?: string; issueLabel?: string };
+export type BrewOpts = {
+  host: 'ref' | 'dev'; issueAct?: string; herbsAct?: string; issueLabel?: string;
+  ings?: Any[]; known?: number; check?: (d: Any, r: Any) => { list: { ok: boolean; text: string }[] };
+  noHerbs?: boolean; noCuts?: boolean; autoRoll?: boolean; empty?: string;
+};
 
 const setPath = (o: Any, path: string, val: unknown) => {
   const ps = path.split('.');
@@ -23,6 +30,7 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
   // прежний код просит перерисовать справочник (Reference.refresh → mh-ref): например, после пароля ГМ
   useEffect(() => { window.addEventListener('mh-ref', re); return () => window.removeEventListener('mh-ref', re); }, []);
   B.configure(opts);
+  if (opts.ings && !opts.ings.length) return <p className="muted small">{opts.empty || 'Ингредиентов нет.'}</p>;
   if (!B.ings().length) return (
     <p className="muted small">Ингредиенты записаны в закрытом разделе «Алхимия и кухня» — <a href="#ref/alchemy">откройте его паролем ГМ</a>, и калькулятор заработает.</p>
   );
@@ -55,7 +63,7 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
 
   return (
     <div className="wstack bw">
-      <div className="bw-herbs">
+      {!opts.noHerbs && <div className="bw-herbs">
         <div className="hp-row"><button type="button" className="btn small" onClick={gather}>Сбор трав</button><span className="muted small">{B.HERBS[0]}–{B.HERBS[1]} случайных растений из таблицы ингредиентов</span></div>
         {herbs && herbs.length > 0 && <>
           <ul className="bw-list">{herbs.map(x => { const i = B.ing(x.n); return <li key={x.n}><b>{x.n}</b>{x.qty > 1 ? ` ×${x.qty}` : ''} <span className="muted small">— {i ? i.e.map((e: Any) => e[0]).join(', ') : ''}</span></li>; })}</ul>
@@ -65,7 +73,7 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
             <button type="button" className="link small" onClick={() => { App.ui.brewHerbs = null; re(); }}>убрать</button>
           </div>
         </>}
-      </div>
+      </div>}
 
       <div className="gr-modes" role="tablist">
         {B.MODES.map(([k, t]: [string, string]) => <button key={k} type="button" role="tab" aria-selected={k === d.mode} className={k === d.mode ? 'is-on' : ''} onClick={() => set('mode', k)}>{t}</button>)}
@@ -106,7 +114,7 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
       </div>
       <div><button type="button" className="link" onClick={() => { d.rows.push({ ing: '', qty: 1, eff: 1 }); re(); }}>+ ингредиент</button></div>
 
-      {isCook && <>
+      {isCook && !opts.noCuts && <>
         <h3>Вырезки и выжимки <span className="muted small">разделочный стол; живость — 10% тела существа, стихия — 10% духа</span></h3>
         {creatures.length ? <>
           <div className="bw-rows">
@@ -131,9 +139,10 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
 
       <div className="fgrid">
         {isPot ? <label className="gr-check"><input type="checkbox" checked={!!d.conc} onChange={e => set('conc', e.target.checked)} /><span>Концентратор: эффект зелья 2Х</span></label> : <>
-          <label className="fld"><span className="fld-l">Бросок {isCook ? 'готовки' : 'варки'} <span className="muted">— ниже {B.SPOIL} все эффекты негативные</span></span>
+          {opts.autoRoll ? <p className="muted small">Бросок {isCook ? 'готовки' : 'варки'} d100 сайт сделает сам, когда вы нажмёте «{opts.issueLabel || 'Выдать'}»: ниже {B.SPOIL} — все эффекты негативные.</p>
+            : <label className="fld"><span className="fld-l">Бросок {isCook ? 'готовки' : 'варки'} <span className="muted">— ниже {B.SPOIL} все эффекты негативные</span></span>
             <span className="hp-row"><input type="number" min={1} max={100} step={1} className="gr-num" value={d.roll || ''} onChange={e => set('roll', e.target.value)} aria-label="Результат броска d100" />
-              <button type="button" className="btn small" onClick={roll}>d100</button></span></label>
+              <button type="button" className="btn small" onClick={roll}>d100</button></span></label>}
           <label className="gr-check"><input type="checkbox" checked={!!d.canned} onChange={e => set('canned', e.target.checked)} /><span>Консервы / долгое хранение: показатели −50%</span></label>
         </>}
       </div>
@@ -157,6 +166,7 @@ export function BrewForm({ opts }: { opts: BrewOpts }) {
           <label className="fld"><span className="fld-l">Название</span><input type="text" value={d.name || ''} onChange={e => set('name', e.target.value)} placeholder={r.shownName || r.name} maxLength={120} /></label>
           <label className="fld"><span className="fld-l">Количество</span><input type="number" min={1} step={1} value={d.qty || 1} onChange={e => set('qty', e.target.value)} /></label>
         </div>
+        {opts.check && <Needs list={opts.check(d, r).list} />}
         <div className="row">
           <button type="button" className="btn primary" onClick={() => act(opts.issueAct!)}>{opts.issueLabel || 'Выдать'}</button>
           <button type="button" className="btn ghost" onClick={() => { App.ui.brew = B.blank(d.mode); re(); }}>Очистить</button>

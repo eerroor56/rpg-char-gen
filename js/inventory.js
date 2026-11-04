@@ -1502,8 +1502,22 @@
     }
   });
 
+  // для новой версии: передача предметов без разметки — что передают этому персонажу, что он отдал, кому можно отдать
+  function transfers() {
+    const P = party(), c = ctx();
+    if (!P || !c) return null;
+    return { inc: incoming(c.record, c.chid, P), out: outgoing(c.record, P), to: P.filter(ch => ch.status === 'active') };
+  }
+  // слитки и камни в рюкзаке — подсказки для материала у игрока: [{ m, have }]
+  function bagMats(v) {
+    const seen = new Set(), list = [];
+    v.inv.items.forEach(it => { const m = !isGear(it) && K.material(it.name); if (m && !seen.has(norm(m.name))) { seen.add(norm(m.name)); list.push({ m, have: bagHave(v, m.name) }); } });
+    return list;
+  }
+
   window.Inv = { gearTab, effectsTab, sheetGear, sheetExtra, equipInto, incoming,
     // для новой версии (React рисует экипировку, рюкзак, карточку предмета и кошелёк сам, остальное — отсюда)
     transferCard, giveRow, spellCard, addCard, stationsCard, makeCard, craftForm, stationsOf,
-    priceOf, boostHtml, gunStats, gunDmgParts, ingEffects, knownProps, tInfo, roleKind, WEARABLE_ANY };
+    priceOf, boostHtml, gunStats, gunDmgParts, ingEffects, knownProps, tInfo, roleKind, WEARABLE_ANY,
+    transfers, heroName, giveLabel, bagMats, bagIngs, forgeNeeds, brewNeeds, skillChances, alchLevel };
 })();
