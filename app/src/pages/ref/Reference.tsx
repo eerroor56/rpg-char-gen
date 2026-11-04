@@ -166,9 +166,43 @@ function Table({ b, rows, head }: { b: Block; rows: Row[]; head: ReactNode }) {
  * широкая таблица: стрелки «влево / вправо» листают её, не уходя к полосе прокрутки внизу. Стрелки держатся посередине
  * экрана, пока таблица видна (липкая полоса нулевой высоты), и появляются, только если в ту сторону есть что листать.
  */
+// стрелки — посередине видимой части таблицы (между шапкой сайта и нижним меню на телефоне), но не выходят за таблицу
+const ARROW = 44, HEAD_ROW = 44;
+function coveredEdges() {
+  let top = 0, bottom = window.innerHeight;
+  ['.mtop', '.rf-nav'].forEach(s => {
+    const el = document.querySelector(s);
+    // только полосы во всю ширину (на телефоне); колонка разделов слева на компьютере таблицу не закрывает
+    if (el && getComputedStyle(el).position === 'sticky') { const b = el.getBoundingClientRect(); if (b.height && b.top < 140 && b.width > window.innerWidth * 0.6) top = Math.max(top, b.bottom); }
+  });
+  const bar = document.querySelector('.mbar');
+  if (bar && getComputedStyle(bar).display !== 'none') bottom = Math.min(bottom, bar.getBoundingClientRect().top);
+  return { top, bottom };
+}
+
 function HScroll({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const arrows = useRef<HTMLDivElement>(null);
   const [edge, setEdge] = useState({ l: false, r: false });
+  const any = edge.l || edge.r;
+  useEffect(() => {
+    if (!any) return;
+    // пересчёт лёгкий (два прямоугольника) — прямо на прокрутку, без requestAnimationFrame
+    const place = () => {
+      const b = box.current, a = arrows.current;
+      if (!b || !a) return;
+      const r = b.getBoundingClientRect(), v = coveredEdges();
+      const from = Math.max(r.top + HEAD_ROW, v.top + 8), to = Math.min(r.bottom - 8, v.bottom - 8);
+      if (to - from < ARROW) { a.style.visibility = 'hidden'; return; }
+      a.style.visibility = '';
+      a.style.transform = `translateY(${Math.round((from + to) / 2 - ARROW / 2 - r.top)}px)`;
+    };
+    place();
+    window.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('resize', place);
+    return () => { window.removeEventListener('scroll', place); window.removeEventListener('resize', place); };
+  }, [any]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -182,9 +216,9 @@ function HScroll({ children }: { children: ReactNode }) {
   }, []);
   const go = (d: number) => { const el = ref.current; if (el) el.scrollBy({ left: d * Math.max(200, el.clientWidth * 0.8), behavior: 'smooth' }); };
   return (
-    <div className="rf-scroll">
-      {(edge.l || edge.r) && (
-        <div className="rf-arrows">
+    <div className="rf-scroll" ref={box}>
+      {any && (
+        <div className="rf-arrows" ref={arrows}>
           {edge.l && <button type="button" className="rf-arrow l" onClick={() => go(-1)} aria-label="Прокрутить таблицу влево" title="Влево">‹</button>}
           {edge.r && <button type="button" className="rf-arrow r" onClick={() => go(1)} aria-label="Прокрутить таблицу вправо" title="Вправо">›</button>}
         </div>

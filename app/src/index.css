@@ -675,14 +675,16 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
 
 /* ---------- широкие таблицы: стрелки «влево / вправо» */
 .rf-scroll { position: relative; }
-.rf-arrows { position: sticky; top: calc(50vh - 22px); height: 0; z-index: 4; pointer-events: none; }
-.rf-arrow { pointer-events: auto; position: absolute; top: 44px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; padding: 0 0 3px;
+/* место по высоте ставит Reference.tsx (HScroll): посередине видимой части таблицы, не выходя за неё */
+.rf-arrows { position: absolute; left: 0; right: 0; top: 0; height: 44px; z-index: 4; pointer-events: none; }
+.rf-arrow { pointer-events: auto; position: absolute; top: 0; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; padding: 0 0 3px;
   border: 1px solid var(--brass); background: rgba(34, 29, 59, .92); color: var(--brass-2); font: 400 1.9rem/1 var(--font-display); cursor: pointer;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .45); backdrop-filter: blur(4px); transition: background-color .15s ease, transform .12s ease; }
 .rf-arrow:hover { background: var(--brass); color: var(--brass-ink); }
 .rf-arrow:active { transform: scale(.94); }
 .rf-arrow.l { left: 8px; }
 .rf-arrow.r { right: 8px; }
+@media (max-width: 760px) { .rf-arrow { width: 40px; height: 40px; font-size: 1.7rem; background: rgba(34, 29, 59, .8); } .rf-arrow.l { left: 4px; } .rf-arrow.r { right: 4px; } }
 
 /* ---------- фон шапки (главная, «Игра»): вращающийся знак и свечение, как на прежнем сайте */
 .has-sigil { position: relative; isolation: isolate; overflow-x: clip; padding-top: 72px; padding-bottom: 30px; }
