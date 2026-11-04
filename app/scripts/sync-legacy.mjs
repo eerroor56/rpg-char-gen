@@ -11,7 +11,11 @@ const copy = (from, to) => {
 
 copy('data/', 'data/');
 copy('img/', 'img/');
+// QR-коды пожертвований не выкладываются, пока страница «Поддержать» выключена (app/src/flags.ts: пометка Safe Browsing)
+rmSync(new URL('img/support/', pub), { recursive: true, force: true });
 copy('js/', 'legacy/js/');
+// страница пожертвований прежнего сайта новой версией не подключается, а пока «Поддержать» выключено — и не выкладывается
+rmSync(new URL('legacy/js/support.js', pub), { force: true });
 // стили прежнего сайта (css/) новой версии не нужны: всё на экране рисует React со своими стилями
 rmSync(new URL('legacy/css/', pub), { recursive: true, force: true });
 // приложение (PWA): манифест и service worker — общие с прежним сайтом

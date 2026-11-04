@@ -3,7 +3,7 @@ import { initLegacy, useAuth, useRoute } from './lib/legacy';
 import { Icon, type IconName } from './ui/Icon';
 import Home from './pages/Home';
 import Heroes from './pages/Heroes';
-import Support from './pages/Support';
+// страница «Поддержать» (./pages/Support) выключена — см. ./flags.ts; чтобы вернуть, снова импортировать её здесь
 import Moving from './pages/Moving';
 import Create from './pages/Create';
 import Game from './pages/game/Game';
@@ -12,9 +12,10 @@ import Rules from './pages/ref/Rules';
 import { Guard } from './ui/Guard';
 import { InstallButton } from './ui/Install';
 import HeroPage from './pages/hero/HeroPage';
+import { FLAGS } from './flags';
 
 // разделы: что уже в новой версии, а что пока открывается в прежней (old)
-export const SECTIONS: { id: string; title: string; short: string; icon: IconName; old?: boolean; lead: string }[] = [
+const ALL_SECTIONS: { id: string; title: string; short: string; icon: IconName; old?: boolean; lead: string }[] = [
   { id: 'home', title: 'Главная', short: 'Главная', icon: 'home', lead: 'С чего начать' },
   { id: 'create', title: 'Создание персонажа', short: 'Создание', icon: 'spark', lead: 'Мастер по шагам: раса, возраст, черты, навыки, снаряжение' },
   { id: 'heroes', title: 'Мои герои', short: 'Герои', icon: 'users', lead: 'Ваши персонажи — в облаке, на любом устройстве' },
@@ -22,8 +23,9 @@ export const SECTIONS: { id: string; title: string; short: string; icon: IconNam
   { id: 'world', title: 'Мир', short: 'Мир', icon: 'globe', lead: 'Карта, уровни мира, места' },
   { id: 'ref', title: 'Справочник', short: 'Справочник', icon: 'book', lead: 'Расы, бестиарий, магия, предметы — все таблицы' },
   { id: 'rules', title: 'Как считается', short: 'Правила', icon: 'scale', lead: 'Формулы и решения по спорным местам' },
-  { id: 'support', title: 'Поддержать', short: 'Поддержать', icon: 'heart', lead: 'СБП, USDT и TON, Telegram' },
+  // «Поддержать» выключено (./flags.ts): пункт { id: 'support', title: 'Поддержать', short: 'Поддержать', icon: 'heart', lead: … }
 ];
+export const SECTIONS = ALL_SECTIONS;
 const MOBILE_MAIN = ['home', 'create', 'heroes', 'game'];
 const MINI_KEY = 'hero-workshop:side-mini';
 
@@ -45,7 +47,6 @@ export default function App() {
   if (cur.id === 'home') page = <Home auth={auth} />;
   else if (heroId) page = <HeroPage id={heroId} />;
   else if (cur.id === 'heroes') page = <Heroes auth={auth} />;
-  else if (cur.id === 'support') page = <Support />;
   else if (cur.id === 'create') page = <Create />;
   else if (cur.id === 'game') page = <Game auth={auth} path={rest.map(decodeURIComponent)} />;
   else if (cur.id === 'ref') page = <Reference section={rest[0] || ''} />;
@@ -68,7 +69,7 @@ export default function App() {
             </a>
           ))}
         </nav>
-        <InstallButton className="side-link side-install" />
+        {FLAGS.install && <InstallButton className="side-link side-install" />}
         <Account auth={auth} />
       </aside>
 
@@ -91,7 +92,7 @@ export default function App() {
             {SECTIONS.filter(s => !MOBILE_MAIN.includes(s.id)).map(s => (
               <a key={s.id} href={'#' + s.id} className="msheet-link"><Icon name={s.icon} /><span><b>{s.title}</b><small>{s.lead}</small></span></a>
             ))}
-            <InstallButton className="msheet-link msheet-install" />
+            {FLAGS.install && <InstallButton className="msheet-link msheet-install" />}
           </div>
         </div>
       )}
