@@ -206,7 +206,7 @@ function ItemCard({ it, c, perms, isWorn, rec, v }: { it: Any; c: Any; perms: Pe
 // эффекты приготовленного с цветом, как в листе «алхимия»: зелёным — бафф, красным — дебафф
 function FxText({ fx, text }: { fx: { t: string; m?: string }[]; text: string }) {
   const tail = (String(text || '').match(/(\s\((испорчено|консервы)\))+$/) || [''])[0];    // пометки в конце описания
-  return <>{fx.map((x, i) => <span key={i}>{i > 0 && ', '}<span className={'bw-eff' + (x.m === '+' ? ' plus' : x.m === '-' ? ' minus' : '')}>{x.t}</span></span>)}{tail}</>;
+  return <>{fx.map((x, i) => <span key={i} className={'eff' + (x.m === '+' ? ' plus' : x.m === '-' ? ' minus' : '')}>{x.t}</span>)}{tail}</>;
 }
 
 // ------------------------------------------------------------ кошелёк

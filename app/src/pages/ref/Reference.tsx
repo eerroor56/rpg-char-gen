@@ -119,8 +119,12 @@ function TableBlock({ id, b, rows, q }: { id: string; b: Block; rows: Row[]; q: 
   }, [b, grouped]);
   const by = (n: string) => sorted.filter(r => (r.g || 'Другое') === n);
   const sel = group && names.includes(group) ? group : '';
-  const head = !b.cols ? null : (
-    <tr>{b.cols!.map((c, i) => {
+  // в листах ГМ у шапки бывает меньше колонок, чем в строках (колонка без заголовка), а у строки — меньше ячеек, чем
+  // в шапке: дополняем пустыми, иначе фон строки обрывается, а шапка короче таблицы
+  const ncol = Math.max(b.cols ? b.cols.length : 0, ...b.rows.map(r => r.cells.length));
+  const cols = b.cols ? b.cols.concat(Array(Math.max(0, ncol - b.cols.length)).fill('')) : null;
+  const head = !cols ? null : (
+    <tr>{cols.map((c, i) => {
       if (!c) return <th key={i} />;
       const on = sort && sort.col === i;
       return <th key={i}><button type="button" className={'rf-th' + (on ? ' is-on' : '')} title={`Сортировать по «${c}»`}
@@ -140,21 +144,22 @@ function TableBlock({ id, b, rows, q }: { id: string; b: Block; rows: Row[]; q: 
           {names.map(n => { const c = by(n).length; return <button key={n} type="button" role="tab" aria-selected={sel === n} className={sel === n ? 'is-on' : ''} disabled={!c} onClick={() => setGroup(n)}>{n} <small>{c}</small></button>; })}
         </div>
       )}
-      {grouped ? (sel ? <Table key={sel + q} b={b} rows={by(sel)} head={head} />
-        : names.map(n => { const rr = by(n); return rr.length ? <div key={n}><h3 className="rf-g">{n} <small>{rr.length}</small></h3><Table key={n + q} b={b} rows={rr} head={head} /></div> : null; }))
-        : <Table key={q} b={b} rows={sorted} head={head} />}
+      {grouped ? (sel ? <Table key={sel + q} b={b} rows={by(sel)} head={head} ncol={ncol} />
+        : names.map(n => { const rr = by(n); return rr.length ? <div key={n}><h3 className="rf-g">{n} <small>{rr.length}</small></h3><Table key={n + q} b={b} rows={rr} head={head} ncol={ncol} /></div> : null; }))
+        : <Table key={q} b={b} rows={sorted} head={head} ncol={ncol} />}
     </section>
   );
 }
 
-function Table({ b, rows, head }: { b: Block; rows: Row[]; head: ReactNode }) {
+function Table({ b, rows, head, ncol }: { b: Block; rows: Row[]; head: ReactNode; ncol: number }) {
   const [lim, setLim] = useState(PAGE);
   return <>
     <HScroll>
       <table className="rf-tbl">
         {b.cols && <thead>{head}</thead>}
         <tbody>{rows.slice(0, lim).map((r, i) => (
-          <tr key={i}>{r.cells.map((c, j) => { const len = plain(c).length; return <td key={j} className={len > 70 ? 'long' : len > 25 ? 'mid' : undefined} dangerouslySetInnerHTML={{ __html: capHtml(c) }} />; })}</tr>
+          <tr key={i}>{r.cells.map((c, j) => { const len = plain(c).length; return <td key={j} className={len > 70 ? 'long' : len > 25 ? 'mid' : undefined} dangerouslySetInnerHTML={{ __html: capHtml(c) }} />; })}
+            {r.cells.length < ncol && Array.from({ length: ncol - r.cells.length }, (_, j) => <td key={'e' + j} />)}</tr>
         ))}</tbody>
       </table>
     </HScroll>

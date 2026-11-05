@@ -80,18 +80,20 @@ export default function Create() {
         </div>
       )}
 
+      {/* шапка шага — над сеткой: сводка героя справа начинается вровень с содержимым шага */}
+      <header className="wiz-head">
+        <p className="eyebrow">Шаг {ix + 1} из {steps.length}</p>
+        <h1>{cur?.title}</h1>
+        <p className="lead">{WHY[want] || ''}</p>
+        <div className="row">
+          {canRoll && <button type="button" className="btn small" onClick={() => act('randomStep', { step: want })}><Icon name="dice" />Случайно этот шаг</button>}
+          <button type="button" className="btn ghost small" onClick={() => act('randomFull')}><Icon name="spark" />Случайный герой</button>
+          {App.prevState && <button type="button" className="link" onClick={() => act('randomUndo')}>отменить случайный выбор</button>}
+        </div>
+      </header>
+
       <div className="wiz-grid">
         <section className="wiz-main">
-          <header className="wiz-head">
-            <p className="eyebrow">Шаг {ix + 1} из {steps.length}</p>
-            <h1>{cur?.title}</h1>
-            <p className="lead">{WHY[want] || ''}</p>
-            <div className="row">
-              {canRoll && <button type="button" className="btn small" onClick={() => act('randomStep', { step: want })}><Icon name="dice" />Случайно этот шаг</button>}
-              <button type="button" className="btn ghost small" onClick={() => act('randomFull')}><Icon name="spark" />Случайный герой</button>
-              {App.prevState && <button type="button" className="link" onClick={() => act('randomUndo')}>отменить случайный выбор</button>}
-            </div>
-          </header>
           {(here.errs.length > 0 || here.warns.length > 0) && (
             <div className="step-issues" role="status">
               {here.errs.map((e: { msg: string }, i: number) => <p key={'e' + i} className="issue err">{e.msg}</p>)}

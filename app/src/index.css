@@ -268,7 +268,8 @@ input:focus { outline: none; border-color: var(--brass); }
 .wiz-step.is-on .wiz-num { background: var(--brass); color: var(--brass-ink); }
 .wiz-step.is-bad .wiz-num { background: rgba(227, 111, 100, .2); color: var(--err); }
 .wiz-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
-.wiz-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.wiz-head { display: flex; flex-direction: column; gap: 8px; }
+.wiz-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .wiz-head h1 { color: var(--brass-2); }
 .wiz-head .lead { margin: 0; }
 .wiz-work { min-width: 0; }
@@ -303,7 +304,7 @@ input:focus { outline: none; border-color: var(--brass); }
   .wiz-nav { bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
 /* лист персонажа (шаг «Итог») пока со стилями прежнего сайта: фон и шрифт — свои */
-.step-issues { display: grid; gap: 6px; margin-bottom: 14px; }
+.step-issues { display: grid; gap: 6px; }
 
 /* ---------- шаги мастера: поля и общие блоки */
 .wstack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -508,6 +509,17 @@ details.more[open] > summary { margin-bottom: 8px; }
 .combo-opt mark { background: none; color: var(--brass-2); font-weight: 700; }
 .combo-more { padding: 6px 10px; color: var(--muted); font-size: .82rem; border-top: 1px solid var(--line-soft); }
 input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
+/* выпадающий список (ui/selectPop.ts): пристыкован к полю — у поля снизу (или сверху) углы прямые, у списка — скруглённые */
+select.sel-open { border-color: var(--brass) !important; border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+select.sel-open.sel-open-up { border-radius: 0 0 var(--r-m) var(--r-m) !important; }
+.sel-pop { position: fixed; z-index: 90; overflow-y: auto; overscroll-behavior: contain; padding: 4px; background: var(--bg-2); border: 1px solid var(--brass); border-top-color: var(--line-soft);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .5); color: var(--text); scrollbar-width: thin; }
+.sel-pop.is-up { border-top-color: var(--brass); border-bottom-color: var(--line-soft); box-shadow: 0 -16px 34px rgba(0, 0, 0, .5); }
+.sel-opt { padding: 7px 10px; border-radius: var(--r-s); cursor: pointer; line-height: 1.35; overflow-wrap: anywhere; }
+.sel-opt.is-active { background: var(--panel-2); }
+.sel-opt.is-cur { color: var(--brass-2); font-weight: 700; }
+.sel-opt.is-off { color: var(--muted); opacity: .55; cursor: default; }
+.sel-group { padding: 8px 10px 4px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 
 /* итог */
 .reroll { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; }
@@ -623,8 +635,11 @@ input.combo-input[aria-expanded="true"] { border-color: var(--brass); }
 .rf-tbl .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .rf-tbl .mark { color: var(--love); margin-left: 3px; }
 .rf-tbl .tag { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); font-size: .78rem; color: var(--muted); }
-.rf-tbl .eff.plus { color: var(--ok); }
-.rf-tbl .eff.minus { color: #f0a3a3; }
+/* эффект с цветом, как в листе «алхимия»: зелёная кайма — бафф, красная — дебафф (ингредиенты, калькулятор, готовые зелья и блюда) */
+.eff, .bw-eff { display: inline-block; padding: 0 8px; margin: 1px 2px 1px 0; border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); line-height: 1.55; }
+.eff.plus, .bw-eff.plus { color: #a8e2bd; border-color: rgba(127, 199, 155, .55); background: rgba(127, 199, 155, .12); }
+.eff.minus, .bw-eff.minus { color: #f2b2aa; border-color: rgba(228, 141, 132, .55); background: rgba(228, 141, 132, .12); }
+.eff.unknown, .bw-eff.unknown { color: var(--muted); border-style: dashed; font-style: italic; }
 .rf-tbl .abil { margin: 0; padding-left: 16px; }
 .rf-more { align-self: flex-start; }
 .rf-lock h2 { display: flex; align-items: center; gap: 8px; font-size: 1.4rem; color: var(--brass-2); }
@@ -901,10 +916,7 @@ span.cs-pic > img { width: 100%; height: 100%; object-fit: cover; object-positio
 .bw-out p, .cr-preview p { margin: 0; }
 .bw-out.spoiled { border-color: var(--err); }
 .bw-name, .cr-name { font-family: var(--font-display); font-size: 1.25rem; }
-.bw-eff { font-weight: 700; }
-.bw-eff.plus { color: var(--ok); }
-.bw-eff.minus { color: #f0a3a3; }
-.bw-eff.unknown { color: var(--muted); }
+.bw-eff { font-weight: 700; }     /* цвет и кайма — общие с .eff (раздел справочника) */
 .chip.bad { color: var(--err); border-color: rgba(227, 111, 100, .5); }
 .bw-help { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
 .cr-more summary { font-weight: 700; }
