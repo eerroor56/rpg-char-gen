@@ -298,12 +298,12 @@ function SelInfo({ v, gm }: { v: Any; gm: boolean }) {
         {B.canHide(t) && <button type="button" className={'btn small' + (veiled ? ' primary' : ' ghost')} aria-pressed={veiled} onClick={() => act('btHide')}>{veiled ? 'Показать игрокам' : 'Скрыть от игроков'}</button>}
         {(t.kind === 'f' || t.kind === 'o') && <button type="button" className="link small danger" onClick={() => act('btRemove', { v: s })}>убрать с поля</button>}
       </div>}
-      {t.kind !== 'o' && <Vitals board={board} t={t} gm={gm} />}
+      {t.kind !== 'o' && <Vitals board={board} t={t} gm={gm} at={v.at} />}
     </div>
   );
 }
 
-function Vitals({ board, t, gm }: { board: Any; t: Tok; gm: boolean }) {
+function Vitals({ board, t, gm, at }: { board: Any; t: Tok; gm: boolean; at: Any }) {
   const B = window.Battle, App = window.App, ui = useUi();
   const v = B.vitals(t), has = B.has as (x: unknown) => boolean;
   const num = gm || t.kind !== 'f';          // игроки видят у противника только полоску
@@ -338,7 +338,7 @@ function Vitals({ board, t, gm }: { board: Any; t: Tok; gm: boolean }) {
     </div>
     {(gm || t.kind !== 'f') && <Resists t={t} gm={gm} />}
     {gm && <div className="bt-vit-ctl">
-      <DmgKind />
+      <DmgKind t={t} at={at} />
       <div className="bt-btns bt-hit">
         <input type="number" min={1} step={1} className="bt-amt" value={ui.get('btAmt')} onChange={e => ui.set('btAmt', e.target.value)} placeholder="сколько" aria-label="Сколько" />
         <button type="button" className="btn small bt-dmg" onClick={() => act('btVit', { v: 'hp:-1' })} title="Урон выбранного типа: сопротивления, слабости, затем броня и ХП">Урон</button>
@@ -371,9 +371,13 @@ function Vitals({ board, t, gm }: { board: Any; t: Tok; gm: boolean }) {
 }
 
 // ------------------------------------------------------------ тип и вид урона (js/resist.js)
-function DmgKind() {
-  const ui = useUi(), Z = (window as Any).Resist;
+function DmgKind({ t, at }: { t: Tok; at: Any }) {
+  const ui = useUi(), Z = (window as Any).Resist, B = window.Battle;
   if (!Z) return null;
+  // отражение (ГМ): уходит тому, кто бьёт — список только когда у цели есть отражение
+  const refl = (B.resistOf(t) as Any[]).some(e => e.k === 'refl' && !e.cond);
+  const foes: Any[] = refl ? B.attackers(at, B.tid(t)) : [];
+  const from = ui.get('btFrom');
   const types: Any[] = Z.typeList();
   const type = ui.get('btDmgType') || 'физ', mode = ui.get('btDmgMode') || 'norm';
   const g = Z.groupOf(type), auto = Z.PIERCE.has(type);
@@ -388,6 +392,11 @@ function DmgKind() {
     </select>
     {g === 'mag' && mode !== 'pure' && <label className="check small" title="Урон этого заклинания не магический: считаются только сопротивления к самому типу, без маг резиста">
       <input type="checkbox" checked={!!ui.get('btNoMag')} onChange={e => ui.set('btNoMag', e.target.checked ? '1' : '')} /> не магия</label>}
+    {refl && <select value={foes.some(x => x.id === from) ? from : ''} onChange={e => ui.set('btFrom', e.target.value)} aria-label="Кто бьёт"
+      title="У цели есть отражение: отражённый урон (от урона до сопротивлений, и при иммунитете тоже) уйдёт тому, кто бьёт">
+      <option value="">кто бьёт? (для отражения)</option>
+      {foes.map(x => <option key={x.id} value={x.id}>{x.n}{x.kind === 'h' ? ' (герой)' : x.kind === 'a' ? ' (союзник)' : ''}</option>)}
+    </select>}
   </div>;
 }
 
@@ -399,7 +408,7 @@ function Resists({ t, gm }: { t: Tok; gm: boolean }) {
     <div><span className="muted">Сопротивления:</span> <ResistChips entries={rz} /></div>
     {gm && <input key={B.tid(t) + ':' + line} type="text" className="bt-rz-in" defaultValue={line} aria-label="Сопротивления в бою"
       placeholder="в бою: огонь 25%, физ 50е, молния 2х, иммун яд, вода в хил"
-      title="На время боя (зелье, умение): тип и число через запятую или «/» — % или «е» (единицы), «2х» — слабость, «иммун …», «вода в хил» / «молния в ману» — урон этого типа лечит"
+      title="На время боя (зелье, умение): тип и число через запятую или «/» — % или «е» (единицы), «2х» — слабость, «иммун …», «вода в хил» / «молния в ману» — урон этого типа лечит, «отражение 30% звук» — часть урона уходит тому, кто бьёт"
       onBlur={e => act('btRes', {}, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />}
     {gm && <ResistConds entries={rz} />}
   </div>;

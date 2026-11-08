@@ -1171,32 +1171,33 @@
       const [what, sign, how] = btn.dataset.v.split(':');
       const v = vitals(t);
       if (what === 'arm') { if (v.marm) setVit(t, { arm: Math.max(0, Math.min(v.marm, v.arm + sign * amt)) }); return; }
-      const max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
-      // урон (порядок ГМ, js/resist.js): единицы сопротивления → резисты в % → множители слабостей → броня → ХП;
-      // сквозь броню — мимо брони (резисты считаются), чистый — мимо всего; слизь и ихор бьют по броне сильнее
-      let rest = amt, soak = 0, steps = [], gain = {};
-      const patch = {};
+      // урон (порядок ГМ, js/resist.js) — hitCalc; отражение (ГМ: от урона без сопротивлений, и при иммунитете тоже)
+      // уходит тому, кто бьёт (App.ui.btFrom): его сопротивления и броня считаются как обычно
       if (what === 'hp' && sign < 0) {
-        const Z = window.Resist;
         const type = App.ui.btDmgType || 'физ', mode = how === 'pierce' ? 'pierce' : (App.ui.btDmgMode || 'norm');
-        const r = Z ? Z.damage(amt, type, mode, resistOf(t), !!App.ui.btNoMag) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
-        rest = r.hp; steps = r.steps; gain = r.gain || {};
-        if (!r.pierce && v.arm > 0 && rest > 0) {
-          const m = r.armorMul || 1, hit = rest * m;
-          soak = Math.min(v.arm, Math.round(hit));
-          patch.arm = v.arm - soak;
-          rest = Math.max(0, Math.round((hit - soak) / m));
-          steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}`);
+        const h = hitCalc(t, amt, type, mode, !!App.ui.btNoMag);
+        const saves = [[t, h.patch]], msg = [hitText(t, h)];
+        if (h.refl.length) {
+          const fh = App.ui.btFrom && App.ui.btFrom !== tid(t) ? findTok(board0(), App.ui.btFrom) : null;
+          if (fh && fh.t.kind !== 'o') {
+            let a = fh.t, all = {};
+            h.refl.forEach(rf => {
+              const h2 = hitCalc(a, rf.amt, rf.type, 'norm', false);
+              msg.push(`отражено ${rf.amt} (${window.Resist.nameOf(rf.type)}) → ${hitText(a, h2)}`);
+              all = Object.assign(all, h2.patch);
+              a = withVit(a, h2.patch);       // следующее отражение — по уже раненому
+            });
+            saves.push([fh.t, all]);
+          } else msg.push(`отражено ${h.refl.map(rf => `${rf.amt} (${window.Resist.nameOf(rf.type)})`).join(' и ')} — выберите «Кто бьёт», чтобы нанести атакующему`);
         }
+        setVits(saves);
+        App.toast(msg.join('; '));
+        return;
       }
-      if (rest) patch[what] = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * rest) : (+now || 0) + sign * rest);
-      // конвертация урона в лечение или ману (не выше максимума): «конвертирует урон от воды в хил»
-      const up = (cur, add, mx) => { const x2 = (+cur || 0) + add; return has(mx) ? Math.min(mx, x2) : x2; };
-      if (gain.hp) patch.hp = up(has(patch.hp) ? patch.hp : v.hp, gain.hp, v.mhp);
-      if (gain.mp) patch.mp = up(v.mp, gain.mp, v.mmp);
-      if (Object.keys(patch).length) setVit(t, patch);
-      if (steps.length > 1 || soak) App.toast(`${tname(t)}: ${steps.join(' → ')}${rest || !(gain.hp || gain.mp) ? ` → ХП −${rest}` : ''}`);
-      else if (what === 'hp' && sign < 0 && !rest) App.toast(`${tname(t)}: урона нет`);
+      const max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
+      const patch = {};
+      patch[what] = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * amt) : (+now || 0) + sign * amt);
+      setVit(t, patch);
     },
     // полная прочность брони: у героя — броня надетого снаряжения, у остальных — заданная ГМ
     btArmFix() {
@@ -1304,6 +1305,43 @@
       App.toast(on ? `${tname(t)}: скрыт от игроков${was ? ' и убран из очереди ходов' : ''}` : `${tname(t)}: снова виден игрокам${ini ? ` — в очереди с инициативой ${ini}` : ''}`);
     }
   });
+  // удар по фишке (js/resist.js): единицы сопротивления → резисты в % → множители слабостей → броня → ХП;
+  // сквозь броню — мимо брони (резисты считаются), чистый — мимо всего; слизь и ихор бьют по броне сильнее;
+  // конвертация — в лечение или ману (не выше максимума) → { patch, steps, rest, gain, refl }
+  function hitCalc(t, amt, type, mode, noMag) {
+    const v = vitals(t), Z = window.Resist;
+    const r = Z ? Z.damage(amt, type, mode, resistOf(t), noMag) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
+    let rest = r.hp, soak = 0;
+    const steps = r.steps.slice(), patch = {}, gain = r.gain || {};
+    if (!r.pierce && v.arm > 0 && rest > 0) {
+      const m = r.armorMul || 1, hit = rest * m;
+      soak = Math.min(v.arm, Math.round(hit));
+      patch.arm = v.arm - soak;
+      rest = Math.max(0, Math.round((hit - soak) / m));
+      steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}`);
+    }
+    if (rest) patch.hp = Math.max(0, (+v.hp || 0) - rest);
+    const up = (cur, add, mx) => { const x2 = (+cur || 0) + add; return has(mx) ? Math.min(mx, x2) : x2; };
+    if (gain.hp) patch.hp = up(has(patch.hp) ? patch.hp : v.hp, gain.hp, v.mhp);
+    if (gain.mp) patch.mp = up(v.mp, gain.mp, v.mmp);
+    return { patch, steps, rest, gain, refl: r.refl || [] };
+  }
+  const hitText = (t, h) => `${tname(t)}: ${h.steps.join(' → ')}${h.rest ? ` → ХП −${h.rest}` : h.gain.hp || h.gain.mp ? '' : ' → урона нет'}`;
+  // фишка с уже применёнными изменениями (для нескольких ударов подряд)
+  const withVit = (t, patch) => Object.assign({}, t, { o: t.kind === 'h' ? Object.assign({}, t.o, { vit: Object.assign({}, t.o.vit || {}, patch) }) : Object.assign({}, t.o, patch) });
+  // несколько фишек за раз: противники — одним сохранением поля, союзники — одним списком
+  function setVits(list) {
+    const foes = list.filter(([t, p]) => t.kind === 'f' && Object.keys(p).length), allies = list.filter(([t, p]) => t.kind === 'a' && Object.keys(p).length);
+    list.forEach(([t, p]) => { if (t.kind === 'h' && Object.keys(p).length) setVit(t, p); });
+    if (allies.length) ctx.saveAllies((ctx.allies || []).map(a => { const x = allies.find(([t]) => t.o.i === a.i); return x ? Object.assign({}, a, x[1]) : a; }));
+    if (foes.length) {
+      const nb = JSON.parse(JSON.stringify(board0()));
+      foes.forEach(([t, p]) => { const f = nb.foes.find(z => z.i === t.o.i); if (f) Object.assign(f, p); });
+      ctx.saveBoard(nb);
+    }
+  }
+  // «Кто бьёт»: все на поле, кроме выбранной фишки и предметов
+  function attackers(at, except) { return [...at.values()].filter(x => x.kind !== 'o' && tid(x) !== except).map(x => ({ id: tid(x), n: tname(x), kind: x.kind })); }
   function setVit(t, patch) {
     if (t.kind === 'h') { ctx.saveVit(t.o.id, Object.assign({}, t.o.vit || {}, patch)); return; }
     if (t.kind === 'a') { ctx.saveAllies((ctx.allies || []).map(a => (a.i === t.o.i ? Object.assign({}, a, patch) : a))); return; }
@@ -1423,7 +1461,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, resistOf, resistLine, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 

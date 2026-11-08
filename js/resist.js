@@ -149,6 +149,19 @@
       if (m && into(m[2]) && typesIn(m[1]).length) { push(typesIn(m[1]), 'conv', into(m[2])); return; }
       m = s.match(/заблокированн\S*\s+урон\S*\s+(?:конверт\S*|превращ\S*|переходит)\s+в\s+(\S+)/);
       if (m && into(m[1])) { push(['всё'], 'conv', into(m[1]), { blocked: true }); return; }
+      // отражение (ГМ: от урона без сопротивлений, и при иммунитете тоже): «50% получаемого урона отражается как урон тьмой»,
+      // «25% урона возвращается противнику», «возвращает полученный урон как урон лавой»,
+      // «полученный урон возвращается в виде случайного стихийного»; строка ГМ: «отражение 30% звук»
+      m = s.match(/(\d+(?:[.,]\d+)?)\s*(?:%|п)\s*(?:получаем\S*\s+|полученн\S*\s+)?урон\S*\s+(?:отража\S*|возвращ\S*)(.*)/)
+        || s.match(/(?:возвращает|отражает)\s+(?:полученн\S*|получаем\S*|весь)\s+урон\S*()(.*)/)
+        || s.match(/(?:полученн\S*|получаем\S*)\s+урон\S*\s+(?:возвращ\S*|отража\S*)()(.*)/)
+        || (manual && s.match(/^отраж\S*\s+(\d+(?:[.,]\d+)?)\s*(?:%|п)?(.*)/));
+      if (m) {
+        const rest = m[2] || '';
+        const as = /стихийн|элементальн|случайн/.test(rest) ? 'стихия' : (typesIn(rest).filter(t => BY_ID.has(t))[0] || '');
+        push(['всё'], 'refl', m[1] ? num(m[1]) : 100, { as });
+        return;
+      }
       // эссенция в предмете (ГМ: по названию из таблицы алхимии): «эссенция огня» — 100е резиста к своему элементу
       // («все эссенции дают 100е резиста … соответствующего элемента, если это возможно»), плюс её собственное свойство
       m = s.match(/эссенци\S*\s+([а-я]+)/);
@@ -313,23 +326,27 @@
       const x = m.get(e.t) || { key: e.t, name: nameOf(e.t), pct: 0, flat: 0, mul: 1, imm: false, src: [] };
       if (e.k === 'imm') x.imm = true;
       else if (e.k === 'conv') { if (e.blocked) x.convBlocked = e.v; else x.conv = e.v; }
+      else if (e.k === 'refl') (x.refl = x.refl || []).push({ v: e.v, as: e.as });
       else if (e.k === 'pct') x.pct = r1(x.pct + e.v);
       else if (e.k === 'flat') x.flat = r1(x.flat + e.v);
       else if (e.k === 'mul') x.mul = r1(x.mul * e.v);
-      x.src.push(`${e.src}: ${e.k === 'conv' ? (e.blocked ? 'заблокированное → ' : 'в ') + (e.v === 'mp' ? 'ману' : 'лечение') : e.k === 'imm' ? 'иммунитет' : e.k === 'mul' ? '×' + e.v : (e.v > 0 ? '+' : '') + e.v + (e.k === 'flat' ? ' ед.' : '%')}`);
+      x.src.push(`${e.src}: ${e.k === 'refl' ? `отражает ${e.v}%${e.as ? ' как ' + (e.as === 'стихия' ? 'случайную стихию' : nameOf(e.as)) : ''}` : e.k === 'conv' ? (e.blocked ? 'заблокированное → ' : 'в ') + (e.v === 'mp' ? 'ману' : 'лечение') : e.k === 'imm' ? 'иммунитет' : e.k === 'mul' ? '×' + e.v : (e.v > 0 ? '+' : '') + e.v + (e.k === 'flat' ? ' ед.' : '%')}`);
       m.set(e.t, x);
     });
     const order = ['всё', 'физ', 'маг'].concat(TYPES.map(t => t[0]));
     return [...m.values()].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   }
   const conds = entries => entries.filter(e => e.cond);
-  const chip = x => x.conv ? (x.conv === 'mp' ? 'урон → в ману' : 'урон → в лечение') : x.imm ? 'иммунитет' : [x.convBlocked ? `снятое резистами → в ${x.convBlocked === 'mp' ? 'ману' : 'лечение'}` : '', x.flat ? `${x.flat > 0 ? '−' : '+'}${Math.abs(x.flat)} ед. урона` : '', x.pct ? `${x.pct > 0 ? 'резист' : 'слабость'} ${Math.abs(x.pct)}%` : '', x.mul !== 1 ? `урон ×${x.mul}` : ''].filter(Boolean).join(', ');
+  const reflText = x => (x.refl || []).map(r => `отражает ${r.v}%${r.as ? ` (${r.as === 'стихия' ? 'случайная стихия' : nameOf(r.as)})` : ''}`);
+  const chip0 = x => x.conv ? (x.conv === 'mp' ? 'урон → в ману' : 'урон → в лечение') : x.imm ? 'иммунитет' : [x.convBlocked ? `снятое резистами → в ${x.convBlocked === 'mp' ? 'ману' : 'лечение'}` : '', x.flat ? `${x.flat > 0 ? '−' : '+'}${Math.abs(x.flat)} ед. урона` : '', x.pct ? `${x.pct > 0 ? 'резист' : 'слабость'} ${Math.abs(x.pct)}%` : '', x.mul !== 1 ? `урон ×${x.mul}` : ''].filter(Boolean).join(', ');
+  const chip = x => [chip0(x)].concat(reflText(x)).filter(Boolean).join(', ');
   // слабость или защита — для цвета плашки
-  const sign = x => x.conv || x.convBlocked || x.imm || (x.pct > 0 && x.mul <= 1) || (x.flat > 0 && x.mul <= 1 && x.pct >= 0) ? 1 : x.pct < 0 || x.mul > 1 || x.flat < 0 ? -1 : 0;
+  const sign = x => (x.refl && !x.pct && !x.flat && x.mul === 1 && !x.imm) || x.conv || x.convBlocked || x.imm || (x.pct > 0 && x.mul <= 1) || (x.flat > 0 && x.mul <= 1 && x.pct >= 0) ? 1 : x.pct < 0 || x.mul > 1 || x.flat < 0 ? -1 : 0;
 
   /**
    * урон X типа type: mode — norm | pierce | pure; notMagic — урон заклинания не магический (только сопротивление к самому типу)
-   * → { hp: сколько уходит дальше (в броню / ХП), pierce, armorMul, steps: ['…'], blocked, gain: { hp | mp: n } — конвертация в лечение / ману }
+   * → { hp: сколько уходит дальше (в броню / ХП), pierce, armorMul, steps: ['…'], blocked, gain: { hp | mp: n } — конвертация в лечение / ману,
+   *     refl: [{ amt, type }] — сколько отражается атакующему (ГМ: от урона без сопротивлений, и при иммунитете тоже) }
    */
   function damage(X, type, mode, entries, notMagic) {
     const steps = [`${nameOf(type)} ${X}`];
@@ -338,7 +355,9 @@
     const keys = [type, 'всё'].concat(g === 'phys' && type !== 'физ' ? ['физ'] : g === 'mag' && !notMagic ? ['маг'] : []);
     const on = entries.filter(e => !e.cond && keys.includes(e.t));
     const pierce = mode === 'pierce' || PIERCE.has(type);
-    const res = { pierce, armorMul: ARMOR_MUL[type] || 1, steps };
+    // отражение — от всего входящего урона, до сопротивлений; «случайная стихия» — одна из четырёх
+    const refl = on.filter(e => e.k === 'refl').map(e => ({ amt: Math.round(X * e.v / 100), type: e.as === 'стихия' ? ELEMENTS[Math.floor(Math.random() * 4)] : e.as || type, src: e.src })).filter(r => r.amt > 0);
+    const res = Object.assign({ pierce, armorMul: ARMOR_MUL[type] || 1, steps }, refl.length ? { refl } : {});
     // конвертация (ГМ): урон этого типа целиком становится лечением (или маной) — ни резисты, ни броня уже не нужны
     const conv = on.find(e => e.k === 'conv' && !e.blocked && e.t !== 'всё') || on.find(e => e.k === 'conv' && !e.blocked);
     if (conv) return Object.assign(res, { hp: 0, blocked: true, gain: { [conv.v]: X }, steps: steps.concat(`конвертация (${conv.src}) → ${conv.v === 'mp' ? 'МП' : 'ХП'} +${X}`) });

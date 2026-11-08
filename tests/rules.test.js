@@ -333,8 +333,16 @@ eq('resist: essence by name', pz('эссенция огня'), ['огонь:flat
 eq('resist: essence note is not a resist', pz('все эссенции дают 100е резиста и 100 урона соответствующего элемента'), []);
 eq('resist: two clauses joined by «и»', pz('выделяет слизь которая даёт 20е резиста огню и +20е получаемого ледяного урона'), ['огонь:flat20', 'лёд:flat-20']);
 eq('resist: «these symbols»', pz('не могут использовать хаос/хтон/космос/Аббис / получают двойной урон от этих символов'), ['хаос:mul2', 'хтон:mul2', 'космос:mul2', 'бездна:mul2']);
-eq('resist: reflection is not a weakness', pz('50% получаемого урона отражается как урон тьмой'), []);
+eq('resist: reflection is not a weakness', pz('50% получаемого урона отражается как урон тьмой'), ['всё:refl50']);
 if ((window.GAME_DATA.skills.symbols || []).some(x => /запрет/.test(x.cat))) eq('resist: forbidden magic = forbidden symbols', pz('иммун к запретной магии').every(x => /:imm$/.test(x)) && pz('иммун к запретной магии').includes('хаос:imm'), true);
+const rp = t => Z.parse(t).filter(e => e.k === 'refl').map(e => e.v + '/' + e.as);
+eq('reflect: pct as type', rp('50% получаемого урона отражается как урон тьмой'), ['50/тьма']);
+eq('reflect: same type', rp('Шипованный доспех: +20% физ резиста / 25% урона возвращается противнику'), ['25/']);
+eq('reflect: all as lava', rp('лавовое тело: иммун к физ урону / возвращает полученный урон как урон лавой'), ['100/лава']);
+eq('reflect: random element', rp('полученный урон возвращается в виде случайного стихийного'), ['100/стихия']);
+const RF = Z.parse('иммун к физ урону / возвращает полученный урон как урон лавой / 25% урона возвращается противнику / физ резист 50%');
+eq('reflect: from raw damage, even when immune', Z.damage(200, 'физ', 'norm', RF).refl.map(r => r.amt + ' ' + r.type), ['200 лава', '50 физ']);
+eq('reflect: pure damage is not reflected', Z.damage(200, 'физ', 'pure', RF).refl, undefined);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
