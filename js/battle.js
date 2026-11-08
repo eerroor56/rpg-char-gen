@@ -1174,13 +1174,13 @@
       const max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
       // урон (порядок ГМ, js/resist.js): единицы сопротивления → резисты в % → множители слабостей → броня → ХП;
       // сквозь броню — мимо брони (резисты считаются), чистый — мимо всего; слизь и ихор бьют по броне сильнее
-      let rest = amt, soak = 0, steps = [];
+      let rest = amt, soak = 0, steps = [], gain = {};
       const patch = {};
       if (what === 'hp' && sign < 0) {
         const Z = window.Resist;
         const type = App.ui.btDmgType || 'физ', mode = how === 'pierce' ? 'pierce' : (App.ui.btDmgMode || 'norm');
         const r = Z ? Z.damage(amt, type, mode, resistOf(t), !!App.ui.btNoMag) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
-        rest = r.hp; steps = r.steps;
+        rest = r.hp; steps = r.steps; gain = r.gain || {};
         if (!r.pierce && v.arm > 0 && rest > 0) {
           const m = r.armorMul || 1, hit = rest * m;
           soak = Math.min(v.arm, Math.round(hit));
@@ -1190,8 +1190,12 @@
         }
       }
       if (rest) patch[what] = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * rest) : (+now || 0) + sign * rest);
+      // конвертация урона в лечение или ману (не выше максимума): «конвертирует урон от воды в хил»
+      const up = (cur, add, mx) => { const x2 = (+cur || 0) + add; return has(mx) ? Math.min(mx, x2) : x2; };
+      if (gain.hp) patch.hp = up(has(patch.hp) ? patch.hp : v.hp, gain.hp, v.mhp);
+      if (gain.mp) patch.mp = up(v.mp, gain.mp, v.mmp);
       if (Object.keys(patch).length) setVit(t, patch);
-      if (steps.length > 1 || soak) App.toast(`${tname(t)}: ${steps.join(' → ')} → ХП −${rest}`);
+      if (steps.length > 1 || soak) App.toast(`${tname(t)}: ${steps.join(' → ')}${rest || !(gain.hp || gain.mp) ? ` → ХП −${rest}` : ''}`);
       else if (what === 'hp' && sign < 0 && !rest) App.toast(`${tname(t)}: урона нет`);
     },
     // полная прочность брони: у героя — броня надетого снаряжения, у остальных — заданная ГМ

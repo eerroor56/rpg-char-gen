@@ -398,8 +398,8 @@ function Resists({ t, gm }: { t: Tok; gm: boolean }) {
   return <div className="bt-rz small">
     <div><span className="muted">Сопротивления:</span> <ResistChips entries={rz} /></div>
     {gm && <input key={B.tid(t) + ':' + line} type="text" className="bt-rz-in" defaultValue={line} aria-label="Сопротивления в бою"
-      placeholder="в бою: огонь 25%, физ 50е, молния 2х, иммун яд"
-      title="На время боя (зелье, умение): тип и число через запятую или «/» — % или «е» (единицы), «2х» — слабость, «иммун …»"
+      placeholder="в бою: огонь 25%, физ 50е, молния 2х, иммун яд, вода в хил"
+      title="На время боя (зелье, умение): тип и число через запятую или «/» — % или «е» (единицы), «2х» — слабость, «иммун …», «вода в хил» / «молния в ману» — урон этого типа лечит"
       onBlur={e => act('btRes', {}, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />}
     {gm && <ResistConds entries={rz} />}
   </div>;

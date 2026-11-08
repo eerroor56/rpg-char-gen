@@ -319,6 +319,12 @@ eq('damage: 100% and more blocks', Z.damage(100, 'физ', 'norm', Z.parse('фи
 const half = R.compute(st({ raceId: 'полукровка', parentA: 'кенгаши', parentB: 'йелдримские эльфы', traits: ['резистентный'], traitOpt: { resist0: 'огонь' } }));
 const hz = Z.summary(Z.ofHero({ res: half, state: { traitOpt: { resist0: 'огонь' } } }, null));
 eq('hero: half-blood halves, immune → 50%, trait +10%', ['физ', 'огонь', 'хаос'].map(k => { const x = hz.find(y => y.key === k) || {}; return [x.pct, x.mul]; }), [[45, 1], [60, 1], [0, 1.5]]);
+const C2 = Z.parse('конвертирует урон от воды в хил / иммун к огню / +70% физ резиста / заблокированный урон конвертируется в ману');
+eq('resist: conversion parsed', pz('получаемый урон от молнии конвертируется в ману'), ['молния:convmp']);
+eq('damage: converted to heal', [Z.damage(200, 'вода', 'norm', C2).hp, Z.damage(200, 'вода', 'norm', C2).gain], [0, { hp: 200 }]);
+eq('damage: pure is not converted', Z.damage(200, 'вода', 'pure', C2).hp, 200);
+eq('damage: blocked part to mana', [Z.damage(200, 'физ', 'norm', C2).hp, Z.damage(200, 'физ', 'norm', C2).gain], [60, { mp: 140 }]);
+eq('damage: manual conversion', Z.damage(50, 'вода', 'norm', Z.parse('вода в хил', true)).gain, { hp: 50 });
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
