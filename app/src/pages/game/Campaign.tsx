@@ -44,7 +44,7 @@ export function Campaign({ cid }: { cid: string }) {
   const patchCamp = (patch: Any) => { camp.set(x => ({ ...x, ...patch })); return C.updateCampaign(cid, patch).catch((e: unknown) => App.toast(C.errorText(e))); };
   const patchChar = (chid: string, patch: Any) => { chars.set(l => (l || []).map(x => (x.id === chid ? { ...x, ...patch } : x))); return C.updateCharacter(cid, chid, patch).catch((e: unknown) => App.toast(C.errorText(e))); };
   const rerender = () => tick(t => t + 1);
-  const heroes = inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '' }; });
+  const heroes = inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? (v.rz || (v.rz = window.Resist.ofHero(v, ch))) : [] }; });
   const party = inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой' }));
   const saveAllies = (allies: Any[]) => patchCamp({ allies });
 

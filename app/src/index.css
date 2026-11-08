@@ -1241,6 +1241,17 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .bf .btn.bt-dmg:hover { border-color: var(--err); }
 .bf .btn.bt-heal { border-color: rgba(103, 188, 167, .7); color: #a6e6d4; }
 .bf .btn.bt-heal:hover { border-color: var(--ok); }
+.bf .bt-kind select { flex: 1 1 140px; min-width: 0; min-height: 34px; padding: 4px 8px; }
+.bf .bt-kind .check { flex: 0 0 auto; }
+.bf .bt-rz { display: grid; gap: 5px; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
+.bf .bt-rz p { margin: 0; }
+.bf .bt-rz-in { width: 100%; min-height: 32px; padding: 4px 8px; }
+.rz-chips { display: inline; }
+.rz-chips .eff { cursor: help; }
+/* на «бумажном» листе — тёмные надписи */
+.cs-sheet .eff { border-color: #b9ab8d; background: rgba(0, 0, 0, .03); color: var(--ink); }
+.cs-sheet .eff.plus { color: #2d6a43; border-color: #6fae84; background: rgba(60, 150, 90, .1); }
+.cs-sheet .eff.minus { color: #9a3328; border-color: #d48a80; background: rgba(200, 80, 60, .08); }
 .bf .bt-more summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
 .bf .bt-more .bt-btns { gap: 4px 12px; margin-top: 4px; }
 .bf .bt-more p { margin: 4px 0 0; }

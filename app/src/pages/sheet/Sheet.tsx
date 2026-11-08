@@ -2,14 +2,16 @@ import type { ReactNode } from 'react';
 import { act, cap } from '../../lib/legacy';
 import { EntityPic, fmt, norm, R, RacePic, signed, type Any } from '../create/kit';
 import { Icon } from '../../ui/Icon';
+import { ResistBlock, Rz } from './Resist';
 
 /*
  * Лист персонажа — «бумажный» лист для игры, печати и картинки. Считает всё js/rules.js (res); здесь только показ.
  * opts: { res — расчёт с развитием в игре (проверки правил — по листу создания), vit — ХП, МП и броня сейчас (после боя),
  *         symbols — символы, изученные в игре, pic — своя картинка, gearHtml — снаряжение сейчас (js/inventory.js),
- *         dev — блок «Развитие», note — пометка над листом }
+ *         dev — блок «Развитие», note — пометка над листом,
+ *         resist — сопротивления и слабости (js/resist.js; у героя в игре — с состояниями и надетым) }
  */
-export type SheetOpts = { res?: Any; vit?: Any; symbols?: string[]; pic?: string; gearHtml?: string; dev?: ReactNode; note?: ReactNode };
+export type SheetOpts = { res?: Any; vit?: Any; symbols?: string[]; pic?: string; gearHtml?: string; dev?: ReactNode; note?: ReactNode; resist?: Any[] };
 
 export function Sheet({ st, res: chk, opts = {} }: { st: Any; res: Any; opts?: SheetOpts }) {
   const res = opts.res || chk;
@@ -21,6 +23,7 @@ export function Sheet({ st, res: chk, opts = {} }: { st: Any; res: Any; opts?: S
   const now = (v: unknown, max: number) => (v !== undefined && v !== null && v !== '' && +v! !== max ? <span title="сейчас / максимум">{fmt(+v!)} / </span> : null);
   const custom = opts.pic && /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(opts.pic) ? opts.pic : '';
   const talents = Rr.TALENTS.filter((t: Any) => res.talents[t.id].total);
+  const resist: Any[] = opts.resist || (Rz() ? Rz().ofHero({ res, state: st }, null) : []);
   return (
     <article className="cs-sheet" id="sheet">
       <header className="cs-head">
@@ -87,6 +90,8 @@ export function Sheet({ st, res: chk, opts = {} }: { st: Any; res: Any; opts?: S
           <Ancestor race={race} />
           {race.id === 'они' && st.oniClan && <p><b>Клан:</b> {st.oniClan}</p>}
         </section>
+
+        <ResistBlock entries={resist} />
 
         <section className="cs-block wide">
           <h3>Дар, черты</h3>

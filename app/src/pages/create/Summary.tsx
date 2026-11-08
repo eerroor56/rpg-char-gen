@@ -48,6 +48,7 @@ export function sheetOpts(rec: Any, v: Any): SheetOpts {
     pic: rec.pic || '',
     gearHtml: window.Inv && v.inv ? window.Inv.sheetGear(v, rec) : '',
     dev: <DevBlock rec={rec} v={v} />,
+    resist: (window as Any).Resist ? (window as Any).Resist.ofHero(v, rec) : undefined,
   };
 }
 /* eslint-disable @typescript-eslint/no-explicit-any */

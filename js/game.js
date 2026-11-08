@@ -385,7 +385,7 @@
     const sideHtml = arena ? diceBox(myHero ? { cid, chid: myHero.id, chName: myHero.name || 'Безымянный герой', compact: true, side: true } : { cid, compact: true, side: true }) + feedHtml : '';
     const battleHtml = window.Battle ? window.Battle.card({
       cid, camp, gm, me, level: partyLevel, rerender: repaint, side: sideHtml,
-      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '' }; }),
+      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? window.Resist.ofHero(v, ch) : [] }; }),
       saveAllies,
       allies: camp.allies || [],
       saveBoard: board => {

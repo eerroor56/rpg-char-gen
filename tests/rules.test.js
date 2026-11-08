@@ -294,6 +294,31 @@ eq('fill keeps race and name', [s.raceId, s.name], ['орки', 'Гром']);
 eq('fill completes hero', R.compute(s).errors.length, 0);
 for (const id of RH.steps) RH.step(s, id);
 eq('rerolled steps keep hero valid', R.compute(s).errors.length, 0);
+// 18б. Сопротивления и слабости (js/resist.js): разбор текста таблицы и порядок расчёта урона (уточнение ГМ)
+require('../js/resist.js');
+const Z = window.Resist;
+const pz = t => Z.parse(t).map(e => `${e.t}:${e.k}${e.k === 'imm' ? '' : e.v}${e.cond ? '?' : ''}`);
+eq('resist: pct and flat', pz('резист к холоду 25%/сопротивление огню 50е'), ['лёд:pct25', 'огонь:flat50']);
+eq('resist: phys and mag', pz('Потусторонний хитин: +30% физ и маг резиста'), ['физ:pct30', 'маг:pct30']);
+eq('resist: immune list', pz('Призрак: иммун к физ / тьме / некро'), ['физ:imm', 'тьма:imm', 'некро:imm']);
+eq('resist: magic of types', pz('иммун к магии святости и света'), ['святость:imm', 'свет:imm']);
+eq('resist: weakness mul', pz('урон от молнии 3Х'), ['молния:mul3']);
+eq('resist: weakness pct', pz('получаешь на 25% больше тёмного, святого урона'), ['тьма:pct-25', 'святость:pct-25']);
+eq('resist: temporary is conditional', pz('берсерк: 2Х наносимый урон, 80% резист ко всему урону на 2х'), ['всё:pct80?']);
+eq('resist: curse immunity is not damage', pz('иммун к проклятию истока'), []);
+eq('resist: manual line', Z.parse('огонь 25%, молния 2х, иммун яд, физ 50е', true).map(e => e.t + ':' + e.k + e.v), ['огонь:pct25', 'молния:mul2', 'яд:imm1', 'физ:flat50']);
+const E = Z.parse('физ резист 25% / иммун к огню / урон от молнии 2Х / сопротивление воде 50е / маг резист 30% / пси резист 10%');
+eq('damage: flat, then pct', Z.damage(200, 'вода', 'norm', E).hp, 105);           // 200 − 50 = 150, −30% маг = 105
+eq('damage: pct, then mul', Z.damage(200, 'молния', 'norm', E).hp, 280);          // −30% = 140, ×2 = 280
+eq('damage: immune', Z.damage(200, 'огонь', 'pierce', E).hp, 0);
+eq('damage: psi is not magic', Z.damage(200, 'пси', 'norm', E).hp, 180);
+eq('damage: spell not magical', Z.damage(200, 'молния', 'norm', E, true).hp, 400);
+eq('damage: pure ignores all', [Z.damage(200, 'огонь', 'pure', E).hp, Z.damage(200, 'огонь', 'pure', E).pierce], [200, true]);
+eq('damage: flesh pierces armor', Z.damage(100, 'плоть', 'norm', E).pierce, true);
+eq('damage: 100% and more blocks', Z.damage(100, 'физ', 'norm', Z.parse('физ резист 60% / общий резист 40п')).hp, 0);
+const half = R.compute(st({ raceId: 'полукровка', parentA: 'кенгаши', parentB: 'йелдримские эльфы', traits: ['резистентный'], traitOpt: { resist0: 'огонь' } }));
+const hz = Z.summary(Z.ofHero({ res: half, state: { traitOpt: { resist0: 'огонь' } } }, null));
+eq('hero: half-blood halves, immune → 50%, trait +10%', ['физ', 'огонь', 'хаос'].map(k => { const x = hz.find(y => y.key === k) || {}; return [x.pct, x.mul]; }), [[45, 1], [60, 1], [0, 1.5]]);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;

@@ -758,6 +758,21 @@
       zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
   }
   const radius = v => Math.max(1, Math.floor(v.zor / ZOR_PER_CELL));
+  // сопротивления и слабости фишки (js/resist.js): у героя — с листа (раса, черты, дар, состояния, надетое),
+  // у противника и союзника — из бестиария или расы; плюс строка ГМ «в бою» (зелье, умение на пару ходов):
+  // у героя она в vit.res, у остальных — в самой фишке (res)
+  function resistOf(t) {
+    const Z = window.Resist;
+    if (!Z || !t || t.kind === 'o') return [];
+    const extra = String((t.kind === 'h' ? (t.o.vit || {}).res : t.o.res) || '').trim();
+    if (t.kind === 'h') return (t.o.rz || []).concat(extra ? Z.parse(extra, true).map(e => Object.assign(e, { src: 'в бою (ГМ)' })) : []);
+    const cr = creatureOf(t.o.src || t.o.n);
+    if (cr) return Z.ofCreature(cr, extra);
+    const r = raceOf(t.o.src || t.o.n);
+    if (r) return Z.ofRace(r, extra);
+    return extra ? Z.parse(extra, true).map(e => Object.assign(e, { src: 'в бою (ГМ)' })) : [];
+  }
+  const resistLine = t => String((t && t.kind === 'h' ? (t.o.vit || {}).res : t && t.o.res) || '');
   const isDown = t => { const v = vitals(t); return has(v.hp) && v.mhp !== null && v.hp <= 0; };
 
   const turnOn = b => !!(b && b.turn && b.turn.on && (b.turn.order || []).length);
@@ -1157,17 +1172,27 @@
       const v = vitals(t);
       if (what === 'arm') { if (v.marm) setVit(t, { arm: Math.max(0, Math.min(v.marm, v.arm + sign * amt)) }); return; }
       const max = what === 'hp' ? v.mhp : v.mmp, now = what === 'hp' ? v.hp : v.mp;
-      // урон сначала снимает прочность брони, остаток — ХП; «сквозь броню» — сразу в ХП
-      let rest = amt, soak = 0;
+      // урон (порядок ГМ, js/resist.js): единицы сопротивления → резисты в % → множители слабостей → броня → ХП;
+      // сквозь броню — мимо брони (резисты считаются), чистый — мимо всего; слизь и ихор бьют по броне сильнее
+      let rest = amt, soak = 0, steps = [];
       const patch = {};
-      if (what === 'hp' && sign < 0 && how !== 'pierce' && v.arm > 0) {
-        soak = Math.min(v.arm, amt);
-        patch.arm = v.arm - soak;
-        rest = amt - soak;
+      if (what === 'hp' && sign < 0) {
+        const Z = window.Resist;
+        const type = App.ui.btDmgType || 'физ', mode = how === 'pierce' ? 'pierce' : (App.ui.btDmgMode || 'norm');
+        const r = Z ? Z.damage(amt, type, mode, resistOf(t), !!App.ui.btNoMag) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
+        rest = r.hp; steps = r.steps;
+        if (!r.pierce && v.arm > 0 && rest > 0) {
+          const m = r.armorMul || 1, hit = rest * m;
+          soak = Math.min(v.arm, Math.round(hit));
+          patch.arm = v.arm - soak;
+          rest = Math.max(0, Math.round((hit - soak) / m));
+          steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}`);
+        }
       }
       if (rest) patch[what] = Math.max(0, has(max) ? Math.min(max, (+now || 0) + sign * rest) : (+now || 0) + sign * rest);
-      setVit(t, patch);
-      if (soak) App.toast(`${tname(t)}: броня −${soak}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}${rest ? `, ХП −${rest}` : ''}`);
+      if (Object.keys(patch).length) setVit(t, patch);
+      if (steps.length > 1 || soak) App.toast(`${tname(t)}: ${steps.join(' → ')} → ХП −${rest}`);
+      else if (what === 'hp' && sign < 0 && !rest) App.toast(`${tname(t)}: урона нет`);
     },
     // полная прочность брони: у героя — броня надетого снаряжения, у остальных — заданная ГМ
     btArmFix() {
@@ -1237,6 +1262,15 @@
     },
     btAsPlayer(t) { App.ui.btAsPlayer = !!t.checked; ctx && ctx.rerender(); },
     btFoeHid(t) { App.ui.btFoeHid = !!t.checked; },
+    // строка ГМ «в бою»: сопротивления на время (зелье, умение) — «огонь 25%», «физ 50е», «молния 2х», «иммун яд»
+    btRes(el) {
+      const hit = selTok();
+      if (!hit || !ctx.gm || hit.t.kind === 'o') return;
+      const text = String(el.value || '').trim();
+      if (text === resistLine(hit.t).trim()) return;
+      setVit(hit.t, { res: text });
+      App.toast(text ? `${tname(hit.t)}: в бою — ${text}` : `${tname(hit.t)}: сопротивления в бою сняты`);
+    },
     btMoreToggle() { App.ui.btMore = !App.ui.btMore; ctx && ctx.rerender(); },
     // скрыть существо от игроков или показать снова. Скрытое уходит из очереди ходов, показанное встаёт в неё по броску d100
     btHide() {
@@ -1385,7 +1419,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 

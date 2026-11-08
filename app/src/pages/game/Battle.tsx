@@ -2,6 +2,7 @@ import { useRef, type CSSProperties, type ReactNode } from 'react';
 import { act, cap } from '../../lib/legacy';
 import { useUi } from '../hero/gearKit';
 import { fmt, signed, type Any } from '../create/kit';
+import { ResistChips, ResistConds } from '../sheet/Resist';
 
 /*
  * Поле боя кампании — клетчатая доска: местность с укрытиями, герои, союзники и противники, туман войны, очередь ходов и ОД,
@@ -335,14 +336,15 @@ function Vitals({ board, t, gm }: { board: Any; t: Tok; gm: boolean }) {
         <button type="button" className="btn ghost small" onClick={() => act('btZor', { v: String(Z) })} title={`+${Z} зоркости: на 1 клетку больше`}>+{Z}</button>
         {v.zm ? <button type="button" className="link small" onClick={() => act('btZor', { v: '0' })}>сбросить</button> : null}</span>}
     </div>
+    {(gm || t.kind !== 'f') && <Resists t={t} gm={gm} />}
     {gm && <div className="bt-vit-ctl">
+      <DmgKind />
       <div className="bt-btns bt-hit">
         <input type="number" min={1} step={1} className="bt-amt" value={ui.get('btAmt')} onChange={e => ui.set('btAmt', e.target.value)} placeholder="сколько" aria-label="Сколько" />
-        <button type="button" className="btn small bt-dmg" onClick={() => act('btVit', { v: 'hp:-1' })} title={v.marm ? 'Сначала в броню, остаток — в ХП' : undefined}>Урон</button>
+        <button type="button" className="btn small bt-dmg" onClick={() => act('btVit', { v: 'hp:-1' })} title="Урон выбранного типа: сопротивления, слабости, затем броня и ХП">Урон</button>
         <button type="button" className="btn small bt-heal" onClick={() => act('btVit', { v: 'hp:1' })}>Лечение</button>
       </div>
       {v.marm ? <div className="bt-btns">
-        <button type="button" className="btn ghost small" onClick={() => act('btVit', { v: 'hp:-1:pierce' })} title="Урон сквозь броню — сразу в ХП (гравитация, плоть, кость, бронебойные патроны)">Сквозь броню</button>
         <button type="button" className="btn ghost small" onClick={() => act('btVit', { v: 'arm:-1' })} title="Снять прочность брони">−броня</button>
         <button type="button" className="btn ghost small" onClick={() => act('btVit', { v: 'arm:1' })} title="Прибавить прочность брони (не выше полной)">+броня</button>
         {v.arm < v.marm && <button type="button" className="link small" onClick={() => act('btArmFix')} title="Вернуть броне полную прочность">починить</button>}
@@ -366,6 +368,41 @@ function Vitals({ board, t, gm }: { board: Any; t: Tok; gm: boolean }) {
       </details>}
     </div>}
   </>;
+}
+
+// ------------------------------------------------------------ тип и вид урона (js/resist.js)
+function DmgKind() {
+  const ui = useUi(), Z = (window as Any).Resist;
+  if (!Z) return null;
+  const types: Any[] = Z.typeList();
+  const type = ui.get('btDmgType') || 'физ', mode = ui.get('btDmgMode') || 'norm';
+  const g = Z.groupOf(type), auto = Z.PIERCE.has(type);
+  const grp = (k: string, label: string) => <optgroup label={label}>{types.filter(x => x.group === k).map(x => <option key={x.id} value={x.id}>{x.name}{x.pierce ? ' (сквозь броню)' : ''}</option>)}</optgroup>;
+  return <div className="bt-btns bt-kind">
+    <select value={type} onChange={e => ui.set('btDmgType', e.target.value)} aria-label="Тип урона" title="Тип урона: от него зависят сопротивления и слабости цели">
+      {grp('phys', 'Физический')}{grp('mag', 'Магия (символы)')}{grp('own', 'Не магия')}
+    </select>
+    <select value={mode} onChange={e => ui.set('btDmgMode', e.target.value)} aria-label="Вид урона"
+      title="Обычный — сопротивления, потом броня; сквозь броню — сопротивления, броня не задевается; чистый — мимо всего">
+      <option value="norm">{auto ? 'сквозь броню (символ)' : 'обычный'}</option><option value="pierce">сквозь броню</option><option value="pure">чистый</option>
+    </select>
+    {g === 'mag' && mode !== 'pure' && <label className="check small" title="Урон этого заклинания не магический: считаются только сопротивления к самому типу, без маг резиста">
+      <input type="checkbox" checked={!!ui.get('btNoMag')} onChange={e => ui.set('btNoMag', e.target.checked ? '1' : '')} /> не магия</label>}
+  </div>;
+}
+
+// сопротивления фишки: плашки (с наведением — откуда) и строка ГМ «в бою» на время (зелье, умение)
+function Resists({ t, gm }: { t: Tok; gm: boolean }) {
+  const B = window.Battle;
+  const rz: Any[] = B.resistOf(t), line: string = B.resistLine(t);
+  return <div className="bt-rz small">
+    <div><span className="muted">Сопротивления:</span> <ResistChips entries={rz} /></div>
+    {gm && <input key={B.tid(t) + ':' + line} type="text" className="bt-rz-in" defaultValue={line} aria-label="Сопротивления в бою"
+      placeholder="в бою: огонь 25%, физ 50е, молния 2х, иммун яд"
+      title="На время боя (зелье, умение): тип и число через запятую или «/» — % или «е» (единицы), «2х» — слабость, «иммун …»"
+      onBlur={e => act('btRes', {}, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />}
+    {gm && <ResistConds entries={rz} />}
+  </div>;
 }
 
 // ------------------------------------------------------------ все на поле: броня, ХП, МП, реген, ОД, обзор
