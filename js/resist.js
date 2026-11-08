@@ -77,11 +77,31 @@
   const groupOf = id => (BY_ID.get(id) || [])[3] || '';
   const nameOf = id => GROUPS[id] || (BY_ID.get(id) || [])[1] || id;
 
+  // группы-слова (уточнения ГМ): «элементальный» — четыре стихии; «жидкостная магия»; «запретная» и «порицаемая» —
+  // символы этих категорий в таблице символов; «иммун к символам» — к любой магии
+  const ELEMENTS = ['огонь', 'вода', 'воздух', 'земля'];
+  const LIQUID = ['вода', 'слизь', 'кровь', 'ихор', 'яд', 'кислота'];
+  let catCache = null;
+  function symbolCat(re) {
+    const list = (((window.GAME_DATA || {}).skills || {}).symbols || []);
+    if (!catCache || catCache.n !== list.length) catCache = { n: list.length, m: {} };
+    const k = String(re);
+    if (!catCache.m[k]) catCache.m[k] = [...new Set(list.filter(x => re.test(norm(x.cat))).map(x => wordType(String(x.name).replace(/\s*\(\d+\)/, ''))).filter(t => t && BY_ID.has(t)))];
+    return catCache.m[k];
+  }
+  function groupWord(w) {
+    w = norm(w);
+    if (/^(элементальн|стихийн)/.test(w)) return ELEMENTS;
+    if (/^жидкост/.test(w)) return LIQUID;
+    if (/^запретн/.test(w)) return symbolCat(/запрет/);
+    if (/^порицаем/.test(w)) return symbolCat(/порица/);
+    return null;
+  }
   // слово → тип урона (или группа «маг» / «всё»)
   function wordType(w) {
     w = norm(w).replace(/[^a-zа-я0-9-]/g, '');
     if (!w || /^кровотеч/.test(w)) return null;
-    if (/^(маг|маги|магия|магии|магию|магией|магическ\S*|заклинан\S*)$/.test(w)) return 'маг';
+    if (/^(маг|маги|магия|магии|магию|магией|магическ\S*|заклинан\S*|символам|символов)$/.test(w)) return 'маг';
     if (/^(всему|общ)/.test(w)) return 'всё';
     for (const t of TYPES) if (t[2].test(w)) return t[0];
     return null;
@@ -90,12 +110,18 @@
   const typesIn = s => {
     const out = [];
     let noun = false;
-    words(s).forEach(w => { const t = wordType(w); if (t === 'маг' && /^маги/.test(w)) noun = true; if (t && !out.includes(t)) out.push(t); });
-    // «магии святости и света», «некротической магии» — это святость и свет, некро, а не вся магия
+    words(s).forEach(w => {
+      const g = groupWord(w);
+      if (g) { if (g.length) noun = true; g.forEach(t => { if (!out.includes(t)) out.push(t); }); return; }
+      const t = wordType(w); if (t === 'маг' && /^маги/.test(w)) noun = true; if (t && !out.includes(t)) out.push(t);
+    });
+    // «магии святости и света», «некротической магии», «запретной магии» — это святость и свет, некро, символы категории, а не вся магия
     return noun && out.length > 1 ? out.filter(t => t !== 'маг') : out;
   };
   // сегмент — только названия типов («тьме», «некро», «физ урону») — продолжение списка иммунитетов
-  const bare = s => { const ws = norm(s).split(/[\s,]+|\sи\s/).filter(w => w && w !== 'и' && !/^урон/.test(w)); return ws.length > 0 && ws.length <= 3 && ws.every(w => wordType(w)); };
+  const bare = s => { const ws = norm(s).split(/[\s,]+|\sи\s/).filter(w => w && w !== 'и' && !/^урон/.test(w)); return ws.length > 0 && ws.length <= 3 && !/^(символ|знак)/.test(ws[0]) && ws.every(w => wordType(w) || groupWord(w)); };
+  // первое слово после «иммун к» — тип или группа («всей запретной…», «любой магии» — «всей», «любой» пропустить)
+  const leadsType = s => { const ws = words(s).filter(w => !/^(всей|всех|любой|любых)$/.test(w)); return !!ws.length && !!(wordType(ws[0]) || (groupWord(ws[0]) || []).length); };
 
   const NUM = '(\\d+(?:[.,]\\d+)?)';
   const num = s => +String(s).replace(',', '.');
@@ -107,7 +133,7 @@
   function parse(text, manual) {
     const out = [];
     // строку ГМ можно писать и через запятую («огонь 25%, молния 2х»); «0,5%» — не разделитель
-    const segs = String(text || '').split(manual ? /\s*(?:[\/;\n]|,(?!\d))\s*/ : /\s*[\/;\n]\s*/).map(s => s.trim()).filter(Boolean);
+    const segs = String(text || '').split(manual ? /\s*(?:[\/;\n]|,(?!\d))\s*/ : /\s*[\/;\n]\s*|\s+и\s+(?=[+−-]?\d)/).map(s => s.trim()).filter(Boolean);
     let immRun = false;
     segs.forEach((seg, si) => {
       // «Каменное тело: 50% физ резиста» — название способности перед двоеточием не тип урона
@@ -123,10 +149,22 @@
       if (m && into(m[2]) && typesIn(m[1]).length) { push(typesIn(m[1]), 'conv', into(m[2])); return; }
       m = s.match(/заблокированн\S*\s+урон\S*\s+(?:конверт\S*|превращ\S*|переходит)\s+в\s+(\S+)/);
       if (m && into(m[1])) { push(['всё'], 'conv', into(m[1]), { blocked: true }); return; }
+      // эссенция в предмете (ГМ: по названию из таблицы алхимии): «эссенция огня» — 100е резиста к своему элементу
+      // («все эссенции дают 100е резиста … соответствующего элемента, если это возможно»), плюс её собственное свойство
+      m = s.match(/эссенци\S*\s+([а-я]+)/);
+      if (m) {
+        const ts = typesIn(m[1]).filter(t => BY_ID.has(t));
+        const es = (((window.GAME_DATA || {}).alchemy || {}).essences || []).find(x => norm(x.name) === m[1]);
+        if (ts.length || es) {
+          push(ts, 'flat', 100);
+          if (es && es.effect) parse(es.effect).forEach(e => out.push(Object.assign(e, { txt: `${seg}: ${e.txt}` }, cond ? { cond: true } : {})));
+          return;
+        }
+      }
       // иммунитет: «иммун к огню и лаве», «иммунитет к яду,порче,кровотечению», «иммун к физ / тьме / некро»
       m = s.match(/иммун\S*\s+(?:к|ко)\s+(.+)/) || s.match(/^(.+?)\s+иммун\S*(?:\s*\+.*)?$/) || (manual && s.match(/^иммун\S*\s+(.+)/));
       if (m) {
-        const ts = wordType(words(m[1])[0]) ? typesIn(m[1]) : [];
+        const ts = leadsType(m[1]) ? typesIn(m[1]) : [];
         if (ts.length) { push(ts, 'imm', 1); immRun = true; return; }
       }
       if (immRun && bare(s)) { push(typesIn(s), 'imm', 1); return; }
@@ -142,15 +180,15 @@
       }
       m = s.match(/(двойн|тройн|удвоенн|утроенн)\S*\s+урон\S*\s+от\s+(.+)/);
       if (m && !OUTGOING.test(s)) {
-        let ts = typesIn(m[2]);
-        if (!ts.length && /эт(их|ого)/.test(m[2])) ts = [...new Set(segs.slice(Math.max(0, si - 5), si).flatMap(typesIn))];
+        // «двойной урон от этих символов» — типы из предыдущих частей фразы
+        const ts = /эт(их|ого)/.test(m[2]) ? [...new Set(segs.slice(Math.max(0, si - 5), si).flatMap(typesIn))] : typesIn(m[2]);
         if (ts.length) { push(ts, 'mul', /тро/.test(m[1]) ? 3 : 2); return; }
       }
       // «получаемый маг урон 3Х», «+10% получаемый урон от огня и святости», «получаемый урон от огня на +20е»
       m = s.match(/получаем\S*\s+(.+?)\s+урон\S*\s+(\d+(?:[.,]\d+)?)\s*[x×х](?![а-я])/);
       if (m && typesIn(m[1]).length) { push(typesIn(m[1]), 'mul', num(m[2])); return; }
-      m = s.match(/([+−-])?\s*(\d+(?:[.,]\d+)?)\s*(%|п|е)\s*получаем\S*\s+урон\S*\s+от\s+(.+)/);
-      if (m && typesIn(m[4]).length) { const v = num(m[2]) * (m[1] === '-' || m[1] === '−' ? 1 : -1); push(typesIn(m[4]), m[3] === 'е' ? 'flat' : 'pct', v); return; }
+      m = s.match(/([+−-])?\s*(\d+(?:[.,]\d+)?)\s*(%|п|е)\s*получаем\S*\s+(?:урон\S*\s+от\s+)?(.+)/);
+      if (m && typesIn(m[4]).length && !/отража|возвращ/.test(s)) { const v = num(m[2]) * (m[1] === '-' || m[1] === '−' ? 1 : -1); push(typesIn(m[4]), m[3] === 'е' ? 'flat' : 'pct', v); return; }
       m = s.match(/получаем\S*\s+урон\S*\s+от\s+(.+?)\s+на\s*([+−-])?\s*(\d+(?:[.,]\d+)?)\s*(%|п|е)/);
       if (m && typesIn(m[1]).length) { const v = num(m[3]) * (m[2] === '-' || m[2] === '−' ? 1 : -1); push(typesIn(m[1]), m[4] === 'е' ? 'flat' : 'pct', v); return; }
       // слабость процентом: «получаешь на 25% больше тёмного, святого урона», «больше урона от огня на 25%»
@@ -173,7 +211,9 @@
       }
       if (!m) return;
       if (OUTGOING.test(s) && !rez) return;
-      let ts = typesIn(s.replace(m[0], ' '));
+      // тип — после числа («20е резиста огню», «30% физ резиста»), иначе — перед ним («резист к холоду 25%»)
+      const after = typesIn(s.slice(m.index + m[0].length));
+      let ts = after.length ? after : typesIn(s.slice(0, m.index));
       if (!ts.length && /резист\S*\s+(к|ко)\s+урон|ко всему|всему урону/.test(s)) ts = ['всё'];
       if (!ts.length) return;
       const v = num(m[2]) * (m[1] === '-' || m[1] === '−' ? -1 : 1);
@@ -243,7 +283,12 @@
       out.push(...from(`${kind} «${e.name}»`, [e.text, e.note].filter(Boolean).join(' / ')));
     });
     // надетое снаряжение
-    ((v.eq && v.eq.worn) || []).forEach(c => (c.effects || []).forEach(e => out.push(...from(`«${(c.item && c.item.name) || 'снаряжение'}»: ${e.src}`, e.text))));
+    ((v.eq && v.eq.worn) || []).forEach(c => {
+      const nm = (c.item && c.item.name) || 'снаряжение';
+      (c.effects || []).forEach(e => out.push(...from(`«${nm}»: ${e.src}`, e.text)));
+      // заметка предмета: «эссенция огня» (ГМ — 100е резиста к элементу эссенции), «огонь 10%» и т.п.
+      if (c.item && c.item.note) out.push(...from(`«${nm}»: заметка`, c.item.note));
+    });
     if (extra) out.push(...from('в бою (ГМ)', extra, 1, true));
     return out;
   }

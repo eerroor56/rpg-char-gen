@@ -325,6 +325,16 @@ eq('damage: converted to heal', [Z.damage(200, 'вода', 'norm', C2).hp, Z.dam
 eq('damage: pure is not converted', Z.damage(200, 'вода', 'pure', C2).hp, 200);
 eq('damage: blocked part to mana', [Z.damage(200, 'физ', 'norm', C2).hp, Z.damage(200, 'физ', 'norm', C2).gain], [60, { mp: 140 }]);
 eq('damage: manual conversion', Z.damage(50, 'вода', 'norm', Z.parse('вода в хил', true)).gain, { hp: 50 });
+eq('resist: elemental = 4 elements', pz('4% резиста к элементальному урону'), ['огонь:pct4', 'вода:pct4', 'воздух:pct4', 'земля:pct4']);
+eq('resist: liquid magic', pz('урон от жидкостной магии 2Х'), ['вода:mul2', 'слизь:mul2', 'кровь:mul2', 'ихор:mul2', 'яд:mul2', 'кислота:mul2']);
+eq('resist: immune to symbols = all magic', pz('Отец магии: иммун к символам'), ['маг:imm']);
+eq('resist: «symbol of» after immunity is not a type', pz('иммун к огню и лаве/ символ кристалла'), ['огонь:imm', 'лава:imm']);
+eq('resist: essence by name', pz('эссенция огня'), ['огонь:flat100']);
+eq('resist: essence note is not a resist', pz('все эссенции дают 100е резиста и 100 урона соответствующего элемента'), []);
+eq('resist: two clauses joined by «и»', pz('выделяет слизь которая даёт 20е резиста огню и +20е получаемого ледяного урона'), ['огонь:flat20', 'лёд:flat-20']);
+eq('resist: «these symbols»', pz('не могут использовать хаос/хтон/космос/Аббис / получают двойной урон от этих символов'), ['хаос:mul2', 'хтон:mul2', 'космос:mul2', 'бездна:mul2']);
+eq('resist: reflection is not a weakness', pz('50% получаемого урона отражается как урон тьмой'), []);
+if ((window.GAME_DATA.skills.symbols || []).some(x => /запрет/.test(x.cat))) eq('resist: forbidden magic = forbidden symbols', pz('иммун к запретной магии').every(x => /:imm$/.test(x)) && pz('иммун к запретной магии').includes('хаос:imm'), true);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
