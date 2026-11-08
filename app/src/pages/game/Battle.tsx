@@ -142,7 +142,7 @@ function Token({ t, x, y, sel, turn, unseen }: { t: Tok; x: number; y: number; s
   const st: Any[] = B.stOf(t), stText = st.length ? ' — ' + st.map((z: Any) => z.n + (B.has(z.x) ? ` (${z.x} х.)` : '')).join(', ') : '';
   return (
     <button type="button" data-tok={id} style={t.kind === 'h' ? { '--hue': B.hue(t.o.owner || t.o.id) } as CSSProperties : undefined}
-      className={'bt-tok ' + kindCls(t) + (mine ? ' mine' : '') + mov + (isSel ? ' is-sel' : '') + (turn ? ' is-turn' : '') + (down ? ' down' : '') + (unseen ? ' unseen' : '') + (veiled ? ' hid' : '')}
+      className={'bt-tok ' + kindCls(t) + (B.charmed(t) ? ' charmed' : '') + (mine ? ' mine' : '') + mov + (isSel ? ' is-sel' : '') + (turn ? ' is-turn' : '') + (down ? ' down' : '') + (unseen ? ' unseen' : '') + (veiled ? ' hid' : '')}
       title={title + (down ? ' — выбыл' : '') + (veiled ? ' — скрыт от игроков' : unseen ? ' — игроки не видят' : '') + stText}
       aria-label={`${title}${veiled ? ', скрыт от игроков' : ''}, клетка ${x + 1}:${y + 1}`}>
       {pic ? <img src={pic} alt="" loading="lazy" decoding="async" draggable={false} /> : <b>{B.initials(name)}</b>}
@@ -426,6 +426,9 @@ function Statuses({ t, gm }: { t: Tok; gm: boolean }) {
       <button type="button" className="btn small" onClick={() => act('btStAdd')} title="Иммунитет — не действует; процент сопротивления — бросок d100">Наложить</button>
     </div> : null}
     {gm && cur && cur.d ? <p className="muted">{cur.n}: {cur.d}</p> : null}
+    {B.turnHints(t).map((h: string) => <p key={h} className="bt-st-hint">{h}</p>)}
+    {gm && st.some((z: Any) => z.k === 'страх') && <div className="bt-btns"><button type="button" className="btn small ghost" onClick={() => act('btFlee')}
+      title="Фишка отбегает к ближайшему краю поля, насколько хватает ОД этого хода">Бежать к краю</button></div>}
   </div>;
 }
 

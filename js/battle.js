@@ -746,7 +746,7 @@
       const mhp = has(d.hp) ? d.hp : null, mmp = has(d.mp) ? d.mp : null;
       const zb = has(d.zor) ? d.zor : BASE_ZOR(), zm = +v.zor || 0, marm = +d.armor > 0 ? +d.armor : null;
       return { mhp, mmp, hp: has(v.hp) ? v.hp : mhp, mp: has(v.mp) ? v.mp : mmp, marm, arm: armOf(v.arm, marm), od: baseOd() + (+d.od || 0),
-        rhp: has(d.hpRegen) ? d.hpRegen : null, rmp: has(d.mpRegen) ? d.mpRegen : null, zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
+        rhp: has(d.hpRegen) ? d.hpRegen : null, rmp: has(d.mpRegen) ? d.mpRegen : null, zb, zm, zor: blind(t) ? 0 : Math.max(0, zb + zm + fieldZor()), blind: blind(t) };
     }
     const st = creatureOf(t.o.src || t.o.n) || raceOf(t.o.src || t.o.n);
     const mhp = has(t.o.mhp) ? +t.o.mhp : st ? 2 * st.t : null, mmp = has(t.o.mmp) ? +t.o.mmp : st ? 2 * st.d : null;
@@ -755,8 +755,10 @@
     return { mhp, mmp, hp: has(t.o.hp) ? +t.o.hp : mhp, mp: has(t.o.mp) ? +t.o.mp : mmp, marm, arm: armOf(t.o.arm, marm), od: baseOd(),
       rhp: has(t.o.rhp) ? +t.o.rhp : st ? Math.floor(st.t / 5) + rfx('hpRegen') : null,
       rmp: has(t.o.rmp) ? +t.o.rmp : st ? Math.floor(st.d / 5) + rfx('mpRegen') : null,
-      zb, zm, zor: Math.max(0, zb + zm + fieldZor()) };
+      zb, zm, zor: blind(t) ? 0 : Math.max(0, zb + zm + fieldZor()), blind: blind(t) };
   }
+  // слепота (лист механик): зоркость до 0 — видит только соседние клетки
+  const blind = t => stOf(t).some(z => z.k === 'слепота');
   const radius = v => Math.max(1, Math.floor(v.zor / ZOR_PER_CELL));
   // сопротивления и слабости фишки (js/resist.js): у героя — с листа (раса, черты, дар, состояния, надетое),
   // у противника и союзника — из бестиария или расы; плюс строка ГМ «в бою» (зелье, умение на пару ходов):
@@ -836,7 +838,43 @@
     patch.st = next;
     return { patch, msg };
   }
-  const skipOf = t => { const z = stOf(t).find(y => SKIP[y.k]); return z ? `${tname(t)} ${SKIP[z.k]} — пропускает ход` : ''; };
+  // что делать в этот ход (уточнения ГМ): страх — бежит к краю поля и пытается сбежать; очарование — на стороне очаровавшего;
+  // слепота — промахивается; сон — как стан, но снимается уроном
+  const HINTS = {
+    'страх': 'в страхе — бежит к краю поля и пытается сбежать («Бежать к краю»)',
+    'очарование': 'очарован — сражается на стороне того, кто очаровал',
+    'слепота': 'ослеплён — промахивается (попасть в 2 раза сложнее), видит только соседние клетки',
+    'бешенство': 'в бешенстве — атакует всех подряд', 'бессилие': 'не может атаковать', 'безмолвие': 'не может колдовать',
+    'травма': '−1 ОД и −20% наносимого урона',
+  };
+  function turnHints(t) {
+    const st = stOf(t), skip = st.find(y => SKIP[y.k]);
+    if (skip) return [`${tname(t)} ${SKIP[skip.k]} — пропускает ход`];
+    return st.filter(y => HINTS[y.k]).map(y => `${tname(t)} ${HINTS[y.k]}`);
+  }
+  const skipOf = t => turnHints(t).join('; ');
+  const charmed = t => stOf(t).some(z => z.k === 'очарование');
+  // страх: шаг к ближайшему краю поля — дальше всего, куда хватает ОД этого хода (в обход предметов и чужих)
+  function fleeCell(b, hit) {
+    const t = hit.t, { at } = layout(b, ctx.heroes), foeSide = t.kind === 'f';
+    const edge = (x, y) => Math.min(x, y, b.w - 1 - x, b.h - 1 - y);
+    const sp = spent(b, t), left = Math.max(0, (odCap(b, t) - sp.od) * MOVE_PER_OD - sp.mv);
+    const pass = (x, y) => { const z = at.get(key(x, y)); if (!z || tid(z) === tid(t)) return true; if (z.kind === 'o') return false; return foeSide ? z.kind === 'f' : z.kind !== 'f'; };
+    const free = (x, y) => { const z = at.get(key(x, y)); return !z || tid(z) === tid(t); };
+    const seen = new Map([[key(hit.x, hit.y), 0]]), q = [[hit.x, hit.y]];
+    let best = { x: hit.x, y: hit.y, d: 0, e: edge(hit.x, hit.y) };
+    while (q.length) {
+      const [x, y] = q.shift(), d = seen.get(key(x, y));
+      if (free(x, y) && (edge(x, y) < best.e || (edge(x, y) === best.e && d < best.d))) best = { x, y, d, e: edge(x, y) };
+      if (d >= left) continue;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy, kk = key(nx, ny);
+        if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= b.w || ny >= b.h || seen.has(kk) || !pass(nx, ny)) continue;
+        seen.set(kk, d + 1); q.push([nx, ny]);
+      }
+    }
+    return best;
+  }
   const resistLine = t => String((t && t.kind === 'h' ? (t.o.vit || {}).res : t && t.o.res) || '');
   const isDown = t => { const v = vitals(t); return has(v.hp) && v.mhp !== null && v.hp <= 0; };
 
@@ -1195,7 +1233,7 @@
       do { i++; if (i >= tr.order.length) { i = 0; round++; } } while (!alive(tr.order[i]) && ++guard < tr.order.length);
       Object.assign(tr, { cur: i, round, n: (tr.n || 0) + 1, tk: '', who: '', mv: 0, od: 0, bon: 0 });
       ctx.saveBoard(nb);
-      const nxt = tokById(at, tr.order[i].id), msg = (fx ? fx.msg : []).concat(nxt && skipOf(nxt) ? [skipOf(nxt)] : []);
+      const nxt = tokById(at, tr.order[i].id), msg = (fx ? fx.msg : []).concat(nxt ? turnHints(nxt) : []);
       if (msg.length) App.toast(msg.join('; '));
     },
     btEnd() {
@@ -1375,6 +1413,18 @@
       setVit(t, { st: list });
       const now = list.find(z => z.k === k);
       App.toast(`${tname(t)}: «${info.n}»${now.v ? ` ${now.v} в ход` : ''}${has(now.x) ? `, ${now.x} х.` : ''}${old ? ' (сложено)' : ''}${roll}`);
+    },
+    // страх: фишка бежит к ближайшему краю поля, насколько хватает ОД; уже у края — сбегает (ГМ решает, убрать ли)
+    btFlee() {
+      const b = board0(), hit = selTok();
+      if (!b || !hit || !ctx.gm || hit.t.kind === 'o') return;
+      const c = fleeCell(b, hit);
+      if (c.e === 0 && c.x === hit.x && c.y === hit.y) { App.toast(`${tname(hit.t)} у края поля — сбегает с поля боя`); return; }
+      if (c.x === hit.x && c.y === hit.y) { App.toast(`${tname(hit.t)}: бежать некуда — путь закрыт или ОД кончились`); return; }
+      const patch = { x: c.x, y: c.y };
+      if (turnOn(b) && curTok(b, layout(b, ctx.heroes).at) && tid(curTok(b, layout(b, ctx.heroes).at)) === tid(hit.t)) patch.mv = spent(b, hit.t).mv + c.d;
+      saveTok(b, hit, patch);
+      App.toast(`${tname(hit.t)} бежит: ${c.d} кл., до края ${c.e} кл.${c.e === 0 ? ' — у края, в следующий ход сбежит' : ''}`);
     },
     btStDel(b) {
       const hit = selTok();
@@ -1567,7 +1617,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, DOT, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, turnHints, charmed, DOT, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 

@@ -1252,6 +1252,10 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .bf .bt-st-add select { flex: 1 1 150px; min-width: 0; min-height: 32px; padding: 4px 8px; }
 .bf .bt-st-add .bt-mini { width: 6.4em; margin: 0; min-height: 32px; }
 .bf .bt-st-add .btn { flex: 0 0 auto; }
+.bf .bt-st-hint { color: #f2c48a; }
+/* очарование: фишка сражается на другой стороне — рамка цвета той стороны */
+.bt-tok.foe.charmed { border-color: #5cc48a; border-style: dashed; }
+.bt-tok.hero.charmed, .bt-tok.ally.charmed { border-color: #d34a4a; border-style: dashed; }
 .bt-st-x { margin-left: 4px; padding: 0 2px; border: 0; background: none; color: inherit; cursor: pointer; font-size: 1em; line-height: 1; opacity: .75; }
 .bt-st-x:hover { opacity: 1; }
 .bt-tok .bt-st-dot { position: absolute; top: -3px; right: -3px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: #c0564a; color: #fff;
