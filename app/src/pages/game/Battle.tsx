@@ -386,16 +386,16 @@ function DmgKind({ t, at }: { t: Tok; at: Any }) {
   const g = Z.groupOf(type), auto = Z.PIERCE.has(type);
   const grp = (k: string, label: string) => <optgroup label={label}>{types.filter(x => x.group === k).map(x => <option key={x.id} value={x.id}>{x.name}{x.pierce ? ' (сквозь броню)' : ''}</option>)}</optgroup>;
   return <div className="bt-btns bt-kind">
-    <select value={type} onChange={e => ui.set('btDmgType', e.target.value)} aria-label="Тип урона" title="Тип урона: от него зависят сопротивления и слабости цели">
+    <select className="sel" value={type} onChange={e => ui.set('btDmgType', e.target.value)} aria-label="Тип урона" title="Тип урона: от него зависят сопротивления и слабости цели">
       {grp('phys', 'Физический')}{grp('mag', 'Магия (символы)')}{grp('own', 'Не магия')}
     </select>
-    <select value={mode} onChange={e => ui.set('btDmgMode', e.target.value)} aria-label="Вид урона"
+    <select className="sel" value={mode} onChange={e => ui.set('btDmgMode', e.target.value)} aria-label="Вид урона"
       title="Обычный — сопротивления, потом броня; сквозь броню — сопротивления, броня не задевается; чистый — мимо всего">
       <option value="norm">{auto ? 'сквозь броню (символ)' : 'обычный'}</option><option value="pierce">сквозь броню</option><option value="pure">чистый</option>
     </select>
     {g === 'mag' && mode !== 'pure' && <label className="check small" title="Урон этого заклинания не магический: считаются только сопротивления к самому типу, без маг резиста">
       <input type="checkbox" checked={!!ui.get('btNoMag')} onChange={e => ui.set('btNoMag', e.target.checked ? '1' : '')} /> не магия</label>}
-    {refl && <select value={foes.some(x => x.id === from) ? from : ''} onChange={e => ui.set('btFrom', e.target.value)} aria-label="Кто бьёт"
+    {refl && <select className="sel" value={foes.some(x => x.id === from) ? from : ''} onChange={e => ui.set('btFrom', e.target.value)} aria-label="Кто бьёт"
       title="У цели есть отражение: отражённый урон (от урона до сопротивлений, и при иммунитете тоже) уйдёт тому, кто бьёт">
       <option value="">кто бьёт? (для отражения)</option>
       {foes.map(x => <option key={x.id} value={x.id}>{x.n}{x.kind === 'h' ? ' (герой)' : x.kind === 'a' ? ' (союзник)' : ''}</option>)}
@@ -418,7 +418,7 @@ function Statuses({ t, gm }: { t: Tok; gm: boolean }) {
     </span>) : <span className="muted">нет</span>}</div>
     {guard.length ? <div><span className="muted">Защита от состояний:</span> {guard.map((x: Any) => <span key={x.key} className="eff plus" title={x.src.join('\n')}>{x.name}: {x.imm ? 'иммунитет' : `${x.pct}% (d100)`}</span>)}</div> : null}
     {gm && list.length ? <div className="bt-btns bt-st-add">
-      <select value={k} onChange={e => ui.set('btStK', e.target.value)} aria-label="Состояние" title={cur ? cur.d : ''}>
+      <select className="sel" value={k} onChange={e => ui.set('btStK', e.target.value)} aria-label="Состояние" title={cur ? cur.d : ''}>
         {list.map(x => <option key={x.k} value={x.k}>{x.n}{x.dot ? ' (урон за ход)' : ''}</option>)}
       </select>
       {cur && cur.dot && <input type="number" min={1} step={1} className="bt-mini" value={ui.get('btStV')} onChange={e => ui.set('btStV', e.target.value)} placeholder="урон/ход" aria-label="Урон за ход" />}
