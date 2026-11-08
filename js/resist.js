@@ -130,6 +130,32 @@
   const OUTGOING = /исходящ|наносим|наносит(?!е)|наносите|вы наносите|к урону|урон\S* существам/;
 
   /** разобрать текст: [{ t, k: pct|flat|imm|mul|conv, v, cond?, txt }]; manual — строка ГМ («огонь 25%», «молния 2х», «иммун яд», «вода в хил») */
+  // ------------------------------------------------------------ защита от состояний (лист механик: «статус эффекты»)
+  // слово → состояние: «иммун к стану», «10% резиста оглушению», «5% резиста к кровотечению», «50% резиста к статусным эффектам»
+  const EFF_WORDS = [
+    [/^(стан|оглуш)/, 'стан'], [/^кровотеч/, 'кровотечение'], [/^яд/, 'яд'], [/^(горен|поджог)/, 'горение'], [/^страх/, 'страх'],
+    [/^(сон|сна|сну|усыплен)$/, 'сон'], [/^очаров/, 'очарование'], [/^(слеп|ослеп)/, 'слепота'], [/^безмолв/, 'безмолвие'],
+    [/^заморозк/, 'заморозка'], [/^удушен/, 'удушение'], [/^бешенств/, 'бешенство'], [/^одержим/, 'одержимость'], [/^глухот/, 'глухота'],
+    [/^бессил/, 'бессилие'], [/^истощен/, 'истощение'], [/^травм/, 'травма'], [/^опьянен/, 'опьянение'], [/^охлажден/, 'охлаждение'],
+    [/^вожделен/, 'вожделение'], [/^кокон/, 'кокон'], [/^проклят/, 'проклятие'], [/^(статус|негативн|дебафф)/, 'все'],
+  ];
+  const effWord = w => { w = norm(w).replace(/[^а-я]/g, ''); for (const [re, k] of EFF_WORDS) if (re.test(w)) return k; return null; };
+  const effsIn = t => [...new Set(norm(t).split(/[\s,()«»:;.+%\/]+/).map(effWord).filter(Boolean))];
+  /** состояние по названию из листа механик: «стан / оглушение» → «стан» */
+  const effKey = name => effWord(String(name).split(/[\s\/]+/)[0]) || norm(name);
+  function parseEff(seg, cond, out) {
+    const s = norm(seg).replace(/^[^:]{1,40}:\s*/, '');
+    if (/игнорир|отключает|снимает/.test(s)) return;
+    const push = (ks, k, v) => ks.forEach(x => out.push(Object.assign({ t: 'эф:' + x, k, v, txt: seg }, cond ? { cond: true } : {})));
+    let m = s.match(/иммун\S*\s+(?:к|ко)\s+(.+)/);
+    if (m) { push(effsIn(m[1]), 'eimm', 1); return; }
+    m = s.match(/(\d+(?:[.,]\d+)?)\s*(?:%|п)\s*(?:резист\S*|сопротивл\S*)\s+(?:к\s+)?(.+)/) || s.match(/(?:резист\S*|сопротивл\S*)\s+(?:к\s+)?(.+?)\s+(\d+(?:[.,]\d+)?)\s*(?:%|п)/);
+    if (m) {
+      const a = /^\d/.test(m[1]) ? m[1] : m[2], what = /^\d/.test(m[1]) ? m[2] : m[1];
+      push(effsIn(what), 'epct', num(a));
+    }
+  }
+
   function parse(text, manual) {
     const out = [];
     // строку ГМ можно писать и через запятую («огонь 25%, молния 2х»); «0,5%» — не разделитель
@@ -140,6 +166,7 @@
       const s = norm(seg).replace(/^[^:]{1,40}:\s*/, '');
       const cond = COND.test(s) || TEMP.test(s);
       const push = (types, k, v, more) => types.forEach(t => out.push(Object.assign({ t, k, v, txt: seg }, cond ? { cond: true } : {}, more || {})));
+      parseEff(seg, cond, out);          // защита от состояний — отдельно, урон разбирается дальше как обычно
       // конвертация (ГМ: урон этого типа становится лечением): «конвертирует урон от воды в хил»,
       // «получаемый урон от молнии конвертируется в ману»; «заблокированный урон конвертируется в ману» — то, что сняли резисты;
       // строка ГМ: «вода в хил», «молния в ману»
@@ -322,7 +349,7 @@
   /** по типу и группе: { key, pct, flat, mul, imm, src: [...] } — только то, что считается само (без условий) */
   function summary(entries) {
     const m = new Map();
-    entries.filter(e => !e.cond).forEach(e => {
+    entries.filter(e => !e.cond && !/^эф:/.test(e.t)).forEach(e => {
       const x = m.get(e.t) || { key: e.t, name: nameOf(e.t), pct: 0, flat: 0, mul: 1, imm: false, src: [] };
       if (e.k === 'imm') x.imm = true;
       else if (e.k === 'conv') { if (e.blocked) x.convBlocked = e.v; else x.conv = e.v; }
@@ -337,6 +364,24 @@
     return [...m.values()].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   }
   const conds = entries => entries.filter(e => e.cond);
+  /** защита от состояний: [{ key, imm, pct, src }] — «все» относится ко всем состояниям */
+  function effSummary(entries) {
+    const m = new Map();
+    entries.filter(e => !e.cond && /^эф:/.test(e.t)).forEach(e => {
+      const key = e.t.slice(3), x = m.get(key) || { key, name: key === 'все' ? 'все состояния' : key, imm: false, pct: 0, src: [] };
+      if (e.k === 'eimm') x.imm = true; else x.pct = r1(x.pct + e.v);
+      x.src.push(`${e.src}: ${e.k === 'eimm' ? 'иммунитет' : e.v + '%'}`);
+      m.set(key, x);
+    });
+    return [...m.values()];
+  }
+  /** защита от одного состояния: иммунитет или процент (бросок d100 — ГМ) */
+  function effGuard(entries, key) {
+    const on = entries.filter(e => !e.cond && (e.t === 'эф:' + key || e.t === 'эф:все'));
+    const imm = on.find(e => e.k === 'eimm');
+    const pct = r1(on.filter(e => e.k === 'epct').reduce((a, e) => a + e.v, 0));
+    return { imm: imm ? imm.src || 'иммунитет' : (pct >= 100 ? 'сопротивление 100%' : ''), pct };
+  }
   const reflText = x => (x.refl || []).map(r => `отражает ${r.v}%${r.as ? ` (${r.as === 'стихия' ? 'случайная стихия' : nameOf(r.as)})` : ''}`);
   const chip0 = x => x.conv ? (x.conv === 'mp' ? 'урон → в ману' : 'урон → в лечение') : x.imm ? 'иммунитет' : [x.convBlocked ? `снятое резистами → в ${x.convBlocked === 'mp' ? 'ману' : 'лечение'}` : '', x.flat ? `${x.flat > 0 ? '−' : '+'}${Math.abs(x.flat)} ед. урона` : '', x.pct ? `${x.pct > 0 ? 'резист' : 'слабость'} ${Math.abs(x.pct)}%` : '', x.mul !== 1 ? `урон ×${x.mul}` : ''].filter(Boolean).join(', ');
   const chip = x => [chip0(x)].concat(reflText(x)).filter(Boolean).join(', ');
@@ -380,5 +425,5 @@
 
   const typeList = () => TYPES.map(t => ({ id: t[0], name: t[1], group: t[3], pierce: PIERCE.has(t[0]) }));
 
-  window.Resist = { TYPES, GROUPS, PIERCE, ARMOR_MUL, parse, typesIn, wordType, ofHero, ofCreature, ofRace, summary, conds, chip, sign, damage, typeList, nameOf, groupOf };
+  window.Resist = { effSummary, effGuard, effKey, effsIn, TYPES, GROUPS, PIERCE, ARMOR_MUL, parse, typesIn, wordType, ofHero, ofCreature, ofRace, summary, conds, chip, sign, damage, typeList, nameOf, groupOf };
 })();

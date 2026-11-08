@@ -139,10 +139,11 @@ function Token({ t, x, y, sel, turn, unseen }: { t: Tok; x: number; y: number; s
     : t.kind === 'a' ? `${name} — ${B.allyKind(t.o)}${t.owner ? ' ' + t.owner.name : ''}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`
       : `${name}${t.o.lvl ? ', ур. ' + t.o.lvl : ''}`;
   const v = B.vitals(t), down = B.isDown(t), veiled = B.hid(t);
+  const st: Any[] = B.stOf(t), stText = st.length ? ' — ' + st.map((z: Any) => z.n + (B.has(z.x) ? ` (${z.x} х.)` : '')).join(', ') : '';
   return (
     <button type="button" data-tok={id} style={t.kind === 'h' ? { '--hue': B.hue(t.o.owner || t.o.id) } as CSSProperties : undefined}
       className={'bt-tok ' + kindCls(t) + (mine ? ' mine' : '') + mov + (isSel ? ' is-sel' : '') + (turn ? ' is-turn' : '') + (down ? ' down' : '') + (unseen ? ' unseen' : '') + (veiled ? ' hid' : '')}
-      title={title + (down ? ' — выбыл' : '') + (veiled ? ' — скрыт от игроков' : unseen ? ' — игроки не видят' : '')}
+      title={title + (down ? ' — выбыл' : '') + (veiled ? ' — скрыт от игроков' : unseen ? ' — игроки не видят' : '') + stText}
       aria-label={`${title}${veiled ? ', скрыт от игроков' : ''}, клетка ${x + 1}:${y + 1}`}>
       {pic ? <img src={pic} alt="" loading="lazy" decoding="async" draggable={false} /> : <b>{B.initials(name)}</b>}
       {v.mhp ? <span className="bt-bars" aria-hidden="true">
@@ -150,6 +151,7 @@ function Token({ t, x, y, sel, turn, unseen }: { t: Tok; x: number; y: number; s
         <i className="hp" style={{ width: pct(v.hp, v.mhp) + '%' }} />
         {v.mmp ? <i className="mp" style={{ width: pct(v.mp, v.mmp) + '%' }} /> : null}
       </span> : null}
+      {st.length ? <span className="bt-st-dot" aria-hidden="true">{st.length}</span> : null}
     </button>
   );
 }
@@ -337,6 +339,7 @@ function Vitals({ board, t, gm, at }: { board: Any; t: Tok; gm: boolean; at: Any
         {v.zm ? <button type="button" className="link small" onClick={() => act('btZor', { v: '0' })}>сбросить</button> : null}</span>}
     </div>
     {(gm || t.kind !== 'f') && <Resists t={t} gm={gm} />}
+    <Statuses t={t} gm={gm} />
     {gm && <div className="bt-vit-ctl">
       <DmgKind t={t} at={at} />
       <div className="bt-btns bt-hit">
@@ -397,6 +400,32 @@ function DmgKind({ t, at }: { t: Tok; at: Any }) {
       <option value="">кто бьёт? (для отражения)</option>
       {foes.map(x => <option key={x.id} value={x.id}>{x.n}{x.kind === 'h' ? ' (герой)' : x.kind === 'a' ? ' (союзник)' : ''}</option>)}
     </select>}
+  </div>;
+}
+
+// состояния фишки (лист механик): плашки — у всех, наложить и снять — ГМ; защита от состояний — ГМ и своим
+function Statuses({ t, gm }: { t: Tok; gm: boolean }) {
+  const B = window.Battle, ui = useUi(), Z = (window as Any).Resist;
+  const st: Any[] = B.stOf(t), list: Any[] = gm ? B.statusList() : [];
+  const guard: Any[] = Z && (gm || t.kind !== 'f') ? Z.effSummary(B.resistOf(t)) : [];
+  if (!st.length && !gm && !guard.length) return null;
+  const k = ui.get('btStK') || (list[0] || {}).k || '', cur = list.find(x => x.k === k);
+  const info = (z: Any) => (B.statusList().find((x: Any) => x.k === z.k) || {}).d || '';
+  return <div className="bt-st small">
+    <div><span className="muted">Состояния:</span> {st.length ? st.map((z: Any) => <span key={z.k} className={'eff' + (z.k === 'иммун к стану' ? ' plus' : ' minus')} title={info(z)}>
+      {z.n}{z.v ? ` ${z.v}/ход` : ''}{B.has(z.x) ? ` · ${z.x} х.` : ''}
+      {gm && <button type="button" className="bt-st-x" onClick={() => act('btStDel', { v: z.k })} title="Снять" aria-label={'Снять ' + z.n}>×</button>}
+    </span>) : <span className="muted">нет</span>}</div>
+    {guard.length ? <div><span className="muted">Защита от состояний:</span> {guard.map((x: Any) => <span key={x.key} className="eff plus" title={x.src.join('\n')}>{x.name}: {x.imm ? 'иммунитет' : `${x.pct}% (d100)`}</span>)}</div> : null}
+    {gm && list.length ? <div className="bt-btns bt-st-add">
+      <select value={k} onChange={e => ui.set('btStK', e.target.value)} aria-label="Состояние" title={cur ? cur.d : ''}>
+        {list.map(x => <option key={x.k} value={x.k}>{x.n}{x.dot ? ' (урон за ход)' : ''}</option>)}
+      </select>
+      {cur && cur.dot && <input type="number" min={1} step={1} className="bt-mini" value={ui.get('btStV')} onChange={e => ui.set('btStV', e.target.value)} placeholder="урон/ход" aria-label="Урон за ход" />}
+      <input type="number" min={0} step={1} className="bt-mini" value={ui.get('btStX')} onChange={e => ui.set('btStX', e.target.value)} placeholder="ходов" aria-label="Сколько ходов" title="Пусто — пока не снимут" />
+      <button type="button" className="btn small" onClick={() => act('btStAdd')} title="Иммунитет — не действует; процент сопротивления — бросок d100">Наложить</button>
+    </div> : null}
+    {gm && cur && cur.d ? <p className="muted">{cur.n}: {cur.d}</p> : null}
   </div>;
 }
 

@@ -761,7 +761,8 @@
   // сопротивления и слабости фишки (js/resist.js): у героя — с листа (раса, черты, дар, состояния, надетое),
   // у противника и союзника — из бестиария или расы; плюс строка ГМ «в бою» (зелье, умение на пару ходов):
   // у героя она в vit.res, у остальных — в самой фишке (res)
-  function resistOf(t) {
+  const resistOf = t => resistBase(t).concat(statusFx(t));
+  function resistBase(t) {
     const Z = window.Resist;
     if (!Z || !t || t.kind === 'o') return [];
     const extra = String((t.kind === 'h' ? (t.o.vit || {}).res : t.o.res) || '').trim();
@@ -772,6 +773,70 @@
     if (r) return Z.ofRace(r, extra);
     return extra ? Z.parse(extra, true).map(e => Object.assign(e, { src: 'в бою (ГМ)' })) : [];
   }
+  // ------------------------------------------------------------ состояния (лист механик, «статус эффекты»; уточнения ГМ)
+  // у фишки st = [{ k, n, v, x }]: k — состояние, n — название, v — урон за ход (яд, кровотечение, горение, удушение),
+  // x — сколько ходов осталось (пусто — пока не снимут). У героя — в vit.st, у остальных — в самой фишке.
+  // Наложение: иммунитет — не действует; процент сопротивления — бросок d100: выпало не больше процента — устоял (ГМ).
+  // Урон за ход — в конце хода того, на ком висит; повторный урон за ход складывается и уроном, и длительностью (ГМ).
+  // Стан и оглушение — одно и то же; после стана — иммунитет к стану на 2 хода; сон снимается любым уроном.
+  const DOT = { 'яд': { type: 'яд' }, 'кровотечение': { type: 'физ', mode: 'pierce' }, 'горение': { type: 'огонь', perArm: 10 }, 'удушение': { type: 'физ', mode: 'pierce' } };
+  const SKIP = { 'стан': 'оглушён', 'сон': 'спит', 'заморозка': 'заморожен', 'кокон': 'в коконе', 'одержимость': 'одержим' };
+  const NOT_STATUS = /^(проклятие|зависимость|чистый урон|проникающий урон|нерушимый|мульти|сплэш|поглощение заклинаний|пёрышко|перышко)/;
+  let stCache = { sig: '', list: [] };
+  function statusList() {
+    const rows = ((((D().mechanics || {}).main) || []).find(b => /статус/.test(R.norm(b.title))) || {}).rows || [];
+    const sig = rows.length + ':' + ((D().meta || {}).built || '');
+    if (stCache.sig === sig && stCache.list.length) return stCache.list;
+    const seen = new Set(), out = [];
+    rows.forEach(r => {
+      const n = String(r[0] || '').trim();
+      if (!n || NOT_STATUS.test(R.norm(n))) return;
+      const k = window.Resist ? window.Resist.effKey(n) : R.norm(n);
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push({ k, n: k === 'стан' ? 'стан (оглушение)' : n, d: r.slice(1).filter(Boolean).join(' / '), dot: !!DOT[k] });
+    });
+    if (!out.length) Object.keys(DOT).concat(['стан', 'сон', 'страх']).forEach(k => out.push({ k, n: k, d: '', dot: !!DOT[k] }));
+    stCache = { sig, list: out };
+    return out;
+  }
+  const stOf = t => ((t && (t.kind === 'h' ? (t.o.vit || {}).st : t.o.st)) || []);
+  // что состояния меняют в защите: опьянение — физ резист 5%, заморозка — входящий урон ×2, после стана — иммунитет к стану
+  function statusFx(t) {
+    const out = [];
+    stOf(t).forEach(z => {
+      if (z.k === 'опьянение') out.push({ t: 'физ', k: 'pct', v: 5, src: 'опьянение' });
+      if (z.k === 'заморозка') out.push({ t: 'всё', k: 'mul', v: 2, src: 'заморозка' });
+      if (z.k === 'иммун к стану') out.push({ t: 'эф:стан', k: 'eimm', v: 1, src: 'после стана' });
+    });
+    return out;
+  }
+  // конец хода фишки: урон от яда, кровотечения, горения, удушения (с её сопротивлениями), длительность −1
+  function endTurnFx(t) {
+    const list = stOf(t);
+    if (!list.length) return null;
+    let cur = t, patch = {};
+    const msg = [];
+    list.filter(z => DOT[z.k] && +z.v > 0).forEach(z => {
+      const d = DOT[z.k], v = vitals(cur);
+      const amt = Math.round(+z.v + (d.perArm ? Math.floor((v.marm || 0) / d.perArm) : 0));
+      const h = hitCalc(cur, amt, d.type, d.mode || 'norm', false);
+      msg.push(`${z.n} — ${hitText(cur, h)}`);
+      patch = Object.assign(patch, h.patch);
+      cur = withVit(cur, h.patch);
+    });
+    const next = [];
+    stOf(cur).forEach(z => {
+      if (!has(z.x)) { next.push(z); return; }
+      const x = (+z.x || 0) - 1;
+      if (x > 0) { next.push(Object.assign({}, z, { x })); return; }
+      msg.push(`${tname(t)}: «${z.n}» прошло`);
+      if (z.k === 'стан') next.push({ k: 'иммун к стану', n: 'иммунитет к стану', x: 2 });
+    });
+    patch.st = next;
+    return { patch, msg };
+  }
+  const skipOf = t => { const z = stOf(t).find(y => SKIP[y.k]); return z ? `${tname(t)} ${SKIP[z.k]} — пропускает ход` : ''; };
   const resistLine = t => String((t && t.kind === 'h' ? (t.o.vit || {}).res : t && t.o.res) || '');
   const isDown = t => { const v = vitals(t); return has(v.hp) && v.mhp !== null && v.hp <= 0; };
 
@@ -1120,10 +1185,18 @@
       const nb = JSON.parse(JSON.stringify(b)), tr = nb.turn;
       const { at } = layout(nb, ctx.heroes);
       const alive = e => { const t = tokById(at, e.id); return t && !isDown(t); };
+      // конец хода: урон от состояний и их длительность — у того, чей ход кончился
+      const ending = tokById(at, tr.order[tr.cur].id), fx = ending ? endTurnFx(ending) : null;
+      if (fx) {
+        if (ending.kind === 'f') { const f = nb.foes.find(z => z.i === ending.o.i); if (f) Object.assign(f, fx.patch); }
+        else setVit(ending, fx.patch);
+      }
       let i = tr.cur, round = tr.round, guard = 0;
       do { i++; if (i >= tr.order.length) { i = 0; round++; } } while (!alive(tr.order[i]) && ++guard < tr.order.length);
       Object.assign(tr, { cur: i, round, n: (tr.n || 0) + 1, tk: '', who: '', mv: 0, od: 0, bon: 0 });
       ctx.saveBoard(nb);
+      const nxt = tokById(at, tr.order[i].id), msg = (fx ? fx.msg : []).concat(nxt && skipOf(nxt) ? [skipOf(nxt)] : []);
+      if (msg.length) App.toast(msg.join('; '));
     },
     btEnd() {
       const b = board0();
@@ -1224,10 +1297,12 @@
       if (!ctx.gm) return;      // ХП, МП, броню, реген и зоркость в бою меняет только ГМ (игроки — нет: уточнение ГМ)
       const v = vitals(t), patch = {};
       const up = (now, r, max) => { const x = (+now || 0) + r; return has(max) ? Math.min(max, x) : x; };
-      if (has(v.rhp) && v.rhp) patch.hp = up(v.hp, v.rhp, v.mhp);
+      const poison = stOf(t).some(z => z.k === 'яд');      // яд отключает реген (лист механик)
+      if (has(v.rhp) && v.rhp && !poison) patch.hp = up(v.hp, v.rhp, v.mhp);
       if (has(v.rmp) && v.rmp) patch.mp = up(v.mp, v.rmp, v.mmp);
-      if (!Object.keys(patch).length) { App.toast('Регена нет'); return; }
+      if (!Object.keys(patch).length) { App.toast(poison ? 'Яд: реген ХП отключён' : 'Регена нет'); return; }
       setVit(t, patch);
+      if (poison && has(v.rhp) && v.rhp) App.toast('Яд: реген ХП отключён, восстановлена только МП');
     },
     // зоркость фишки: ±10 (на клетку обзора), 0 — сбросить. Герою меняет игрок или ГМ, союзнику — ГМ
     btZor(btn) {
@@ -1276,6 +1351,36 @@
       setVit(hit.t, { res: text });
       App.toast(text ? `${tname(hit.t)}: в бою — ${text}` : `${tname(hit.t)}: сопротивления в бою сняты`);
     },
+    // наложить состояние (только ГМ): иммунитет — не действует, процент сопротивления — бросок d100
+    btStAdd() {
+      const hit = selTok();
+      if (!hit || !ctx.gm || hit.t.kind === 'o') return;
+      const t = hit.t, k = App.ui.btStK || (statusList()[0] || {}).k;
+      const info = statusList().find(z => z.k === k) || { k, n: k };
+      const x = Math.max(0, Math.round(+App.ui.btStX || 0)), v = Math.max(0, Math.round(+App.ui.btStV || 0));
+      if (DOT[k] && !v) { App.toast('Впишите урон за ход'); return; }
+      const g = window.Resist ? window.Resist.effGuard(resistOf(t), k) : { imm: '', pct: 0 };
+      if (g.imm) { App.toast(`${tname(t)}: «${info.n}» не действует — ${g.imm}`); return; }
+      let roll = '';
+      if (g.pct > 0) {
+        const r = d100();
+        roll = ` (сопротивление ${g.pct}%, d100 = ${r})`;
+        if (r <= g.pct) { App.toast(`${tname(t)}: устоял против «${info.n}»${roll}`); return; }
+      }
+      const list = stOf(t).map(z => Object.assign({}, z)), old = list.find(z => z.k === k);
+      if (old) {
+        if (DOT[k]) { old.v = (+old.v || 0) + v; if (has(old.x)) old.x = x ? +old.x + x : old.x; }      // урон за ход складывается и уроном, и длительностью
+        else if (has(old.x)) old.x = x ? Math.max(+old.x, x) : null;
+      } else list.push(Object.assign({ k, n: info.n }, v && DOT[k] ? { v } : {}, x ? { x } : {}));
+      setVit(t, { st: list });
+      const now = list.find(z => z.k === k);
+      App.toast(`${tname(t)}: «${info.n}»${now.v ? ` ${now.v} в ход` : ''}${has(now.x) ? `, ${now.x} х.` : ''}${old ? ' (сложено)' : ''}${roll}`);
+    },
+    btStDel(b) {
+      const hit = selTok();
+      if (!hit || !ctx.gm || hit.t.kind === 'o') return;
+      setVit(hit.t, { st: stOf(hit.t).filter(z => z.k !== b.dataset.v) });
+    },
     btMoreToggle() { App.ui.btMore = !App.ui.btMore; ctx && ctx.rerender(); },
     // скрыть существо от игроков или показать снова. Скрытое уходит из очереди ходов, показанное встаёт в неё по броску d100
     btHide() {
@@ -1321,6 +1426,7 @@
       steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}`);
     }
     if (rest) patch.hp = Math.max(0, (+v.hp || 0) - rest);
+    if (rest > 0 && stOf(t).some(z => z.k === 'сон')) { patch.st = stOf(t).filter(z => z.k !== 'сон'); steps.push('сон снят'); }
     const up = (cur, add, mx) => { const x2 = (+cur || 0) + add; return has(mx) ? Math.min(mx, x2) : x2; };
     if (gain.hp) patch.hp = up(has(patch.hp) ? patch.hp : v.hp, gain.hp, v.mhp);
     if (gain.mp) patch.mp = up(v.mp, gain.mp, v.mmp);
@@ -1461,7 +1567,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, DOT, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 

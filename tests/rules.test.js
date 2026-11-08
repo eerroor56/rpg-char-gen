@@ -297,7 +297,7 @@ eq('rerolled steps keep hero valid', R.compute(s).errors.length, 0);
 // 18б. Сопротивления и слабости (js/resist.js): разбор текста таблицы и порядок расчёта урона (уточнение ГМ)
 require('../js/resist.js');
 const Z = window.Resist;
-const pz = t => Z.parse(t).map(e => `${e.t}:${e.k}${e.k === 'imm' ? '' : e.v}${e.cond ? '?' : ''}`);
+const pz = t => Z.parse(t).filter(e => !/^эф:/.test(e.t)).map(e => `${e.t}:${e.k}${e.k === 'imm' ? '' : e.v}${e.cond ? '?' : ''}`);
 eq('resist: pct and flat', pz('резист к холоду 25%/сопротивление огню 50е'), ['лёд:pct25', 'огонь:flat50']);
 eq('resist: phys and mag', pz('Потусторонний хитин: +30% физ и маг резиста'), ['физ:pct30', 'маг:pct30']);
 eq('resist: immune list', pz('Призрак: иммун к физ / тьме / некро'), ['физ:imm', 'тьма:imm', 'некро:imm']);
@@ -343,6 +343,14 @@ eq('reflect: random element', rp('полученный урон возвраща
 const RF = Z.parse('иммун к физ урону / возвращает полученный урон как урон лавой / 25% урона возвращается противнику / физ резист 50%');
 eq('reflect: from raw damage, even when immune', Z.damage(200, 'физ', 'norm', RF).refl.map(r => r.amt + ' ' + r.type), ['200 лава', '50 физ']);
 eq('reflect: pure damage is not reflected', Z.damage(200, 'физ', 'pure', RF).refl, undefined);
+const ef = t => Z.parse(t).filter(e => /^эф:/.test(e.t)).map(e => `${e.t.slice(3)}:${e.k}${e.k === 'eimm' ? '' : e.v}`);
+eq('effects: stun immunity', ef('иммун к станам и снижению статов'), ['стан:eimm']);
+eq('effects: stun pct', ef('10% резиста оглушению'), ['стан:epct10']);
+eq('effects: all statuses', ef('нерушим / 50% резиста к статусным эффектам'), ['все:epct50']);
+eq('effects: poison is damage and effect', Z.parse('иммун к яду').map(e => e.t), ['эф:яд', 'яд']);
+eq('effects: guard sums own and all', Z.effGuard(Z.parse('10% резиста оглушению / 5% резиста всем дебаффам'), 'стан'), { imm: '', pct: 15 });
+eq('effects: 100% is immunity', !!Z.effGuard(Z.parse('100% резиста к статус эффектам'), 'яд').imm, true);
+eq('effects: status key', [Z.effKey('стан / оглушение'), Z.effKey('кровотечение')], ['стан', 'кровотечение']);
 // 19. С паролем ГМ: расшифровка и бестиарий
 if (process.env.GM_PASSWORD) {
   let wrong = false;
