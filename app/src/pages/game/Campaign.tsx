@@ -149,14 +149,18 @@ function NewChar({ cid, camp }: { cid: string; camp: Any }) {
     location.hash = '#create/race';
   };
   const useDraft = () => { setTarget({ cid, chid: null, cname: camp.name }); location.hash = '#create/summary'; };
-  const fromLocal = () => {
+  const [busy, setBusy] = useState(false);
+  const fromLocal = async () => {
     const h = local.find(x => x.id === pick);
     if (!h) { App.toast('Выберите героя'); return; }
+    if (busy) return;   // повторное нажатие, пока идёт запись, не создаёт второго такого же персонажа
     const res = R.compute(App.migrate(JSON.parse(JSON.stringify(h.state))));
-    run(async () => {
+    setBusy(true);
+    const ok = await run(async () => {
       const chid = await C.createCharacter(cid, App.migrate(h.state), res.ok ? 'review' : 'draft', h.pic ? { pic: h.pic } : null);
       location.hash = `#game/${cid}/${chid}`;
     }, res.ok ? 'Персонаж отправлен ГМ на проверку' : 'Добавлен как черновик: в листе есть ошибки');
+    if (!ok) setBusy(false);
   };
   return (
     <section className="card wstack">
@@ -170,7 +174,7 @@ function NewChar({ cid, camp }: { cid: string; camp: Any }) {
           <option value="">— из «Моих героев» —</option>
           {local.map(h => <option key={h.id} value={h.id}>{h.state.name || 'Безымянный герой'}</option>)}
         </select>
-        <button type="button" className="btn" onClick={fromLocal}>Добавить</button>
+        <button type="button" className="btn" onClick={fromLocal} disabled={busy}>Добавить</button>
       </div>}
       <p className="muted small">Персонаж уходит ГМ на проверку; после утверждения лист создания фиксируется, а дальше идёт развитие: опыт, уровни, фракции, предметы.</p>
     </section>
@@ -317,9 +321,16 @@ function SessionNotes({ cid, gm, sessions, current }: { cid: string; gm: boolean
 /** текст, который сохраняется кнопкой (заметки ГМ, итоги сессии) */
 export function PrivateNotes({ text, save, title, placeholder, button = 'Сохранить' }: { text: string; save: (t: string) => Promise<unknown>; title?: string; placeholder: string; button?: string }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const body = <>
     <textarea rows={4} value={draft !== null ? draft : text} onChange={e => setDraft(e.target.value)} placeholder={placeholder} />
-    {draft !== null && draft !== text && <div className="row"><button type="button" className="btn small primary" onClick={async () => { await save(draft); setDraft(null); }}>{button}</button><button type="button" className="btn ghost small" onClick={() => setDraft(null)}>Отменить</button></div>}
+    {draft !== null && draft !== text && <div className="row"><button type="button" className="btn small primary" disabled={busy} onClick={async () => {
+      // не сохранилось (нет доступа, ошибка сети) — текст остаётся в поле, а не пропадает
+      setBusy(true);
+      const ok = await save(draft).catch(() => false);
+      setBusy(false);
+      if (ok !== false) setDraft(null);
+    }}>{button}</button><button type="button" className="btn ghost small" onClick={() => setDraft(null)}>Отменить</button></div>}
   </>;
   if (!title) return <div className="wstack tight">{body}</div>;
   return <section className="card wstack"><h2 className="h-sec">{title}</h2><p className="muted small">Видите только вы.</p>{body}</section>;

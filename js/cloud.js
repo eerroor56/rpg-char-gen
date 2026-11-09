@@ -74,7 +74,10 @@
         await b.commit();
       },
       watchDoc: (p, cb, err) => db.doc(p).onSnapshot(s => cb(snapDoc(s)), err),
-      watchQuery: (c, o, cb, err) => query(c, o).onSnapshot(qs => cb(qs.docs.map(snapDoc)), err),
+      // o.meta: сообщать и о смене «из кэша → с сервера» (второй аргумент cb: { fromCache })
+      watchQuery: (c, o, cb, err) => (o && o.meta
+        ? query(c, o).onSnapshot({ includeMetadataChanges: true }, qs => cb(qs.docs.map(snapDoc), { fromCache: qs.metadata.fromCache }), err)
+        : query(c, o).onSnapshot(qs => cb(qs.docs.map(snapDoc)), err)),
       auth: {
         onChange: cb => auth.onAuthStateChanged(u => cb(user(u))),
         current: () => user(auth.currentUser),
@@ -131,6 +134,7 @@
       const keys = () => { const ks = new Set(Object.keys(before || {}).concat(Object.keys(after || {}))); return [...ks].filter(k => JSON.stringify((before || {})[k]) !== JSON.stringify((after || {})[k])); };
       const only = (ks, allowed) => ks.every(k => allowed.includes(k));
       const text = (v, n) => typeof v === 'string' && v.length <= n;
+      const coins = p => [['мд', 1e8], ['пл', 1e6], ['з', 1e4], ['се', 100], ['м', 1]].reduce((a, [id, r]) => a + (+((p || {})[id]) || 0) * r, 0);
       if (!uid) return false;
       if (seg[0] === 'campaigns' && seg.length === 2) {
         if (kind === 'read') return before.members.includes(uid);
@@ -138,8 +142,11 @@
         if (kind === 'delete') return before.gm === uid;
         const gmEdit = before.gm === uid && after.gm === uid && after.members.includes(uid) && text(after.name, 120);
         const nk = Object.keys(Object.assign({}, before.memberNames, after.memberNames)).filter(k => (before.memberNames || {})[k] !== (after.memberNames || {})[k]);
-        const joining = only(keys(), ['members', 'memberNames']) && !before.members.includes(uid) && after.members.includes(uid)
-          && after.members.length === before.members.length + 1 && before.members.every(x => after.members.includes(x)) && only(nk, [uid]);
+        const bj = before.joinedWith || {}, aj = after.joinedWith || {};
+        const jk = Object.keys(Object.assign({}, bj, aj)).filter(k => bj[k] !== aj[k]);
+        const joining = only(keys(), ['members', 'memberNames', 'joinedWith']) && !before.members.includes(uid) && after.members.includes(uid)
+          && after.members.length === before.members.length + 1 && before.members.every(x => after.members.includes(x)) && only(nk, [uid])
+          && only(jk, [uid]) && aj[uid] === before.code;
         const renaming = only(keys(), ['memberNames']) && before.members.includes(uid) && only(nk, [uid]);
         const leaving = only(keys(), ['members']) && before.members.includes(uid) && before.gm !== uid
           && JSON.stringify(after.members) === JSON.stringify(before.members.filter(x => x !== uid));
@@ -155,12 +162,14 @@
       const cid = seg[1], sub = seg[2];
       if (sub === 'characters') {
         if (kind === 'read') return isMember(cid);
-        if (kind === 'create') return isMember(cid) && after.owner === uid && (isGM(cid) || (['draft', 'review'].includes(after.status) && !('gm' in after)));
+        const PLAYER_NEW = ['owner', 'ownerName', 'name', 'raceId', 'level', 'status', 'state', 'prog', 'notes', 'pic', 'createdMs', 'updatedMs', 'updatedBy'];
+        if (kind === 'create') return isMember(cid) && after.owner === uid && (isGM(cid) || (['draft', 'review'].includes(after.status) && only(Object.keys(after), PLAYER_NEW)));
         if (kind === 'delete') return isGM(cid) || (before.owner === uid && ['draft', 'review'].includes(before.status));
         const k = keys();
         const ownerEdit = !k.some(x => ['gm', 'owner', 'createdMs', 'vit'].includes(x))
           && (!k.includes('status') || (['draft', 'review'].includes(before.status) && ['draft', 'review'].includes(after.status)))
-          && (!k.includes('state') || ['draft', 'review'].includes(before.status));
+          && (!k.includes('state') || ['draft', 'review'].includes(before.status))
+          && (!k.includes('purse') || coins(after.purse) <= coins(before.purse));
         return (isGM(cid) && after.owner === before.owner) || (isMember(cid) && before.owner === uid && ownerEdit);
       }
       if (sub === 'events') {
@@ -349,7 +358,8 @@
       const j = await A.get(`joinCodes/${code}`);
       if (!j) throw new Error('Кампании с таким кодом нет — проверьте код у ГМ');
       try {
-        await A.batch([{ type: 'update', path: `campaigns/${j.cid}`, data: { members: op.union([this.uid()]), ['memberNames.' + this.uid()]: this.name() } }]);
+        // joinedWith — код, по которому вошли: правила базы пускают только с действующим кодом
+        await A.batch([{ type: 'update', path: `campaigns/${j.cid}`, data: { members: op.union([this.uid()]), ['memberNames.' + this.uid()]: this.name(), ['joinedWith.' + this.uid()]: code } }]);
       } catch (e) {
         // уже участник? тогда кампания просто откроется
         try { const c = await A.get(`campaigns/${j.cid}`); if (c) return j.cid; } catch (er) { /* нет доступа */ }
@@ -481,7 +491,8 @@
     },
     // ---- «Мои герои» в облаке (js/herosync.js): users/{uid}/heroes/{id} — герой целиком строкой JSON (data),
     // удалённый — пометкой deleted (чтобы не вернулся с другого устройства); читать и писать может только сам игрок
-    watchHeroes(cb, err) { return A.watchQuery(`users/${this.uid()}/heroes`, {}, cb, err); },
+    // второй аргумент cb — { fromCache } (у Firebase): пока ответа сервера не было, облако «пустое» лишь на вид
+    watchHeroes(cb, err) { return A.watchQuery(`users/${this.uid()}/heroes`, { meta: true }, cb, err); },
     putHeroes(docs) {
       const uid = this.uid();
       const ops = docs.map(d => ({ type: 'set', path: `users/${uid}/heroes/${d.id}`, data: d }));

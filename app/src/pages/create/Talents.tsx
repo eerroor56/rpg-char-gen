@@ -22,7 +22,8 @@ export default function Talents({ res }: StepProps) {
             <div key={t.id} className={'tal' + (v.blocked ? ' is-off' : '') + (v.inv ? ' is-on' : '')}>
               <div className="tal-head">
                 <b>{t.name}{t.base ? <span className="muted small"> (база {t.base})</span> : null}</b>
-                <span className="tal-tot">{fmt(v.total)} <span className="muted small">/ {v.cap}</span></span>
+                {/* у таланта с базой (зоркость) предел — у вложенных очков, он показан ниже; «70 / 50» в заголовке путал */}
+                <span className="tal-tot">{fmt(v.total)}{!v.sepBase && <span className="muted small"> / {v.cap}</span>}</span>
               </div>
               {p && <p className="small tal-fx">{p.effect}{top && <><br /><span className="muted">{/сотом/i.test(top) ? '' : 'На максимальном уровне: '}{top}</span></>}</p>}
               <div className="tal-ctl">

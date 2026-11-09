@@ -718,7 +718,16 @@
       if (App.store.set('hero-workshop:heroes', l)) App.toast('Копия сохранена в «Мои герои»'); else App.toast('Не удалось сохранить в браузере');
     },
     gDetach() { clearTarget(); App.toast('Мастер отвязан от кампании'); App.renderCreate(); },
+    // новая версия (React) вызывает действие без настоящей кнопки — b.disabled ничего не блокирует,
+    // поэтому повторное нажатие, пока идёт запись, отсекается флагом (иначе — два одинаковых персонажа)
     async gSaveWizard(b) {
+      if (G.saving) return;
+      G.saving = true;
+      try { await saveWizard(b); } finally { G.saving = false; }
+    }
+  });
+
+  async function saveWizard(b) {
       const t = target();
       if (!t) return;
       const status = b.dataset.status;
@@ -746,8 +755,7 @@
         b.disabled = false;
         App.toast(C.errorText(e));
       }
-    }
-  });
+  }
 
   // формы входа и кампаний
   document.addEventListener('submit', async e => {

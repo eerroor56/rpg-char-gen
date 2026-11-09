@@ -10,7 +10,9 @@
   'use strict';
   const App = window.App, C = window.Cloud;
   const KEY = 'hero-workshop:heroes', OWNER = 'hero-workshop:heroes-owner', DEL = 'hero-workshop:heroes-deleted';
-  const st = { on: false, uid: null, name: '', loading: false, err: '', n: 0, moved: 0, cloud: new Map() };
+  // synced — облако уже ответило с сервера. До этого ничего не отправляется: иначе (вход без сети, первые секунды после входа)
+  // старая копия из браузера записалась бы поверх более новой, сохранённой с другого устройства
+  const st = { on: false, synced: false, uid: null, name: '', loading: false, err: '', n: 0, moved: 0, cloud: new Map() };
   let unsub = null, quiet = false, timer = 0;
 
   const get = (k, d) => App.store.get(k, d);
@@ -33,11 +35,13 @@
   };
 
   const docOf = h => ({ id: h.id, savedAt: +h.savedAt || 0, name: String((h.state || {}).name || '').slice(0, 120), deleted: false, data: JSON.stringify(h) });
-  function schedule() { if (!st.on) return; clearTimeout(timer); timer = setTimeout(push, 400); }
+  // hold — последняя отправка не удалась: снова отправляем при следующем изменении героев, а не на каждый снимок облака
+  // (иначе при постоянной ошибке, например слишком большом герое, отправка шла бы по кругу)
+  function schedule() { if (!st.on) return; st.hold = false; clearTimeout(timer); timer = setTimeout(push, 400); }
 
   // отправить в облако то, что здесь новее или чего там нет, и пометки об удалении
   function push() {
-    if (!st.on) return;
+    if (!st.on || !st.synced) return;
     const list = get(KEY, []) || [], docs = [];
     let bumped = false;
     list.forEach(h => {
@@ -51,17 +55,25 @@
     const del = deleted();
     del.forEach(d => { const c = st.cloud.get(d.id); if (!c || !c.deleted) docs.push({ id: d.id, savedAt: Math.max(d.at, c ? c.savedAt + 1 : 0), name: '', deleted: true, data: '' }); });
     if (!docs.length) { if (del.length) put(DEL, []); return; }
+    const was = new Map(docs.map(d => [d.id, st.cloud.get(d.id)]));
     docs.forEach(d => st.cloud.set(d.id, { savedAt: d.savedAt, data: d.data, deleted: d.deleted }));
-    const moving = st.moved;
+    const moving = st.moved, uid = st.uid;
     C.putHeroes(docs).then(() => {
       if (del.length) put(DEL, deleted().filter(d => !del.some(x => x.id === d.id)));
       if (moving) { App.toast(`Герои перенесены в облако: ${moving}. Теперь они видны на любом устройстве, где вы вошли.`); st.moved = 0; }
       st.err = '';
-    }, e => { st.err = C.errorText(e); refresh(); });
+    }, e => {
+      // не записалось — вернуть, что было известно об облаке: при следующем изменении эти герои отправятся снова
+      if (st.uid === uid) was.forEach((c, id) => { if (c) st.cloud.set(id, c); else st.cloud.delete(id); });
+      st.hold = true; st.err = C.errorText(e); refresh();
+    });
   }
 
   // пришло из облака: новее — сюда, удалённое там — убрать здесь (если здесь не новее)
-  function merge(rows) {
+  function merge(rows, meta) {
+    // снимок из кэша браузера до первого ответа сервера — не правда об облаке: ждём сервер
+    if (meta && meta.fromCache && !st.synced) return;
+    st.synced = true;
     const list = get(KEY, []) || [], byId = new Map(list.map(h => [h.id, h]));
     const delSet = new Set(deleted().map(d => d.id));
     const order = list.map(h => h.id);
@@ -80,7 +92,7 @@
     if (changed) put(KEY, order.filter(id => byId.has(id)).map(id => byId.get(id)));
     st.n = rows.filter(r => r && !r.deleted).length;
     st.loading = false;
-    push();
+    if (!st.hold) push();
     if (changed || App.tab === 'heroes') refresh();
   }
 
@@ -93,7 +105,7 @@
   function onUser(u) {
     if (u && st.uid === u.uid && unsub) { st.name = u.name || ''; return; }
     if (unsub) { unsub(); unsub = null; }
-    Object.assign(st, { on: false, uid: null, name: '', loading: false, err: '', n: 0, moved: 0, cloud: new Map() });
+    Object.assign(st, { on: false, synced: false, hold: false, uid: null, name: '', loading: false, err: '', n: 0, moved: 0, cloud: new Map() });
     if (!u) { refresh(); return; }
     const owner = get(OWNER, null);
     if (owner && owner !== u.uid) {        // другой аккаунт в этом браузере: прежние герои — в сторону, свои — сюда

@@ -23,15 +23,21 @@ service cloud.firestore {
 
     // ---- кампании: читают участники, меняет ГМ; игрок может только вписать или вычеркнуть себя
     match /campaigns/{cid} {
+      // вступить можно, только зная действующий код приглашения: игрок вписывает его в joinedWith[свой uid].
+      // Без этого любой, кто знает адрес кампании (например, исключённый игрок), вернулся бы сам, даже после смены кода
       function joining() {
         let oldM = resource.data.members;
         let newM = request.resource.data.members;
-        return changed().hasOnly(['members', 'memberNames'])
+        let oldJ = resource.data.get('joinedWith', {});
+        let newJ = request.resource.data.get('joinedWith', {});
+        return changed().hasOnly(['members', 'memberNames', 'joinedWith'])
           && !(me() in oldM)
           && me() in newM
           && newM.size() == oldM.size() + 1
           && newM.hasAll(oldM)
-          && request.resource.data.memberNames.diff(resource.data.memberNames).affectedKeys().hasOnly([me()]);
+          && request.resource.data.memberNames.diff(resource.data.memberNames).affectedKeys().hasOnly([me()])
+          && newJ.diff(oldJ).affectedKeys().hasOnly([me()])
+          && newJ.get(me(), '') == resource.data.code;
       }
       function renaming() {
         return changed().hasOnly(['memberNames'])
@@ -78,17 +84,29 @@ service cloud.firestore {
     match /campaigns/{cid}/characters/{chid} {
       // игрок не трогает то, что выдаёт ГМ (gm), свои ХП, МП, броню и зоркость в бою (vit — меняет ГМ)
       // и не меняет лист создания после утверждения
+      // монеты кошелька в медных (курсы — js/config.js CURRENCIES)
+      function coins(p) {
+        return p.get('мд', 0) * 100000000 + p.get('пл', 0) * 1000000 + p.get('з', 0) * 10000 + p.get('се', 0) * 100 + p.get('м', 0);
+      }
       function ownerEdit() {
         let k = changed();
         return !k.hasAny(['gm', 'owner', 'createdMs', 'vit'])
           && (!k.hasAny(['status']) || (resource.data.status in ['draft', 'review'] && request.resource.data.status in ['draft', 'review']))
-          && (!k.hasAny(['state']) || resource.data.status in ['draft', 'review']);
+          && (!k.hasAny(['state']) || resource.data.status in ['draft', 'review'])
+          // свои траты (purse) игрок только платит и разменивает: денег в сумме не становится больше
+          && (!k.hasAny(['purse']) || coins(request.resource.data.get('purse', {})) <= coins(resource.data.get('purse', {})));
+      }
+      // новый персонаж игрока — только лист создания: без кошелька, предметов, передач и боевых полей,
+      // которых ГМ при проверке листа не видит (вкладки развития и снаряжения до утверждения закрыты)
+      function playerNew() {
+        return request.resource.data.status in ['draft', 'review']
+          && request.resource.data.keys().hasOnly(['owner', 'ownerName', 'name', 'raceId', 'level', 'status', 'state', 'prog', 'notes', 'pic', 'createdMs', 'updatedMs', 'updatedBy']);
       }
 
       allow read: if isMember(cid);
       allow create: if isMember(cid)
         && request.resource.data.owner == me()
-        && (isGM(cid) || (request.resource.data.status in ['draft', 'review'] && !('gm' in request.resource.data)));
+        && (isGM(cid) || playerNew());
       allow update: if (isGM(cid) && request.resource.data.owner == resource.data.owner)
         || (isMember(cid) && resource.data.owner == me() && ownerEdit());
       allow delete: if isGM(cid)
