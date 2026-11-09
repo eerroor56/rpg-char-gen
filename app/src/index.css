@@ -1080,7 +1080,7 @@ body.wmap-open { overflow: hidden; }
 .cp-side .card { padding: 10px 12px; border-radius: var(--r-m); }
 .cp-side .g-dice h2 { font-size: 1.05rem; }
 .cp-side .gd-n { width: 64px; height: 64px; font-size: 2rem; border-radius: 16px; }
-.cp-side .cp-feed { flex: 1 1 auto; min-height: 180px; display: flex; flex-direction: column; }
+.cp-side .cp-feed { flex: 1 1 auto; min-height: 180px; min-height: min-content; display: flex; flex-direction: column; } /* не ниже содержимого — иначе список вылезает за рамку */
 .cp-side .cp-feed.is-shut { flex: none; min-height: 0; }
 .cp-side .cp-ev { flex: 1 1 0; min-height: 90px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 @media (max-width: 1100px) { .cp-grid { grid-template-columns: minmax(0, 1fr); } }
