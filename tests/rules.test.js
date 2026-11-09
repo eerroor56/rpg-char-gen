@@ -193,12 +193,12 @@ eq('young level 39,75 → 40', r.level, 40);
 eq('young points', r.agePoints, -39);
 r = R.compute(st({ raceId: 'полукровка', parentA: 'империал', parentB: 'хоббиты', hbSize: 'н', hbAlign: 'нейтрал', ageCat: 'взрослый' }));
 eq('half level integer', Number.isInteger(r.lvl0), true);
-// 18b. Зоркость: база 50 и бонусы отдельно, вложить можно до 100
+// 18b. Зоркость: база 50 и бонусы отдельно; вложить — до предела из таблицы пассивок минус база (ГМ: оставляем как есть)
 r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['зоркий', 'слабый'], talents: { 'зоркость (базовая 50)': 10 } }));
-eq('zor max invest 100', r.talents['зоркость (базовая 50)'].maxInv, 100);
+eq('zor max invest = table cap − base', r.talents['зоркость (базовая 50)'].maxInv, r.talents['зоркость (базовая 50)'].cap);
 eq('zor total 50+10+10', r.der.zor, 70);
 r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', talents: { 'зоркость (базовая 50)': 100 } }));
-eq('zor 150 without cap error', r.errors.some(e => /Зоркость/.test(e.msg)), false);
+eq('zor over cap → error', r.errors.some(e => /Зоркость/.test(e.msg)), r.talents['зоркость (базовая 50)'].cap < 100);
 eq('zor 150', r.der.zor, 150);
 // 18c. Повторяющиеся черты
 r = R.compute(st({ raceId: 'империал', ageCat: 'взрослый', traits: ['сильный', 'сильный', 'щуплый', 'глупость'] }));
@@ -311,6 +311,10 @@ const E = Z.parse('физ резист 25% / иммун к огню / урон �
 eq('damage: flat, then pct', Z.damage(200, 'вода', 'norm', E).hp, 105);           // 200 − 50 = 150, −30% маг = 105
 eq('damage: pct, then mul', Z.damage(200, 'молния', 'norm', E).hp, 280);          // −30% = 140, ×2 = 280
 eq('damage: immune', Z.damage(200, 'огонь', 'pierce', E).hp, 0);
+// колющий (лист механик «урон»): −20% физ резиста; без резиста — урон идёт как бонусный
+eq('pierce-sub: resist 50 − 20', Z.damage(100, 'физ', 'norm', [{ t: 'физ', k: 'pct', v: 50 }], false, { resMinus: 20 }).hp, 70);
+eq('pierce-sub: no resist → bonus', Z.damage(100, 'физ', 'norm', [], false, { resMinus: 20 }).hp, 120);
+eq('pierce-sub: 100% resist → 80%', Z.damage(100, 'физ', 'norm', [{ t: 'физ', k: 'pct', v: 100 }], false, { resMinus: 20 }).hp, 20);
 eq('damage: psi is not magic', Z.damage(200, 'пси', 'norm', E).hp, 180);
 eq('damage: spell not magical', Z.damage(200, 'молния', 'norm', E, true).hp, 400);
 eq('damage: pure ignores all', [Z.damage(200, 'огонь', 'pure', E).hp, Z.damage(200, 'огонь', 'pure', E).pierce], [200, true]);

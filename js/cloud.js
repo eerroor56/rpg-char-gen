@@ -389,10 +389,15 @@
       if (c) c.code = code;
       return code;
     },
+    // исключение игрока (уточнение ГМ): сразу меняется код приглашения — по старому исключённый не вернётся
     async removeMember(cid, uid) {
-      const c = this.camps[cid];
-      await A.batch([{ type: 'update', path: `campaigns/${cid}`, data: { members: op.remove([uid]) } },
+      const c = this.camps[cid], code = genCode();
+      await A.batch([{ type: 'update', path: `campaigns/${cid}`, data: { members: op.remove([uid]), code } },
+        { type: 'set', path: `joinCodes/${code}`, data: { cid, gm: this.uid() } },
+        ...(c && c.code ? [{ type: 'delete', path: `joinCodes/${c.code}` }] : []),
         this.eventOp(cid, null, '', `ГМ исключает из кампании: ${(c && c.memberNames && c.memberNames[uid]) || 'игрок'}`, 'campaign')]);
+      if (c) c.code = code;
+      return code;
     },
     async leaveCampaign(cid) {
       await A.batch([this.eventOp(cid, null, '', `${this.name()} покидает кампанию`, 'campaign')]);

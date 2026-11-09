@@ -294,7 +294,7 @@ function Members({ cid, camp, gm, me, list }: { cid: string; camp: Any; gm: bool
       <h2 className="h-sec">Участники</h2>
       <ul className="hp-list">{(camp.members || []).map((u: string) => (
         <li key={u}><span>{name(u)}{u === camp.gm && <span className="chip is-gm">ГМ</span>}{u === me && <span className="muted small"> (вы)</span>}{counts[u] ? <span className="muted small"> — персонажей: {counts[u]}</span> : null}</span>
-          {gm && u !== me && <button type="button" className="link small" onClick={() => { if (confirm(`Исключить ${name(u)} из кампании? Его персонажи останутся.`)) run(() => C.removeMember(cid, u), 'Исключён'); }}>исключить</button>}</li>
+          {gm && u !== me && <button type="button" className="link small" onClick={() => { if (confirm(`Исключить ${name(u)} из кампании? Его персонажи останутся, код приглашения сменится — остальным игрокам он больше не нужен.`)) run(() => C.removeMember(cid, u), 'Исключён, код приглашения сменился'); }}>исключить</button>}</li>
       ))}</ul>
       {!gm && <div><button type="button" className="link small fx-del" onClick={() => {
         if (confirm('Покинуть кампанию? Ваши персонажи останутся у ГМ; вернуться можно по коду.')) run(async () => { await C.leaveCampaign(cid); location.hash = '#game'; }, 'Вы покинули кампанию');

@@ -40,11 +40,14 @@ const raw = () => JSON.parse(localStorage.getItem('hero-workshop:cloud-local')).
   await denied('вход без кода по адресу кампании', () => C.updateCampaign(cid, { members: C.op.union([C.uid()]), ['memberNames.' + C.uid()]: 'x' }));
   await denied('вход с неверным кодом', () => C.updateCampaign(cid, { members: C.op.union([C.uid()]), ['memberNames.' + C.uid()]: 'x', ['joinedWith.' + C.uid()]: 'ZZZZZZ' }));
 
-  // ГМ исключает игрока и меняет код — старым кодом и адресом не вернуться
+  // ГМ исключает игрока — код приглашения меняется сам (уточнение ГМ): старым кодом и адресом не вернуться
   await as('gm@test');
   await C.myCampaigns();
   await allowed('ГМ исключает игрока', () => C.removeMember(cid, p1));
-  const code2 = await C.newCode(cid);
+  const code2 = raw()['campaigns/' + cid].code;
+  ok('при исключении код сменился', code2 && code2 !== code1);
+  ok('старый код удалён', !raw()['joinCodes/' + code1] && !!raw()['joinCodes/' + code2]);
+  ok('исключённого нет в участниках', !raw()['campaigns/' + cid].members.includes(p1));
   await as('p1@test');
   await denied('исключённый: старый код в joinedWith', () => C.updateCampaign(cid, { members: C.op.union([p1]), ['memberNames.' + p1]: 'p1', ['joinedWith.' + p1]: code1 }));
   await denied('исключённый: без кода', () => C.updateCampaign(cid, { members: C.op.union([p1]), ['memberNames.' + p1]: 'p1' }));
