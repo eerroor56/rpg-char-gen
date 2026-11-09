@@ -384,6 +384,9 @@ function DmgKind({ t, at }: { t: Tok; at: Any }) {
   const types: Any[] = Z.typeList();
   const type = ui.get('btDmgType') || 'физ', mode = ui.get('btDmgMode') || 'norm';
   const g = Z.groupOf(type), auto = Z.PIERCE.has(type);
+  // подтипы физ урона (лист механик «урон»): несколько сразу — гибридное оружие («режуще-рубящий»)
+  const subs = String(ui.get('btSub') || '').split(',').filter(Boolean);
+  const togSub = (k: string) => ui.set('btSub', (subs.includes(k) ? subs.filter(x => x !== k) : subs.concat(k)).join(','));
   const grp = (k: string, label: string) => <optgroup label={label}>{types.filter(x => x.group === k).map(x => <option key={x.id} value={x.id}>{x.name}{x.pierce ? ' (сквозь броню)' : ''}</option>)}</optgroup>;
   return <div className="bt-btns bt-kind">
     <select className="sel" value={type} onChange={e => ui.set('btDmgType', e.target.value)} aria-label="Тип урона" title="Тип урона: от него зависят сопротивления и слабости цели">
@@ -400,6 +403,10 @@ function DmgKind({ t, at }: { t: Tok; at: Any }) {
       <option value="">кто бьёт? (для отражения)</option>
       {foes.map(x => <option key={x.id} value={x.id}>{x.n}{x.kind === 'h' ? ' (герой)' : x.kind === 'a' ? ' (союзник)' : ''}</option>)}
     </select>}
+    {type === 'физ' && mode !== 'pure' && <div className="bt-sub" role="group" aria-label="Подтип физического урона">
+      {B.physSubs().map((x: Any) => <button key={x.k} type="button" className={'bt-sub-b' + (subs.includes(x.k) ? ' is-on' : '')} aria-pressed={subs.includes(x.k)}
+        onClick={() => togSub(x.k)} title={x.d || x.k}>{x.k}</button>)}
+    </div>}
   </div>;
 }
 

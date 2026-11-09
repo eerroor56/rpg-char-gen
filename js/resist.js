@@ -393,7 +393,10 @@
    * → { hp: сколько уходит дальше (в броню / ХП), pierce, armorMul, steps: ['…'], blocked, gain: { hp | mp: n } — конвертация в лечение / ману,
    *     refl: [{ amt, type }] — сколько отражается атакующему (ГМ: от урона без сопротивлений, и при иммунитете тоже) }
    */
-  function damage(X, type, mode, entries, notMagic) {
+  // opt.resMinus — атака снимает столько процентов резиста (колющий: «−20% физ резиста»; лист механик: если резиста нет —
+  // урон просто идёт как бонусный, то есть резист уходит в минус)
+  function damage(X, type, mode, entries, notMagic, opt) {
+    opt = opt || {};
     const steps = [`${nameOf(type)} ${X}`];
     if (mode === 'pure') return { hp: X, pierce: true, armorMul: 1, pure: true, steps: steps.concat('чистый урон: мимо резистов и брони') };
     const g = groupOf(type);
@@ -414,7 +417,8 @@
     let x = X;
     const flat = on.filter(e => e.k === 'flat').reduce((a, e) => a + e.v, 0);
     if (flat) { x = Math.max(0, x - flat); steps.push(`${flat > 0 ? '−' : '+'}${Math.abs(flat)} ед. → ${r1(x)}`); }
-    const pct = on.filter(e => e.k === 'pct').reduce((a, e) => a + e.v, 0);
+    const pct0 = on.filter(e => e.k === 'pct').reduce((a, e) => a + e.v, 0), pct = pct0 - (+opt.resMinus || 0);
+    if (opt.resMinus) steps.push(`${opt.resWhy || 'атака'}: резист ${r1(pct0)}% − ${opt.resMinus}%`);
     if (pct >= 100) return keep(Object.assign(res, { hp: 0, blocked: true, steps: steps.concat(`резист ${r1(pct)}% → 0`) }));
     if (pct) { x = x * (1 - pct / 100); steps.push(`${pct > 0 ? 'резист' : 'слабость'} ${Math.abs(r1(pct))}% → ${Math.round(x)}`); }
     const mul = on.filter(e => e.k === 'mul').reduce((a, e) => a * e.v, 1);

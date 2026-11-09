@@ -1243,6 +1243,10 @@ body.bt-dragging, body.bt-dragging * { cursor: grabbing !important; user-select:
 .bf .btn.bt-heal:hover { border-color: var(--ok); }
 .bf .bt-kind select { flex: 1 1 140px; width: auto; min-width: 0; min-height: 34px; padding: 4px 32px 4px 10px; font-size: .92rem; }
 .bf .bt-kind .check { flex: 0 0 auto; }
+.bf .bt-sub { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.bf .bt-sub-b { padding: 3px 10px; min-height: 28px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font: inherit; font-size: .84rem; cursor: pointer; transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+.bf .bt-sub-b:hover { color: var(--text); border-color: var(--brass); }
+.bf .bt-sub-b.is-on { background: rgba(214, 168, 92, .18); border-color: var(--brass); color: var(--brass-2); }
 .bf .bt-rz { display: grid; gap: 5px; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
 .bf .bt-rz p { margin: 0; }
 .bf .bt-rz-in { width: 100%; min-height: 32px; padding: 4px 8px; }

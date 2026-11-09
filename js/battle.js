@@ -782,6 +782,24 @@
   // Урон за ход — в конце хода того, на ком висит; повторный урон за ход складывается и уроном, и длительностью (ГМ).
   // Стан и оглушение — одно и то же; после стана — иммунитет к стану на 2 хода; сон снимается любым уроном.
   const DOT = { 'яд': { type: 'яд' }, 'кровотечение': { type: 'физ', mode: 'pierce' }, 'горение': { type: 'огонь', perArm: 10 }, 'удушение': { type: 'физ', mode: 'pierce' } };
+  // подтипы физического урона (лист механик «урон», уточнение ГМ). У гибридного оружия («режуще-рубящий») — оба сразу.
+  // ch — шансы (d100) наложить состояние; «конечность» — только подсказка ГМ. Кровотечение — 5% урона оружия на 3 хода.
+  const PHYS_SUB = {
+    'колющий': { resMinus: 20, piercePart: 0.2 },
+    'режущий': { ch: [[20, 'кровотечение']] },
+    'рубящий': { ch: [[40, 'травма'], [20, 'конечность']] },
+    'рвущий': { ch: [[40, 'кровотечение'], [20, 'травма']] },
+    'дробящий': { armPct: 5, ch: [[10, 'стан']] },
+    'секущий': { ch: [[10, 'кровотечение']], note: '−1% от макс. пси' },
+  };
+  function physSubs() {
+    const blk = (((D().mechanics || {}).main) || []).find(b => R.norm(b.title) === 'урон') || {};
+    const lines = [].concat(blk.head || [], ...(blk.rows || []));
+    return Object.keys(PHYS_SUB).map(k => {
+      const s = lines.find(x => R.norm(String(x || '')).startsWith(k.slice(0, 5)));
+      return { k, d: s ? String(s).replace(/^[^:]*:\s*/, '') : '' };
+    });
+  }
   const SKIP = { 'стан': 'оглушён', 'сон': 'спит', 'заморозка': 'заморожен', 'кокон': 'в коконе', 'одержимость': 'одержим' };
   const NOT_STATUS = /^(проклятие|зависимость|чистый урон|проникающий урон|нерушимый|мульти|сплэш|поглощение заклинаний|пёрышко|перышко)/;
   let stCache = { sig: '', list: [] };
@@ -1286,8 +1304,17 @@
       // уходит тому, кто бьёт (App.ui.btFrom): его сопротивления и броня считаются как обычно
       if (what === 'hp' && sign < 0) {
         const type = App.ui.btDmgType || 'физ', mode = how === 'pierce' ? 'pierce' : (App.ui.btDmgMode || 'norm');
-        const h = hitCalc(t, amt, type, mode, !!App.ui.btNoMag);
-        const saves = [[t, h.patch]], msg = [hitText(t, h)];
+        // подтипы физ урона (колющий, режущий, рубящий, рвущий, дробящий, секущий) — несколько сразу у гибридного оружия
+        const subs = type === 'физ' && mode !== 'pure' ? String(App.ui.btSub || '').split(',').filter(k => PHYS_SUB[k]) : [];
+        const so = subOpt(t, subs);
+        const h = hitCalc(t, amt + so.add, type, mode, !!App.ui.btNoMag, so);
+        const saves = [[t, h.patch]], msg = [(so.why.length ? so.why.join(', ') + ' → ' : '') + hitText(t, h)];
+        // состояния от подтипа — если удар дошёл (по ХП или по броне)
+        if (subs.length && (h.rest > 0 || has(h.patch.arm))) {
+          const sr = subRolls(withVit(t, h.patch), subs, amt);
+          if (sr.st) h.patch.st = sr.st;
+          msg.push(...sr.msg);
+        }
         if (h.refl.length) {
           const fh = App.ui.btFrom && App.ui.btFrom !== tid(t) ? findTok(board0(), App.ui.btFrom) : null;
           if (fh && fh.t.kind !== 'o') {
@@ -1394,25 +1421,11 @@
       const hit = selTok();
       if (!hit || !ctx.gm || hit.t.kind === 'o') return;
       const t = hit.t, k = App.ui.btStK || (statusList()[0] || {}).k;
-      const info = statusList().find(z => z.k === k) || { k, n: k };
       const x = Math.max(0, Math.round(+App.ui.btStX || 0)), v = Math.max(0, Math.round(+App.ui.btStV || 0));
       if (DOT[k] && !v) { App.toast('Впишите урон за ход'); return; }
-      const g = window.Resist ? window.Resist.effGuard(resistOf(t), k) : { imm: '', pct: 0 };
-      if (g.imm) { App.toast(`${tname(t)}: «${info.n}» не действует — ${g.imm}`); return; }
-      let roll = '';
-      if (g.pct > 0) {
-        const r = d100();
-        roll = ` (сопротивление ${g.pct}%, d100 = ${r})`;
-        if (r <= g.pct) { App.toast(`${tname(t)}: устоял против «${info.n}»${roll}`); return; }
-      }
-      const list = stOf(t).map(z => Object.assign({}, z)), old = list.find(z => z.k === k);
-      if (old) {
-        if (DOT[k]) { old.v = (+old.v || 0) + v; if (has(old.x)) old.x = x ? +old.x + x : old.x; }      // урон за ход складывается и уроном, и длительностью
-        else if (has(old.x)) old.x = x ? Math.max(+old.x, x) : null;
-      } else list.push(Object.assign({ k, n: info.n }, v && DOT[k] ? { v } : {}, x ? { x } : {}));
-      setVit(t, { st: list });
-      const now = list.find(z => z.k === k);
-      App.toast(`${tname(t)}: «${info.n}»${now.v ? ` ${now.v} в ход` : ''}${has(now.x) ? `, ${now.x} х.` : ''}${old ? ' (сложено)' : ''}${roll}`);
+      const r = stPut(t, k, v, x);
+      if (r.st) setVit(t, { st: r.st });
+      App.toast(r.msg);
     },
     // страх: фишка бежит к ближайшему краю поля, насколько хватает ОД; уже у края — сбегает (ГМ решает, убрать ли)
     btFlee() {
@@ -1463,17 +1476,68 @@
   // удар по фишке (js/resist.js): единицы сопротивления → резисты в % → множители слабостей → броня → ХП;
   // сквозь броню — мимо брони (резисты считаются), чистый — мимо всего; слизь и ихор бьют по броне сильнее;
   // конвертация — в лечение или ману (не выше максимума) → { patch, steps, rest, gain, refl }
-  function hitCalc(t, amt, type, mode, noMag) {
+  // наложить состояние (как «Наложить» у ГМ): иммунитет — не действует, процент сопротивления — бросок d100;
+  // урон за ход складывается и уроном, и длительностью. Возвращает { st, msg } (st нет — не наложилось)
+  function stPut(t, k, v, x) {
+    const info = statusList().find(z => z.k === k) || { k, n: k === 'стан' ? 'стан (оглушение)' : k };
+    const g = window.Resist ? window.Resist.effGuard(resistOf(t), k) : { imm: '', pct: 0 };
+    if (g.imm) return { msg: `${tname(t)}: «${info.n}» не действует — ${g.imm}` };
+    let roll = '';
+    if (g.pct > 0) {
+      const r = d100();
+      roll = ` (сопротивление ${g.pct}%, d100 = ${r})`;
+      if (r <= g.pct) return { msg: `${tname(t)}: устоял против «${info.n}»${roll}` };
+    }
+    const list = stOf(t).map(z => Object.assign({}, z)), old = list.find(z => z.k === k);
+    if (old) {
+      if (DOT[k]) { old.v = (+old.v || 0) + v; if (has(old.x)) old.x = x ? +old.x + x : old.x; }      // урон за ход складывается и уроном, и длительностью
+      else if (has(old.x)) old.x = x ? Math.max(+old.x, x) : null;
+    } else list.push(Object.assign({ k, n: info.n }, v && DOT[k] ? { v } : {}, x ? { x } : {}));
+    const now = list.find(z => z.k === k);
+    return { st: list, msg: `${tname(t)}: «${info.n}»${now.v ? ` ${now.v} в ход` : ''}${has(now.x) ? `, ${now.x} х.` : ''}${old ? ' (сложено)' : ''}${roll}` };
+  }
+  // подтипы физ урона в ударе: что меняется в расчёте (колющий, дробящий) и броски на состояния после попадания
+  function subOpt(t, subs) {
+    const v = vitals(t), o = { resMinus: 0, piercePart: 0, add: 0, why: [] };
+    subs.forEach(k => {
+      const s = PHYS_SUB[k];
+      if (s.resMinus) { o.resMinus += s.resMinus; o.resWhy = k; }
+      if (s.piercePart) o.piercePart = Math.max(o.piercePart, s.piercePart);
+      if (s.armPct && v.marm) { const a = Math.round(v.marm * s.armPct / 100); o.add += a; o.why.push(`${k} +${a} (${s.armPct}% брони)`); }
+    });
+    return o;
+  }
+  function subRolls(t, subs, amt) {
+    let cur = t, st = null;
+    const msg = [];
+    subs.forEach(k => {
+      const s = PHYS_SUB[k];
+      (s.ch || []).forEach(([p, what]) => {
+        const r = d100();
+        if (r > p) return;
+        if (what === 'конечность') { msg.push(`${k}: отрублена конечность (${p}%, d100 = ${r}) — решает ГМ`); return; }
+        const res = what === 'кровотечение' ? stPut(cur, what, Math.max(1, Math.round(amt * 0.05)), 3) : stPut(cur, what, 0, what === 'стан' ? 1 : 0);
+        msg.push(`${k} (${p}%, d100 = ${r}): ${res.msg}`);
+        if (res.st) { st = res.st; cur = withVit(cur, { st }); }
+      });
+      if (s.note) msg.push(`${k}: ${s.note}`);
+    });
+    return { st, msg };
+  }
+  function hitCalc(t, amt, type, mode, noMag, opt) {
     const v = vitals(t), Z = window.Resist;
-    const r = Z ? Z.damage(amt, type, mode, resistOf(t), noMag) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
+    opt = opt || {};
+    const r = Z ? Z.damage(amt, type, mode, resistOf(t), noMag, opt) : { hp: amt, pierce: mode !== 'norm', armorMul: 1, steps: [] };
     let rest = r.hp, soak = 0;
     const steps = r.steps.slice(), patch = {}, gain = r.gain || {};
     if (!r.pierce && v.arm > 0 && rest > 0) {
-      const m = r.armorMul || 1, hit = rest * m;
+      // колющий: часть урона (20%) идёт сквозь доспех, остальное — как обычно
+      const pp = opt.piercePart ? Math.round(rest * opt.piercePart) : 0;
+      const m = r.armorMul || 1, hit = (rest - pp) * m;
       soak = Math.min(v.arm, Math.round(hit));
       patch.arm = v.arm - soak;
-      rest = Math.max(0, Math.round((hit - soak) / m));
-      steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}`);
+      rest = Math.max(0, Math.round((hit - soak) / m)) + pp;
+      steps.push(`броня −${soak}${m !== 1 ? ` (×${m} по броне)` : ''}${patch.arm ? ` (осталось ${patch.arm})` : ' — разрушена'}${pp ? `, ${pp} сквозь броню (${opt.resWhy || 'колющий'})` : ''}`);
     }
     if (rest) patch.hp = Math.max(0, (+v.hp || 0) - rest);
     if (rest > 0 && stOf(t).some(z => z.k === 'сон')) { patch.st = stOf(t).filter(z => z.k !== 'сон'); steps.push('сон снят'); }
@@ -1617,7 +1681,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, turnHints, charmed, DOT, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, turnHints, charmed, DOT, PHYS_SUB, physSubs, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 
