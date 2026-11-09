@@ -329,9 +329,11 @@
     },
     note(cid, text, chid, chName) { return A.batch([this.eventOp(cid, chid, chName, text, 'note')]); },
     // бросок d100: текст — для старых версий сайта и журнала персонажа, число и «за что» — отдельными полями
-    roll(cid, n, why, chid, chName) {
-      const op = this.eventOp(cid, chid, chName, `Бросок d100: ${n}${why ? ' — ' + why : ''}`, 'roll');
-      Object.assign(op.data, { roll: n, why: why || '' });
+    // n2 — второй бросок (Хенра, пока брат-близнец жив: бросает дважды и берёт лучший)
+    roll(cid, n, why, chid, chName, n2) {
+      const two = typeof n2 === 'number';
+      const op = this.eventOp(cid, chid, chName, `Бросок d100: ${n}${two ? ` и ${n2} (двойной — близнец)` : ''}${why ? ' — ' + why : ''}`, 'roll');
+      Object.assign(op.data, { roll: n, why: why || '' }, two ? { roll2: n2 } : {});
       return A.batch([op]);
     },
 

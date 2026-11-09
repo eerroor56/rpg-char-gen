@@ -15,17 +15,18 @@ export function d100() {
  * Бросок d100. cid — бросок попадает в журнал кампании (видят ГМ и все игроки); chid / chName — бросок за персонажа.
  * side — компактный, в панели у поля боя. История бросков общая для всех кубиков (App.ui.gDiceHist).
  */
-export function Dice({ cid, chid, chName, side }: { cid?: string; chid?: string; chName?: string; side?: boolean }) {
+// twin — имя брата-близнеца (Хенра): пока он жив, бросок двойной — берётся лучший результат
+export function Dice({ cid, chid, chName, side, twin }: { cid?: string; chid?: string; chName?: string; side?: boolean; twin?: string }) {
   const ui = window.App.ui;
   const [why, setWhy] = useState('');
-  const [hist, setHist] = useState<{ n: number; why: string }[]>(ui.gDiceHist || []);
+  const [hist, setHist] = useState<{ n: number; n2?: number; why: string }[]>(ui.gDiceHist || []);
   const [fresh, setFresh] = useState(0);
   const roll = () => {
-    const n = d100(), w = why.trim().slice(0, 200);
-    const h = [{ n, why: w }, ...(ui.gDiceHist || hist)].slice(0, 12);
+    const n = d100(), n2 = twin ? d100() : undefined, w = why.trim().slice(0, 200);
+    const h = [{ n, n2, why: w }, ...(ui.gDiceHist || hist)].slice(0, 12);
     ui.gDiceHist = h; ui.gDiceLast = { n, ms: Date.now() };
     setHist(h); setWhy(''); setFresh(f => f + 1);
-    if (cid && window.Cloud.user) run(() => window.Cloud.roll(cid, n, w, chid, chName));
+    if (cid && window.Cloud.user) run(() => window.Cloud.roll(cid, n, w, chid, chName, n2));
   };
   const last = hist[0];
   const hint = cid ? (chid ? `Бросок за «${chName || 'персонажа'}» попадёт в журнал кампании — его увидят ГМ и игроки.` : 'Результат попадает в журнал кампании — его видят ГМ и все игроки.')
@@ -35,12 +36,14 @@ export function Dice({ cid, chid, chName, side }: { cid?: string; chid?: string;
       <h2><Icon name="dice" />Бросок d100{chid ? ` за «${chName || 'персонажа'}»` : ''}</h2>
       <div className="gd-row">
         <div key={fresh} className={'gd-n' + (last ? '' : ' empty') + (fresh ? ' fresh' : '') + (last && (last.n === 1 || last.n === 100) ? ' edge' : '')} aria-live="polite" aria-label="Результат броска">{last ? last.n : '—'}</div>
+        {last && typeof last.n2 === 'number' && <div key={'b' + fresh} className={'gd-n' + (fresh ? ' fresh' : '') + (last.n2 === 1 || last.n2 === 100 ? ' edge' : '')} aria-label="Второй бросок" title={`Двойной бросок: брат-близнец ${twin || ''} жив — берётся лучший`}>{last.n2}</div>}
         <div className="gd-ctl">
           <input type="text" value={why} onChange={e => setWhy(e.target.value)} maxLength={200} placeholder="за что бросок (необязательно)" aria-label="За что бросок" onKeyDown={e => e.key === 'Enter' && roll()} />
           <button type="button" className="btn primary" onClick={roll}>Бросить d100</button>
         </div>
       </div>
-      {hist.length > 1 && <p className="small gd-hist">Предыдущие: {hist.slice(1, side ? 7 : 9).map((h, i) => <span key={i} title={h.why}>{h.n}</span>)}</p>}
+      {hist.length > 1 && <p className="small gd-hist">Предыдущие: {hist.slice(1, side ? 7 : 9).map((h, i) => <span key={i} title={h.why}>{h.n}{typeof h.n2 === 'number' ? ` / ${h.n2}` : ''}</span>)}</p>}
+      {twin && <p className="small gd-twin">Брат-близнец «{twin}» жив — бросок двойной, берётся лучший.</p>}
       {!side && <p className="muted small">{hint}</p>}
     </section>
   );

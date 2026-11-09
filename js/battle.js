@@ -395,7 +395,8 @@
     pet: ['питомец', 'полноценный член отряда: получает опыт вместе со всеми и может прокачивать характеристики'],
     summon: ['призванное существо', 'опыта не получает и не прокачивается, полностью подчиняется; пока призвано, блокирует ману призывателя — 25% от уровня существа'],
     familiar: ['фамильяр', 'питомец с контрактом: характеристики фамильяра и хозяина общие; если погибнет один, погибнет и второй'],
-    npc: ['НПС, наёмник', 'союзник по сюжету']
+    npc: ['НПС, наёмник', 'союзник по сюжету'],
+    clone: ['двойник', 'двойник героя (дар «Исчезающий близнец»): копия персонажа, создаётся раз в день']
   };
   const allyKind = a => (ALLY_KINDS[a.kind] || ALLY_KINDS.npc)[0];
 
@@ -769,6 +770,8 @@
     if (!Z || !t || t.kind === 'o') return [];
     const extra = String((t.kind === 'h' ? (t.o.vit || {}).res : t.o.res) || '').trim();
     if (t.kind === 'h') return (t.o.rz || []).concat(extra ? Z.parse(extra, true).map(e => Object.assign(e, { src: 'в бою (ГМ)' })) : []);
+    const orig = t.kind === 'a' && t.o.clone ? (ctx.heroes || []).find(x => x.id === t.o.clone) : null;
+    if (orig) return (orig.rz || []).concat(extra ? Z.parse(extra, true).map(e => Object.assign(e, { src: 'в бою (ГМ)' })) : []);
     const cr = creatureOf(t.o.src || t.o.n);
     if (cr) return Z.ofCreature(cr, extra);
     const r = raceOf(t.o.src || t.o.n);
@@ -782,6 +785,19 @@
   // Урон за ход — в конце хода того, на ком висит; повторный урон за ход складывается и уроном, и длительностью (ГМ).
   // Стан и оглушение — одно и то же; после стана — иммунитет к стану на 2 хода; сон снимается любым уроном.
   const DOT = { 'яд': { type: 'яд' }, 'кровотечение': { type: 'физ', mode: 'pierce' }, 'горение': { type: 'огонь', perArm: 10 }, 'удушение': { type: 'физ', mode: 'pierce' } };
+  // Хенра (раса): «второй подконтрольный персонаж» — брат-близнец со своим листом (статы, черты, дары — свои, уточнение ГМ).
+  // ГМ связывает двоих (gm.twin у обоих). Пока брат жив — двойной бросок d100 (берётся лучший); брат погиб — 75% резиста к пси;
+  // «узы боли» — 25% урона по ХП одного уходит другому. Дар «исчезающий близнец» — раз в день двойник героя (союзник-копия)
+  const VANISH = 'исчезающий близнец';
+  function heroExtra(ch, list) {
+    const id = ch && ch.gm && ch.gm.twin, tw = id ? (list || []).find(x => x.id === id) : null;
+    const b = (ch && ch.state && ch.state.boon) || {};
+    return {
+      twin: tw ? tw.id : '', twinName: tw ? tw.name || 'Безымянный герой' : '',
+      twinDead: !!(tw && tw.status === 'dead'), twinUp: !!(tw && tw.status === 'active'),
+      canClone: b.kind === 'gift' && R.norm(b.name || '').replace('изчез', 'исчез') === VANISH
+    };
+  }
   // подтипы физического урона (лист механик «урон», уточнение ГМ). У гибридного оружия («режуще-рубящий») — оба сразу.
   // ch — шансы (d100) наложить состояние; «конечность» — только подсказка ГМ. Кровотечение — 5% урона оружия на 3 хода.
   const PHYS_SUB = {
@@ -829,6 +845,7 @@
       if (z.k === 'заморозка') out.push({ t: 'всё', k: 'mul', v: 2, src: 'заморозка' });
       if (z.k === 'иммун к стану') out.push({ t: 'эф:стан', k: 'eimm', v: 1, src: 'после стана' });
     });
+    if (t && t.kind === 'h' && t.o.twinDead) out.push({ t: 'пси', k: 'pct', v: 75, src: 'брат-близнец погиб (Хенра)' });
     return out;
   }
   // конец хода фишки: урон от яда, кровотечения, горения, удушения (с её сопротивлениями), длительность −1
@@ -1315,6 +1332,17 @@
           if (sr.st) h.patch.st = sr.st;
           msg.push(...sr.msg);
         }
+        // узы боли (Хенра): 25% урона по ХП уходит брату-близнецу, пока оба в игре
+        const tw = t.kind === 'h' && t.o.twinUp ? (ctx.heroes || []).find(x => x.id === t.o.twin) : null;
+        if (tw && h.rest > 0 && has(h.patch.hp)) {
+          const share = Math.round(h.rest * 0.25);
+          if (share) {
+            const v0 = vitals(t), tt = { kind: 'h', o: tw }, tv = vitals(tt);
+            h.patch.hp = has(v0.mhp) ? Math.min(v0.mhp, h.patch.hp + share) : h.patch.hp + share;
+            saves.push([tt, { hp: Math.max(0, (+tv.hp || 0) - share) }]);
+            msg.push(`узы боли: ${share} из ${h.rest} уходит брату — ${tw.name}`);
+          }
+        }
         if (h.refl.length) {
           const fh = App.ui.btFrom && App.ui.btFrom !== tid(t) ? findTok(board0(), App.ui.btFrom) : null;
           if (fh && fh.t.kind !== 'o') {
@@ -1438,6 +1466,17 @@
       if (turnOn(b) && curTok(b, layout(b, ctx.heroes).at) && tid(curTok(b, layout(b, ctx.heroes).at)) === tid(hit.t)) patch.mv = spent(b, hit.t).mv + c.d;
       saveTok(b, hit, patch);
       App.toast(`${tname(hit.t)} бежит: ${c.d} кл., до края ${c.e} кл.${c.e === 0 ? ' — у края, в следующий ход сбежит' : ''}`);
+    },
+    // дар «исчезающий близнец»: двойник героя — союзник-копия (ХП, МП, броня, сопротивления — как у героя), встаёт рядом
+    btClone() {
+      const hit = selTok();
+      if (!hit || !ctx.gm || hit.t.kind !== 'h' || !hit.t.o.canClone) return;
+      const h = hit.t.o, v = vitals(hit.t);
+      if ((ctx.allies || []).some(a => a.clone === h.id) && !confirm(`У «${h.name}» уже есть двойник. Дар действует раз в день — создать ещё одного?`)) return;
+      const a = { i: newId('a'), n: `${h.name} (двойник)`, src: (h.race && h.race.name) || '', kind: 'clone', of: h.id, clone: h.id,
+        mhp: v.mhp, mmp: v.mmp, marm: v.marm, rhp: v.rhp, rmp: v.rmp, lvl: Math.round(+((h.der || {}).level) || 0) || undefined };
+      ctx.saveAllies((ctx.allies || []).concat(JSON.parse(JSON.stringify(a))));
+      App.toast(`${h.name}: двойник создан — встал рядом. Убрать — в «Союзниках отряда»`);
     },
     btStDel(b) {
       const hit = selTok();
@@ -1681,7 +1720,7 @@
   const api = {
     view, selected, creatures, setParty: o => { party = o; }, setCtx: o => { ctx = o; },
     info, preset, presetList, pickedPreset, key, tid, tname, tpos, vitals, radius, isDown, hid, veil, canMove, canHide, personal,
-    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, turnHints, charmed, DOT, PHYS_SUB, physSubs, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
+    turnOn, spent, odLeft, has, resistOf, resistLine, attackers, stOf, statusList, skipOf, turnHints, charmed, DOT, PHYS_SUB, physSubs, heroExtra, fogOn, fogFor, fieldZor, heroPic, foePic, initials, hue, allyKind,
     GLYPHS: G, COVER, ALLY_KINDS, DENSITY, SIZE, MOVE_PER_OD, ZOR_PER_CELL
   };
 

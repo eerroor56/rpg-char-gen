@@ -44,7 +44,7 @@ export function Campaign({ cid }: { cid: string }) {
   const patchCamp = (patch: Any) => { camp.set(x => ({ ...x, ...patch })); return C.updateCampaign(cid, patch).catch((e: unknown) => App.toast(C.errorText(e))); };
   const patchChar = (chid: string, patch: Any) => { chars.set(l => (l || []).map(x => (x.id === chid ? { ...x, ...patch } : x))); return C.updateCharacter(cid, chid, patch).catch((e: unknown) => App.toast(C.errorText(e))); };
   const rerender = () => tick(t => t + 1);
-  const heroes = inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? (v.rz || (v.rz = window.Resist.ofHero(v, ch))) : [] }; });
+  const heroes = inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? (v.rz || (v.rz = window.Resist.ofHero(v, ch))) : [], ...(window.Battle ? window.Battle.heroExtra(ch, list) : {}) }; });
   const party = inGame.map(ch => ({ id: ch.id, name: ch.name || 'Безымянный герой' }));
   const saveAllies = (allies: Any[]) => patchCamp({ allies });
 
@@ -62,7 +62,8 @@ export function Campaign({ cid }: { cid: string }) {
     run(() => C.savePrivate(cid, '_campaign', (was ? was + '\n\n' : '') + text), 'Подземелье добавлено в заметки ГМ');
   };
 
-  const dice = <Dice cid={cid} chid={myHero?.id} chName={myHero ? myHero.name || 'Безымянный герой' : undefined} side={arena} />;
+  const dice = <Dice cid={cid} chid={myHero?.id} chName={myHero ? myHero.name || 'Безымянный герой' : undefined} side={arena}
+    twin={myHero && window.Battle && window.Battle.heroExtra(myHero, list).twinUp ? window.Battle.heroExtra(myHero, list).twinName : ''} />;
   const journal = <Journal cid={cid} gm={gm} events={events.data} chars={list} sessions={sessions.data || []} feed={feed} setFeed={f => { App.ui.gFeed = f; setFeed(f); }} side={arena} />;
 
   return (
@@ -209,7 +210,7 @@ function Journal({ cid, gm, events, chars, sessions, feed, setFeed, side }: { ci
                 <span>
                   {e.chid && e.chName ? (alive.has(e.chid) ? <a href={`#game/${encodeURIComponent(cid)}/${encodeURIComponent(e.chid)}`}><b>{e.chName}</b></a> : <b>{e.chName}</b>) : null}{e.chid && e.chName ? ': ' : ''}
                   {e.kind === 'roll' && typeof e.roll === 'number'
-                    ? <span className="cp-roll"><Icon name="dice" />d100: <b className={e.roll === 1 || e.roll === 100 ? 'edge' : ''}>{e.roll}</b>{e.why ? ` — ${e.why}` : ''}</span>
+                    ? <span className="cp-roll"><Icon name="dice" />d100: <b className={e.roll === 1 || e.roll === 100 ? 'edge' : ''}>{e.roll}</b>{typeof e.roll2 === 'number' ? <> и <b className={e.roll2 === 1 || e.roll2 === 100 ? 'edge' : ''}>{e.roll2}</b> (двойной)</> : null}{e.why ? ` — ${e.why}` : ''}</span>
                     : e.text}
                   {['note', 'dev', 'roll'].includes(e.kind) && <span className="muted small"> — {e.byName || ''}</span>}
                 </span>

@@ -385,7 +385,7 @@
     const sideHtml = arena ? diceBox(myHero ? { cid, chid: myHero.id, chName: myHero.name || 'Безымянный герой', compact: true, side: true } : { cid, compact: true, side: true }) + feedHtml : '';
     const battleHtml = window.Battle ? window.Battle.card({
       cid, camp, gm, me, level: partyLevel, rerender: repaint, side: sideHtml,
-      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? window.Resist.ofHero(v, ch) : [] }; }),
+      heroes: inGame.map(ch => { const v = charView(ch); return { id: ch.id, name: ch.name || 'Безымянный герой', owner: ch.owner, ownerName: ch.ownerName, pos: ch.pos, apos: ch.apos, vit: ch.vit, der: v.res.der, race: v.res.race, pic: ch.pic || '', rz: window.Resist ? window.Resist.ofHero(v, ch) : [], ...window.Battle.heroExtra(ch, G.d.chars) }; }),
       saveAllies,
       allies: camp.allies || [],
       saveBoard: board => {
@@ -467,7 +467,7 @@
     if (!events.length) return '<p class="muted small">Записей пока нет.</p>';
     const alive = new Set((chars || []).map(x => x.id));
     const body = e => (e.kind === 'roll' && typeof e.roll === 'number'
-      ? `<span class="roll-ev">${App.DICE}d100: <b class="roll-num${e.roll === 1 || e.roll === 100 ? ' edge' : ''}">${e.roll}</b>${e.why ? ` — ${esc(e.why)}` : ''}</span>`
+      ? `<span class="roll-ev">${App.DICE}d100: <b class="roll-num${e.roll === 1 || e.roll === 100 ? ' edge' : ''}">${e.roll}</b>${typeof e.roll2 === 'number' ? ` и <b class="roll-num">${e.roll2}</b> (двойной)` : ''}${e.why ? ` — ${esc(e.why)}` : ''}</span>`
       : esc(e.text));
     return `<ol class="feed" data-keep="feed">${events.map(e => `<li class="ev-${esc(e.kind || 'note')}">
       <span class="muted small">${when(e.ms)}${e.session ? ` · <span class="tag">сессия ${e.session}</span>` : ''}</span>

@@ -26,6 +26,7 @@ export function CharPage({ cid, chid }: { cid: string; chid: string }) {
 
   const c = camp.data, x = ch.data, owner = x.owner === C.uid(), st = x.status;
   const v = charView(x);
+  const tw = window.Battle ? window.Battle.heroExtra(x, chars.data || []) : { twinUp: false, twinName: '' };
   const save = (patch: Any, text: string) => {
     const p = JSON.parse(JSON.stringify(patch));
     const lvl = Dev.compute(Object.assign(JSON.parse(JSON.stringify(x)), p)).res.level;
@@ -92,7 +93,8 @@ export function CharPage({ cid, chid }: { cid: string; chid: string }) {
       {errs.length > 0 && <ul>{errs.map((e, i) => <li key={i} className="err">{e.msg}</li>)}</ul>}
       {v.res0.notes.length > 0 && <><h3>Для ГМ</h3><ul>{v.res0.notes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></>}
     </div>}
-    {(gm || owner) && st === 'active' && <Dice cid={cid} chid={chid} chName={x.name || 'Безымянный герой'} />}
+    <Twin cid={cid} x={x} race={v.res.race} gm={gm} list={chars.data || []} />
+    {(gm || owner) && st === 'active' && <Dice cid={cid} chid={chid} chName={x.name || 'Безымянный герой'} twin={tw.twinUp ? tw.twinName : ''} />}
   </>;
 
   return (
@@ -106,4 +108,30 @@ export function CharPage({ cid, chid }: { cid: string; chid: string }) {
       privateBox={gm ? <PrivateNotes key={String(!!priv.data)} title="Заметки ГМ о персонаже" text={(priv.data || {}).text || ''} placeholder="тайны персонажа, планы на него"
         save={text => run(() => C.savePrivate(cid, chid, text), 'Заметки сохранены')} /> : null} />
   );
+}
+
+// Хенра (раса): брат-близнец — отдельный персонаж со своим листом (уточнение ГМ). ГМ связывает двоих — у обоих gm.twin.
+// Связь даёт: двойной бросок, пока брат жив; 75% резиста к пси, когда брат погиб; «узы боли» на поле боя (25% урона — брату)
+function Twin({ cid, x, race, gm, list }: { cid: string; x: Any; race: Any; gm: boolean; list: Any[] }) {
+  const C = window.Cloud;
+  const henra = !!race && (race.id === 'хенра' || (race.parents || []).some((p: Any) => p && p.id === 'хенра'));
+  const cur = (x.gm || {}).twin || '', tw = list.find(y => y.id === cur);
+  if (!henra && !tw) return null;
+  const others = list.filter(y => y.id !== x.id);
+  const link = (id: string) => run(async () => {
+    const ops: [string, Any][] = [];
+    if (cur && cur !== id) ops.push([cur, { 'gm.twin': '' }]);
+    const other = list.find(y => y.id === id);
+    if (other && (other.gm || {}).twin && other.gm.twin !== x.id) ops.push([other.gm.twin, { 'gm.twin': '' }]);
+    ops.push([x.id, { 'gm.twin': id }]);
+    if (id) ops.push([id, { 'gm.twin': x.id }]);
+    for (const [chid, p] of ops) await C.updateCharacter(cid, chid, p);
+  }, id ? 'Близнецы связаны' : 'Связь снята');
+  return <div className="card wstack tight">
+    <h2 className="h-sec">Брат-близнец</h2>
+    {tw ? <p><a href={`#game/${encodeURIComponent(cid)}/${encodeURIComponent(tw.id)}`}><b>{tw.name || 'Безымянный герой'}</b></a>{tw.status === 'dead' ? ' — погиб: 75% резиста к пси' : ' — жив: бросок d100 двойной (берётся лучший)'}; узы боли — 25% урона по ХП одного уходит другому.</p>
+      : <p className="muted small">Хенра: у вас есть второй подконтрольный персонаж — брат со своим листом. Создайте его отдельным героем, а ГМ свяжет их здесь.</p>}
+    {gm && <label className="small">Связать с <select className="sel" value={tw ? tw.id : ''} onChange={e => link(e.target.value)} aria-label="Брат-близнец">
+      <option value="">— нет —</option>{others.map(y => <option key={y.id} value={y.id}>{y.name || 'Безымянный герой'}{y.ownerName ? ` (${y.ownerName})` : ''}</option>)}</select></label>}
+  </div>;
 }

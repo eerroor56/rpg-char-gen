@@ -340,6 +340,11 @@ function Vitals({ board, t, gm, at }: { board: Any; t: Tok; gm: boolean; at: Any
     </div>
     {(gm || t.kind !== 'f') && <Resists t={t} gm={gm} />}
     <Statuses t={t} gm={gm} />
+    {t.kind === 'h' && (t.o.twin || t.o.canClone) ? <div className="bt-twin small">
+      {t.o.twin ? <p>Брат-близнец: <b>{t.o.twinName}</b>{t.o.twinDead ? ' — погиб (75% резиста к пси)' : t.o.twinUp ? ' — узы боли: 25% урона по ХП уходит ему' : ''}</p> : null}
+      {gm && t.o.canClone && <div className="bt-btns"><button type="button" className="btn small ghost" onClick={() => act('btClone')}
+        title="Дар «Исчезающий близнец»: раз в день — двойник героя (копия ХП, МП, брони и сопротивлений), встаёт рядом">Создать двойника</button></div>}
+    </div> : null}
     {gm && <div className="bt-vit-ctl">
       <DmgKind t={t} at={at} />
       <div className="bt-btns bt-hit">
@@ -512,7 +517,7 @@ export function Allies({ gm, heroes, allies, save }: { gm: boolean; heroes: { id
           <label className="fld"><span className="fld-l">Имя</span><input type="text" value={ui.get('alNick')} onChange={e => ui.set('alNick', e.target.value)} maxLength={60} placeholder="кличка (необязательно)" /></label>
           <label className="fld"><span className="fld-l">Вид</span>
             <select className="sel" value={ui.get('alKind') || 'pet'} onChange={e => ui.set('alKind', e.target.value)}>
-              {Object.entries(B.ALLY_KINDS as Record<string, [string, string]>).map(([k, d]) => <option key={k} value={k}>{cap(d[0])}</option>)}
+              {Object.entries(B.ALLY_KINDS as Record<string, [string, string]>).filter(([k]) => k !== 'clone').map(([k, d]) => <option key={k} value={k}>{cap(d[0])}</option>)}
             </select></label>
           <label className="fld"><span className="fld-l">Чей</span>
             <select className="sel" value={ui.get('alOf')} onChange={e => ui.set('alOf', e.target.value)}>
